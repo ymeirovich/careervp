@@ -564,7 +564,7 @@ owns the handler-name fix itself. Status: **settled — belief was FALSE, port n
 
 Per `RUNBOOK-RULES.md` rule 9. Each is a belief Wave 3 rests on that could be false, with the
 **cheapest** check that would show it false (rule 9's five-tier ladder) and the fallback decided
-now, while the answer is still genuinely unknown. **All five are re-read at the Wave-3 gate** and
+now, while the answer is still genuinely unknown. **All seven are re-read at the Wave-3 gate** and
 recorded there as settled TRUE/FALSE with the concrete artifact that settled them.
 
 Promoted from the seed table in
@@ -803,3 +803,79 @@ documented maximum, freezes the 22 enumerated source signatures so any new site 
 one disappears, and reports all 22 current locations before asserting the required end state of
 zero. The count-label discrepancy is documentation precision debt; it does not widen the scan,
 silence a violation, or change the D-H2 boundary.
+
+---
+
+## B-3-6 — AC-DH4-2 still fails against the live backend
+
+- **Load-bearing for:** 3.2 (D-H4's `vpr_id` null-vs-absent half) and the boundary with Wave-4 F-04.
+
+**The belief.** AC-DH4-2 still fails against the live backend: `vpr_id: null` is accepted, but an
+omitted `vpr_id` is not observably distinguishable at the request handler, so 3.2 requires a
+behavior change.
+
+**Why it is a bet.** The fill-in evidence pointed to
+`src/backend/careervp/models/api_models.py::CVTailoringRequest` and therefore pre-settled the belief
+toward FALSE. If the model and handler both already enforced the contract, the RED test had to stay
+as a day-one regression guard and could not be bent into failing. If the handler bypassed the
+model, the same test was a real behavior change and `cv_tailoring_handler.py` had to join the
+pinned 3.2 file list. The answer also determines whether Wave 3 merely guards a Wave-4 F-04 surface
+whose cited model bug has already disappeared, or exposes a real remaining handler surface that
+needs an explicit ownership decision.
+
+**The cheapest-tier check (tier 1 — live source read, zero new code).** Read both layers. At
+`src/backend/careervp/models/api_models.py:340-344`, `vpr_id: str | None` has no default:
+present-null validates and omission raises Pydantic `type='missing'` at `loc=('vpr_id',)`. At
+`src/backend/careervp/handlers/cv_tailoring_handler.py:600-607`, however, the model is called only
+when `{'cv_id', 'job_id', 'vpr_id'}.issubset(body)` is already true. An omitted key therefore
+bypasses the model. A zero-file diagnostic probe corroborated the read: with the downstream path
+stubbed to HTTP 202, present-null returned 202, omission also returned 202, and the downstream stub
+was called twice.
+
+**The fallback, decided now.** If the belief had settled FALSE, the D-H4 test would remain as a
+labelled regression guard, pass on day one, and record why; it would not be deleted or weakened.
+Because the belief settled TRUE, the fallback is not taken: the test asserts model behavior and
+handler behavior separately, and the handler half is expected RED. F-04 remains a Wave-4 clause
+with `status: TARGET` and `current_state: live_bug`; Wave 3 must not mark it closed.
+
+**Settled: 2026-07-27 — TRUE at the handler boundary, despite the model already being correct.**
+This is a delta from the fill-in's pre-settlement. The stale F-04 evidence
+(`api_models.py:282`, required non-null) is confirmed fixed at the model layer, while a distinct
+omission-bypass remains in `cv_tailoring_handler.py:600-607`. **Human-review flag:** D-H4
+AC-DH4-2 requires the observable handler distinction in Wave 3, while the prompt says any real
+remaining F-04 surface belongs to Wave 4. The 3.2 spec pins the RED assertion and names the overlap;
+neither this issue nor Wave 3 closes F-04.
+
+---
+
+## B-3-7 — AC-DH4-1's hub round-trip is broken on the read side while the write path is sound
+
+- **Load-bearing for:** 3.2 (D-H4's canonical `artifact_id` round-trip) and its implementation file
+  list.
+
+**The belief.** AC-DH4-1's hub round-trip is broken only on the read side; the canonical
+`artifact_id` write path is sound.
+
+**Why it is a bet.** If true, 3.2 could stay a read-resolution change. If false,
+`src/backend/careervp/dal/application_repository.py` had to join the pinned file list before RED
+wrote a test, and the fix had to surface the write failure in D-H3's typed-failure shape. Discovering
+that boundary only during GREEN would turn a contained read fix into an unplanned durability change.
+
+**The cheapest-tier check (tier 3 — one minimal moto probe).** In moto, create one applications
+table and one canonical artifacts table; seed application `job-1` for `user-1` plus canonical
+artifact `ARTIFACT#COVER_LETTER#cl-1`; wrap the applications table so its first `update_item`
+succeeds and its second raises `RuntimeError('forced step-2 failure')`; call
+`ApplicationRepository.update_artifact_with_id`; then read the application through the real
+`application_handler._build_artifacts` projection. The probe printed:
+`{'artifact_exists': True, 'hub_cover_letter': {'status': 'pending', 'artifact_id': None}, 'step2_swallowed': True}`.
+
+**The fallback, decided now.** If false,
+`src/backend/careervp/dal/application_repository.py` is named in the 3.2 implementation file list
+before 3.2-RED starts. Its step-2 `except Exception: pass` becomes a surfaced
+`Result(success=False, data=None, code=ResultCode.DYNAMODB_ERROR)`, and the canonical hub read must
+still resolve the stored opaque id. D-H4 owns this failure; D-H3 is not widened.
+
+**Settled: 2026-07-27 — FALSE; fallback required.** The artifact existed, the second write failed,
+the exception was swallowed, and the hub served a null identity. The write path is implicated.
+`application_repository.py` is therefore in the pinned file list, and
+`test_dh4_status_endpoint_resolves_hub_artifact_id` carries the forced-failure stimulus.

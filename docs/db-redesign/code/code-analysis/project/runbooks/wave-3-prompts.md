@@ -8,6 +8,9 @@
 > [`wave-3-status.md`](./wave-3-status.md).
 >
 > **Branch:** `db-redesign` · **Deploy target: `CareerVpCrudDevx`** (not `CareerVpCrudDev`)
+> **Repo root:** `/Users/yitzchak.meirovich/Documents/code5/careervp` (rule 17a — declared once here;
+> every full path below is built from it, and every shell block anchors on
+> `cd "$(git rev-parse --show-toplevel)"` so a relocated checkout needs one edit, not an excavation)
 > **Canonical docs tree:** `docs/db-redesign/code/` (`code1`/`code2` are stale — ignore)
 >
 > **Companion files every prompt below depends on — read all before starting:**
@@ -103,7 +106,7 @@ cover-letter and interview-prep paths (clause P-01). Every Track D spec it needs
 | # | Clause(s) | Plain-English step | Spec | Depends on | Detail |
 |---|---|---|---|---|---|
 | 3.1-RED / 3.1-GREEN | D-H2, D-H3 | One module owns every DynamoDB key; surface `ValidationException` instead of hiding it as "not found" | `D-H2-D-H3-key-authority-spec.md` | 0.6 + Wave-2 GATE | **full, below** |
-| 3.2 | D-H4, P-01 | Store a canonical `artifact_id` + resolved upstreams → fixes cover-letter/interview-prep | `D-H4-P-01-canonical-artifact-spec.md` | 3.1 | skeleton |
+| 3.2 | D-H4, P-01 | Store a canonical `artifact_id` + resolved upstreams → fixes cover-letter/interview-prep | `D-H4-P-01-canonical-artifact-spec.md` | 3.1 | **full, below** (3.2-SPEC → 3.2-RED → 3.2-GREEN) |
 | 3.3 | D-H7 | Eliminate request-path Scans | `D-H7-request-path-scans-spec.md` | 3.1 | skeleton |
 | 3.4 | D-M1, D-M2, D-M3, D-M5, D-M6, D-Q | God-class split; stop dual-key CV write; minimized GSI; retire `userEmail` PK; access-pattern doc; quick wins | `D-M-seams-bundle-spec.md` | 3.1 | skeleton |
 | 3.5 | D-H9 | Complete the FE-UI-044 CR canonical-store migration; retire the legacy `users-table` CR read path | `D-H9-company-research-migration-spec.md` | 3.1 | skeleton |
@@ -459,17 +462,517 @@ fill-in edit.
 |---|---|
 | **Clause** | D-H4, P-01 |
 | **Spec** | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md` |
-| **Acceptance criteria** | (read from the spec's "RED Tests to Write First" / "Acceptance Criteria" at fill-in; do not invent) |
+| **Acceptance criteria** | **AC-DH4-1, AC-P01-1, AC-DH4-2** (read live from the spec's "Acceptance Criteria" section — confirmed present 2026-07-27) |
 | **Claude / Codex** | opus/high · gpt-5-codex/high |
 | **Depends on** | 3.1-GREEN (needs `CoreRepository` + `TableRegistry`) |
 | **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only; no merge to `main`) |
-| **Rule 7** | RED and GREEN separate — this is the P-01 fix, a migration cutover |
-| **Bets** | none — `B-3-1` retired at scope-lock v2.7.0 (no harness, no migration, no legacy-id probe) |
+| **Rule 7** | RED and GREEN separate — this is the P-01 fix, on the request path of two broken features |
+| **Bets** | `B-3-6`, `B-3-7` — **new at fill-in, promoted by 3.2-SPEC before 3.2-RED runs** (the `B-3-5` precedent). `B-3-1` remains retired at scope-lock v2.7.0 (no harness, no migration, no legacy-id probe) |
 
 **In plain English.** Store a canonical `artifact_id` and its resolved upstream ids so cover-letter
 and interview-prep stop failing to find their VPR/CV. **Canonical ids only — no dual-read window, no
 cutover probe, no harness, no legacy-id resolution** (v2.7.0/`O-3`: the data is disposable, so there
 is no pre-migration `artifact_id` to keep resolving).
+
+**Filled in 2026-07-27.** Three sessions, in this order, and the order is the point:
+**3.2-SPEC** (pin the spec's assertion values + promote the two new bets) → **3.2-RED** (four tests,
+no implementation) → **3.2-GREEN** (fresh session, implementation only). 3.2-SPEC exists because
+§0.5's W2/P-31 row names this spec explicitly: *"Do the same for `D-H4-P-01`, `D-H7`, `D-M`, and
+`D-H9` at fill-in."* It is not optional politeness — the spec's current RED-test line for AC-P01-1
+reads *"resolves owned canonical VPR **or** rejects"*, which is exactly the "or"-shaped assertion
+rule 14 forbids. **3.2-RED may not start until 3.2-SPEC has landed**, and its standing check stops
+if it hasn't.
+
+**Model note, so nobody "helpfully" upgrades it.** `redesign-execution-plan.md`'s Wave-3 row 3.2
+says `opus/high | codex/high`. Per rule 15 the Claude side is copied verbatim — **3.2-GREEN is
+`opus/high`, not `fable/high`**, even though rule 18's three conditions arguably hold. Rows 3.1-GREEN
+and 3.5 carry `fable` in the plan itself; 3.2 does not. Re-routing it is an edit to the execution
+plan under rule 8, not something a fill-in session decides. The Codex side resolves `codex/high` →
+`gpt-5-codex/high` per rule 16 and the spec's `tooling` frontmatter, which pins `gpt-5-codex`.
+
+---
+
+# PROMPT 3.2-SPEC — pin the assertion values, promote the two new bets (spec + ISSUES.md only)
+
+> **Clause:** D-H4, P-01 · **Spec:** [`specs/D-H4-P-01-canonical-artifact-spec.md`](../specs/D-H4-P-01-canonical-artifact-spec.md)
+> (full path: `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md`)
+> **Acceptance criteria:** AC-DH4-1, AC-P01-1, AC-DH4-2 — **pinned, never renumbered, never widened**
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 16 — precision authoring against an existing contract. **Not Fable:** rule 18 routes
+> precision authoring away from Fable for the same reason it routes RED away, and this session
+> writes no implementation.)
+>
+> **What this session is.** The separate visible action §0.5 requires: a precision edit to one spec's
+> "RED Tests to Write First" section, plus two bets into `ISSUES.md`. It writes **no test and no
+> implementation**. It is the analogue of the 2026-07-27 precision edit already made to
+> `D-H2-D-H3-key-authority-spec.md`, which is why 3.1-RED had nothing left to improvise.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.1-GREEN row — 3.2 is the first step that depends on it.
+
+  1. Confirm 3.1-GREEN actually landed, from git and the filesystem, not the column:
+        cd "$(git rev-parse --show-toplevel)" && git log --oneline -6
+        ls src/backend/careervp/dal/core_repository.py src/backend/careervp/dal/table_registry.py
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run python -c "from careervp.dal.core_repository import CoreRepository; from careervp.dal.table_registry import TableRegistry; print('importable')"
+     If either module is missing or not importable, STOP — 3.2 has no foundation to extend.
+
+  2. Read the THREE residues 3.1-GREEN recorded as explicitly NOT ITS OWN, and treat all three as
+     out of bounds for the whole of 3.2: (a) logic/company_research_store.py::_legacy_table_name
+     reversed env order, (b) dal/dynamo_dal_handler.py still building keys internally, (c) the inner
+     query-level fallback in _legacy_read_cover_letter_by_scan that still returns success-None.
+     (a) and (c) belong to 3.5, (b) to a later wave. Fixing one here is scope drift, not diligence.
+
+You are performing a PRECISION EDIT on
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md,
+and promoting two bets into
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md.
+
+You may edit EXACTLY those two files. You may not touch any file under
+/Users/yitzchak.meirovich/Documents/code5/careervp/src/, any test, or either
+project-scope-lock twin.
+
+--------------------------------------------------------------------------------
+WHY THIS SESSION EXISTS (rule 14, and §0.5's W2/P-31 row)
+--------------------------------------------------------------------------------
+The spec is a ~57-line Wave-0 spec with the same thinness P-31's spec had. Its four RED-test lines
+name behaviors but not values, and one of them — AC-P01-1's "assert repository resolves owned
+canonical VPR or rejects" — is literally an "or"-shaped assertion. A RED session cannot legally
+write tests from it (rule 14 check 3), and a GREEN session handed "or" will satisfy whichever
+branch is cheaper. Pin the values here, once, visibly.
+
+HARD BOUNDARY on what pinning means. You may make each RED-test description state exact values,
+exact scope, and exact out-of-scope exclusions. You may NOT:
+  - add, remove, rename, or renumber an acceptance criterion (AC-DH4-1, AC-P01-1, AC-DH4-2 stand),
+  - add a fifth RED test,
+  - change the Done-when, the Sequencing section, or the tooling frontmatter,
+  - re-introduce anything v2.7.0 removed (no parity harness, no dual-read, no legacy-id probe, no
+    cutover — Fix Plan item 5 records that removal; leave it),
+  - change what D-H4 or P-01 require. That is the contract twins' text and a §0.3 amendment.
+If pinning a value turns out to require any of the above, STOP and say which one and why.
+
+--------------------------------------------------------------------------------
+THE LIVE FINDINGS TO CONFIRM AND PIN (gathered 2026-07-27 at fill-in — CONFIRM EACH, then pin)
+--------------------------------------------------------------------------------
+Every line/count below is a citation, and this project has been burned by stale citations three
+times (§0.2, §0.5). Re-read each site live. Where live disagrees, THE DELTA IS THE FINDING — record
+it in the spec's Evidence section; do not quietly adopt either number.
+
+A. The spec's own Evidence citations have already drifted. Live at fill-in:
+   - `vpr_status_handler.py` — the spec cites `:184-192,253` for provenance projection.
+     `_extract_vpr_provenance` is at approximately :181-188 and the provenance `setdefault` loop at
+     approximately :253. Off by ~3 lines. Re-cite from live.
+   - `cv_tailoring_handler.py` — the spec cites `:983-986` for path-parameter id extraction.
+     `_extract_cv_tailoring_id` is at approximately :983-989 live. Re-cite.
+   - `src/frontend/lib/types.ts:75` (`HubArtifact.artifact_id: string | null`) and `:517`
+     (`CVTailoringRequest.vpr_id: string | null` + the load-bearing comment) both still read as
+     cited. Confirm and leave.
+
+B. **The canonical `artifact_id` write is best-effort and silently swallowed.** This is the D-H4
+   defect with teeth and the spec's Evidence section does not mention it. Live:
+   `src/backend/careervp/dal/application_repository.py` — `artifact_statuses.<type>_artifact_id` is
+   written by a two-step update at approximately :340-390, and the step-2 `update_item` is wrapped
+   in `except Exception: pass  # Non-fatal — frontend localStorage fallback handles missing
+   artifact_id`. The hub read is `application_handler.py:_build_artifacts` (~:86-96), which serves
+   `status_map.get(f'{artifact_type}_artifact_id')` — i.e. `None` when the write no-opped.
+   AC-DH4-1's round-trip identity CANNOT hold while a swallowed exception can leave the hub serving
+   `artifact_id: null` over an artifact that exists. Add this to Evidence and pin what
+   `test_dh4_status_endpoint_resolves_hub_artifact_id` asserts about it. Note the shape is the same
+   family as D-H3: a real failure presented as a benign empty. Do NOT widen D-H3's clause to cover
+   it — D-H4 owns the artifact_id write; say so explicitly.
+
+C. **The six-name id ladder IS the "3-schema / vpr_id routing" ambiguity, in code.** Live:
+   `src/backend/careervp/logic/artifact_dependency_resolver.py::_artifact_id` (~:167-173) resolves
+   an artifact's id by trying, in order: `artifact_id`, `artifactId`, `vpr_id`,
+   `company_research_id`, `job_id`, `id`. A canonical id means this ladder collapses. Pin which
+   names survive and which must be gone, as an enumerated list — not "prefer canonical".
+
+D. **Cover letter resolves the CLIENT's vpr_id and checks ownership afterwards.** Live:
+   `cover_letter_handler.py::_resolve_vpr_payload` (~:320-345) calls `dal.get_vpr(vpr_id)` on the
+   client-supplied value, then post-hoc compares `user_id` and raises
+   `ValueError('VPR ownership mismatch for cover letter: {vpr_id}')`. Two distinct defects, and the
+   pin must separate them: (i) the read happens before the ownership decision, and (ii) the failure
+   surfaces as a `ValueError` whose HTTP mapping must be pinned to an exact status and error shape,
+   not left as "rejects". AC-P01-1 says *resolved owned upstreams, not arbitrary client keys* —
+   pin the exact status code and the exact envelope for a stale/cross-tenant `vpr_id`.
+
+E. **Interview prep has TWO resolution paths and the ownership failure falls through to the
+   second.** Live: `interview_prep_handler.py::_resolve_vpr_from_jobs_table` (~:686-712) reads an
+   env pair `VPR_JOBS_TABLE_NAME` or `JOBS_TABLE_NAME`, and on an ownership mismatch **returns
+   `None`** — after which `~:791-827` falls through to `dal.get_vpr(api_request.vpr_id)` and only
+   then raises. A cross-tenant id that is refused by path one and then looked up again by path two
+   is the drift. Pin that the ownership refusal is terminal, with the same exact status/envelope as
+   (D) so both features answer identically.
+
+F. **`interview_prep_submit_handler.py:144` coerces an id chain into `application_id`:**
+   `application_id = api_request.application_id or api_request.job_id or api_request.vpr_id`.
+   §3 item 1 is `application_id == job_id`; `vpr_id` is a third thing. DECIDE AND PIN whether this
+   site is in scope for 3.2 or is D-M/3.4 work, and state the decision either way — an undecided
+   site is how 2.2 blocked the wave (§0.5). If in scope, name it in the pinned file list.
+
+G. **AC-DH4-2 may already be satisfied — this is `B-3-6` below.** Live:
+   `src/backend/careervp/models/api_models.py::CVTailoringRequest` (~:340-344) reads
+   `vpr_id: str | None` with **no default**, so present-and-null validates and omitted is a
+   required-field error. That is already §3 item 3's semantics. The F-01 oracle spec's F-04 evidence
+   cites `api_models.py:282` as `str = Field(min_length=1)` — that citation is stale; the model has
+   moved and changed. Pin `test_dh4_cv_tailoring_preserves_vpr_id_null` to assert BOTH halves at the
+   layer that can actually fail (parse/validate AND the handler's observable response), and state in
+   the spec what happens if it passes on day one — see the bet.
+
+--------------------------------------------------------------------------------
+PROMOTE TWO BETS TO ISSUES.md (rule 9) — the beliefs, checks and fallbacks are drafted; your job
+is to CONFIRM and RECORD them, not re-invent them. B-3-5 is the precedent for adding a bet at
+fill-in when the pre-flight finds one.
+--------------------------------------------------------------------------------
+B-3-6 — BELIEF: "AC-DH4-2 (`vpr_id: null` accepted, absent distinguishable from null) still fails
+  against the live backend, so it is a behavior change."
+  CHECK (tier 1, zero new code): read `CVTailoringRequest` in
+  `/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/models/api_models.py`.
+  PRE-SETTLED TOWARD FALSE at fill-in: it is `vpr_id: str | None`, no default. Confirm live.
+  FALLBACK, decided now: if false, D-H4's `vpr_id` half ships as an explicit REGRESSION GUARD —
+  the test stays, is labelled as a guard, and the ledger row records that it passed on day one and
+  why. It does NOT get deleted (§3 item 3 is IMMUTABLE and unguarded today) and it does NOT get
+  bent into failing. Additionally: F-04 is a Wave-4 clause, still `status: TARGET,
+  current_state: live_bug` in `project-scope-lock.yaml:152`, whose cited violation appears already
+  fixed at the model layer. FLAG that overlap for human review — a Wave-3 step may not silently
+  close a Wave-4 clause, and F-04's real remaining surface (if any) belongs to Wave 4.
+
+B-3-7 — BELIEF: "AC-DH4-1's hub round-trip is broken on the READ side; the write path is sound."
+  WHY IT IS A BET: if the write is the cause, 3.2's file list grows to include
+  `dal/application_repository.py` and the fix takes D-H3's shape (surface, don't swallow) — a
+  materially larger step than a read-path change, and discovering that mid-GREEN is exactly the
+  W1/1.6 incident in §0.5.
+  CHECK (tier 3, one minimal moto test): seed an application, force the step-2 `update_item` to
+  raise, then read the hub — if it serves `artifact_id: null` over an existing artifact, the write
+  path is implicated and the belief is FALSE.
+  FALLBACK, decided now: if false, `application_repository.py` is named in the pinned file list
+  BEFORE 3.2-RED writes a line, and the swallowed `except` becomes a surfaced typed failure in the
+  same shape D-H3 used — recorded in the spec, not improvised in GREEN.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. For each of A–G: the live command you ran, what you found, and whether it CONFIRMS the fill-in
+   citation or is a DELTA. Every delta recorded in the spec's Evidence section.
+2. The edited "RED Tests to Write First" section, quoted in full, with every assertion value pinned
+   and every out-of-scope exclusion named. No "or"-shaped assertion may remain anywhere in it.
+3. Explicit confirmation that AC-DH4-1 / AC-P01-1 / AC-DH4-2 are unchanged in id, count, and text,
+   and that nothing v2.7.0 removed came back.
+4. `B-3-6` and `B-3-7` written into ISSUES.md under "Wave-3 bets", each with belief / why-it-is-a-bet
+   / cheapest-tier check / fallback-decided-now / settled-status, plus the index rows added to
+   `wave-3-status.md`'s bets table so the GATE's rule-9 re-read finds seven bets, not five.
+5. Confirmation that ZERO files under
+   /Users/yitzchak.meirovich/Documents/code5/careervp/src/ and ZERO test files were modified
+   (`git diff --stat`).
+6. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses D-H4
+  and P-01 in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  add a 3.2-SPEC row with a plain-English status, the commit, today's date, and what 3.2-RED must
+  resolve first — in particular how B-3-6 and B-3-7 settled (or write "none").
+```
+
+---
+
+# PROMPT 3.2-RED — canonical artifact_id + resolved upstreams (tests only)
+
+> **Clause:** D-H4, P-01 · **Spec:** [`specs/D-H4-P-01-canonical-artifact-spec.md`](../specs/D-H4-P-01-canonical-artifact-spec.md)
+> (full path: `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md`)
+> **Acceptance criteria:** AC-DH4-1, AC-P01-1, AC-DH4-2
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16 — Claude side verbatim from `redesign-execution-plan.md` Wave-3 row 3.2; Codex side
+> resolved from the bare `codex/high` per rule 16 and the spec's `tooling` frontmatter pin.
+> **Not Fable — rule 18 forbids routing RED to it.**)
+>
+> **Rule 7 applies — this is the P-01 fix on two live request paths, and it decides ownership
+> behavior for cross-tenant ids.** RED and GREEN are two different sessions. This one writes tests
+> only and carries an **absolute prohibition** on touching implementation files.
+>
+> **Requires 3.2-SPEC to have landed.** Without the precision edit there is no legal set of
+> assertion values to write against, and the standing check below stops.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.1-GREEN row AND the 3.2-SPEC row. If either left anything open, deal with that first.
+
+  1. Confirm 3.1-GREEN's foundation is real, from the filesystem and the interpreter, not the column:
+        cd "$(git rev-parse --show-toplevel)" && git log --oneline -8
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run python -c "from careervp.dal.core_repository import CoreRepository; from careervp.dal.table_registry import TableRegistry; print(sorted(n for n in dir(CoreRepository) if not n.startswith('_')))"
+     Expect the 3.1-GREEN surface: get_cover_letter_by_artifact_id, list_cover_letters,
+     list_tailored_cvs, get_company_research, plus registry/dal properties. There is NO VPR read
+     method and no interview-prep read method yet — 3.2 adds what it needs. If CoreRepository is
+     missing or unimportable, STOP.
+
+  2. Confirm the suite is green before you add a failing test, so a later failure is unambiguous:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q 2>&1 | tail -5
+
+  3. Confirm the D-H2/D-H3 ratchets from 3.1 still hold — you must not regress them:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3" 2>&1 | tail -10
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md
+exists, that its "RED Tests to Write First" section names tests covering AC-DH4-1, AC-P01-1 and
+AC-DH4-2, and that each cited test states exact assertion values. **Specifically grep it for the
+word "or" inside the RED-test section** — if AC-P01-1's line still reads "resolves owned canonical
+VPR or rejects", 3.2-SPEC has NOT landed. STOP. Do not write tests against it and do not pin the
+values yourself inside this session; that is 3.2-SPEC's separate visible action (§0.5).
+
+You are implementing clauses D-H4 and P-01, acceptance criteria AC-DH4-1, AC-P01-1, AC-DH4-2, from
+the spec above.
+
+You are the RED session. You write TEST FILES ONLY. You may not create or edit any file under
+/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/ or
+/Users/yitzchak.meirovich/Documents/code5/careervp/src/frontend/ except to READ it. Not temporarily,
+not "to see if it works." If you believe an implementation file must change, write the test that
+proves it and stop.
+
+--------------------------------------------------------------------------------
+FIRST — read how B-3-6 and B-3-7 settled
+--------------------------------------------------------------------------------
+Both were promoted to
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md
+by 3.2-SPEC. Read them there — belief, cheapest check, fallback already decided, and how each
+settled. Your job is to write the tests the settled position implies, not to re-litigate either.
+
+  - If B-3-6 settled FALSE (expected): `test_dh4_cv_tailoring_preserves_vpr_id_null` is a
+    REGRESSION GUARD that passes on day one. Write it, label it in its docstring as a guard with the
+    reason, and report it as such in the rule-13 block below. **Do not bend it into failing**, do
+    not delete it, and do not treat its green as evidence that D-H4 is done.
+  - If B-3-7 settled FALSE, `dal/application_repository.py` is in the pinned file list and
+    `test_dh4_status_endpoint_resolves_hub_artifact_id` must force the swallowed step-2 failure.
+
+--------------------------------------------------------------------------------
+THEN — write these tests, and only these (from the spec's pinned "RED Tests to Write First")
+--------------------------------------------------------------------------------
+Four tests. The spec is authoritative for every assertion value after 3.2-SPEC's precision edit —
+READ IT. Do not re-derive values from the summaries below, and do not widen them. The summaries
+exist so you can tell whether you are reading the right section, not so you can skip it.
+
+  test_dh4_status_endpoint_resolves_hub_artifact_id
+      Seed a hub artifact; assert the status endpoint resolves the SAME opaque artifact_id —
+      round-trip identity, exact string equality, not "an id is present". Per B-3-7, force the
+      `application_repository` step-2 write failure and assert the hub does NOT serve
+      `artifact_id: null` over an artifact that exists. Cite AC-DH4-1.
+
+  test_p01_cover_letter_uses_resolved_vpr_not_client_key
+      Call cover-letter generation with a stale AND with a cross-tenant `vpr_id`; assert the exact
+      status code and exact error envelope the spec pins, and assert no read of another user's VPR
+      is performed at all (not "performed then rejected"). Cite AC-P01-1.
+
+  test_p01_interview_prep_uses_resolved_vpr_not_client_key
+      Same stimulus and the SAME pinned status/envelope as the cover-letter test — both features
+      must answer identically. Additionally assert the ownership refusal is TERMINAL: the jobs-table
+      path refusing must not fall through to a second `dal.get_vpr` lookup of the same client key.
+      Cite AC-P01-1.
+
+  test_dh4_cv_tailoring_preserves_vpr_id_null
+      Request with `vpr_id` present-and-null: accepted. Request with `vpr_id` omitted:
+      distinguishable, per the spec's pinned outcome for each. Assert at both the model-validation
+      layer and the handler's observable response. Cite AC-DH4-2. See B-3-6 above for what to do
+      when this passes immediately.
+
+OUT OF SCOPE, and say so explicitly in the test module docstring so 3.2-GREEN inherits the boundary:
+  - The three residues 3.1-GREEN recorded (`company_research_store::_legacy_table_name`,
+    `dynamo_dal_handler` internal key building, the inner `_legacy_read_cover_letter_by_scan`
+    query-level fallback). (a) and (c) are 3.5's, (b) is a later wave's.
+  - Anything under `infra/` — 3.2 touches no infrastructure. That is 3.4.
+  - Auth/trial/user-pool keying (Wave-6 D-H8), and the D-M god-class split (3.4).
+  - Clause F-04 (Wave 4). If B-3-6 shows F-04's cited violation is already fixed, that is a FLAG for
+    human review, not a Wave-3 deliverable.
+
+RULE 13 — a test that has not been observed to fail is not a test. Run every test above and capture
+the failure output VERBATIM. For each, state WHY it failed. A test failing on an ImportError, a
+collection error, or a missing fixture is NOT RED — it is broken, and it will go green later for
+reasons unrelated to the fix.
+
+Where 3.2 needs a `CoreRepository` method that does not exist yet (VPR/interview-prep resolution),
+an ImportError or AttributeError is the naive first result. DO NOT resolve that with a skip-guard —
+a skipped test is not a red test, and `skip` is the quietest way in this repo to ship a decorative
+assertion (§0.5, `api-client.test.ts`). Attempt the import/attribute access inside the test, catch
+it, and fail on your own message naming the exact symbol that must exist, e.g.
+`pytest.fail('AC-P01-1: CoreRepository.<method> not available at careervp.dal.core_repository')`.
+The test then fails on ITS OWN assertion and goes green for exactly the right reason. Say explicitly
+which technique you used for each of the four, and name the exact symbols 3.2-GREEN must create.
+
+The two behavioral tests (cover letter, interview prep) exercise code that exists today — they must
+RUN today and fail on their pinned assertions. If either passes today, STOP: the stimulus is wrong,
+not the codebase correct.
+
+No real network calls in any test — moto/stub only. Secrets stay under the P-06 rules.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. Confirmation (rule 14) that the spec existed, named AC-DH4-1/AC-P01-1/AC-DH4-2, and stated exact
+   assertion values with no "or"-shaped assertion — including the grep you ran for it. Or, if not,
+   what you found and where you stopped.
+2. How B-3-6 and B-3-7 settled per ISSUES.md, and what each implied for the tests you wrote. If
+   B-3-6 settled FALSE, the F-04 overlap flagged in plain English for human review.
+3. Verbatim failure output for every test, with a one-line why for each, and the exact list of
+   symbols 3.2-GREEN must create.
+4. Confirmation that the D-H2/D-H3 ratchets from 3.1 still pass unchanged.
+5. Confirmation that ZERO files under
+   /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/ and
+   /Users/yitzchak.meirovich/Documents/code5/careervp/src/frontend/ were modified
+   (`git diff --stat`).
+6. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses D-H4
+  and P-01 in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  update the 3.2-RED row with a plain-English status, the commit, today's date, and anything
+  3.2-GREEN must resolve first (or write "none").
+```
+
+---
+
+# PROMPT 3.2-GREEN — make them pass
+
+> **Clause:** D-H4, P-01 · **Spec:** [`specs/D-H4-P-01-canonical-artifact-spec.md`](../specs/D-H4-P-01-canonical-artifact-spec.md)
+> **Acceptance criteria:** AC-DH4-1, AC-P01-1, AC-DH4-2
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15 — copied verbatim from `redesign-execution-plan.md`'s Wave-3 row 3.2. **Deliberately
+> `opus`, not `fable`:** the plan's row says `opus/high`, and rule 18 does not license a fill-in
+> session to re-route a step the plan already tiered. See the model note in §3.2 above.)
+>
+> Run in a **FRESH session** that has not seen 3.2-RED's reasoning. `/clear` is the minimum; a
+> separate invocation is preferred. The failing tests are a contract you did not write and **may not
+> edit** — that clause is the entire firewall. No relaxing an assertion, no widening an exclusion,
+> no `xfail`, no `skip`. If a test looks genuinely *wrong* (not merely inconvenient), STOP and raise
+> a §0.3 amendment.
+>
+> **You are editing the Wave-3 contention hotspot.** `CoreRepository` / `TableRegistry` is what 3.3,
+> 3.4 and 3.5 all extend (§2). One open editor at a time; do not start if another Wave-3 step is
+> mid-flight against those modules.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.2-RED row (and, above it, 3.2-SPEC and 3.1-GREEN). If any left something open — a
+B-3-6/B-3-7 decision, the F-04 overlap flag, a symbol list — deal with that FIRST. Confirm the RED
+tests exist and FAIL right now, with a real command; do not trust the ledger:
+
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh4 or p01" 2>&1 | tail -40
+
+If they pass, or fail on import/collection errors rather than their own assertions, STOP and say so.
+If `test_dh4_cv_tailoring_preserves_vpr_id_null` passes and the 3.2-RED row records it as a B-3-6
+regression guard, that ONE is expected — confirm it against the row rather than assuming.
+
+You are implementing clauses D-H4 and P-01 (AC-DH4-1, AC-P01-1, AC-DH4-2). You make the RED tests
+pass by writing implementation code ONLY. You may not edit any test file and you may not edit the
+spec's RED-test brief. If a test looks genuinely wrong, STOP and raise a §0.3 amendment — never a
+quiet edit.
+
+--------------------------------------------------------------------------------
+WHAT TO BUILD (from the spec's Fix Plan, as pinned by 3.2-SPEC)
+--------------------------------------------------------------------------------
+1. Characterization first. Before changing a resolution path, pin today's observable behavior for
+   VPR, CV-tailoring, cover-letter and interview-prep artifact ids in NEW characterization tests —
+   the technique 3.1-GREEN used (`tests/unit/test_table_registry_characterization.py`). New test
+   files are allowed; editing the RED file is not.
+
+2. ONE canonical opaque `artifact_id` per artifact, and status reads routed through it. Extend
+   `careervp/dal/core_repository.py` / `careervp/dal/table_registry.py` — they are the key and
+   repository authority 3.1 established, and 3.2 does not create a second one. Collapse the
+   six-name id ladder in `logic/artifact_dependency_resolver.py::_artifact_id` to exactly the names
+   the spec pins.
+
+3. Resolve upstream VPR/CR/CV dependencies THROUGH the repository, never from a raw client-supplied
+   key: `cover_letter_handler.py::_resolve_vpr_payload` and both interview-prep resolution paths
+   (`_resolve_vpr_from_jobs_table` and its `dal.get_vpr` fallback). Ownership is decided BEFORE the
+   read, the refusal is terminal, and both features return the identical pinned status and envelope.
+
+4. If B-3-7 settled FALSE, make the canonical `artifact_id` write authoritative:
+   `dal/application_repository.py`'s swallowed step-2 `except Exception: pass` becomes a surfaced
+   typed failure in the same shape D-H3 used. A write that silently no-ops cannot underwrite a
+   round-trip guarantee. **Do not widen D-H3's clause to cover it — D-H4 owns this.**
+
+5. Public semantics stay byte-stable: `application_id == job_id`, `artifact_id`, and `vpr_id`
+   null-vs-absent. Internal keying changes are not API changes — prove it against the oracle
+   (/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/F-frontend-oracle-spec.md),
+   specifically §3 items 1, 2 and 3, which is this step's Done-when. **No route versioning** — the
+   spec's Done-when says none is required, and adding one is a rule-5 stop.
+
+FORWARD-THINKING ONLY (v2.7.0 / `O-3`). Canonical ids only. No migration, no dual-read window, no
+backfill, no cutover probe, no legacy-id resolution, no parity harness — there is nothing to import
+and nothing to build. A record in a legacy shape is deleted and rewritten. If you find yourself
+writing a compatibility path for an old id, STOP: that is the exact family this wave is removing.
+
+OUT OF SCOPE — leave every one of these alone, they belong to a named later step:
+  - The three residues 3.1-GREEN recorded (`company_research_store::_legacy_table_name`,
+    `dynamo_dal_handler` internal key building, the inner `_legacy_read_cover_letter_by_scan`
+    fallback) — 3.5 and a later wave.
+  - `infra/` — nothing in 3.2 touches it; the GSI and PK work is 3.4.
+  - The D-M god-class split (3.4), request-path Scans (3.3), auth/trial keying (Wave-6 D-H8).
+  - Clause F-04 (Wave 4) and the carried-in P-07b / I-05 / I-06 items. Do not fix I-05's red test
+    as a side effect.
+
+--------------------------------------------------------------------------------
+VERIFY — with fresh evidence, not assertion
+--------------------------------------------------------------------------------
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh4 or p01" 2>&1 | tail -20      # the 4 RED tests now pass
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3" 2>&1 | tail -20      # 3.1's ratchets NOT regressed
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/ tests/integration/ -q 2>&1 | tail -10  # full suite green, zero regressions
+  cd "$(git rev-parse --show-toplevel)/src/backend" && make coverage-tests                                             # exit 0; core-branch ratchet held (3.1-GREEN measured core 55.52)
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_frontend_oracle_schema_emission.py tests/unit/test_route_parity_openapi.py -q 2>&1 | tail -10
+  cd "$(git rev-parse --show-toplevel)/src/frontend" && npm run typecheck && npm run test:unit
+  cd "$(git rev-parse --show-toplevel)" && uv run python src/backend/scripts/check_scope_lock_integrity.py --base HEAD
+
+P-01's contract verification is `e2e+characterization` and D-H4's is `contract+integration` — a unit
+suite alone does not discharge them. Either deploy `CareerVpCrudDevx` (manual-dispatch only, no
+merge to `main`) and characterize the two fixed features against the raw invoke URL
+`https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/`, or state the undeployed debt
+explicitly in the ledger row. §0.5: Wave 2 accumulated four undeployed steps and then had to
+reconcile them all at once into the next step's diff. Do not repeat it silently.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. Fresh verbatim pass output for the 4 RED tests, the 3.1 ratchets, the full suite, mypy --strict,
+   the coverage gate (with measured numbers), the oracle tests, and the frontend checks.
+2. Confirmation that ZERO test files and ZERO spec RED-briefs were modified (`git diff --stat` over
+   the test dirs and the spec) — new characterization test files listed separately and named.
+3. The exact `CoreRepository` / `TableRegistry` surface 3.2 added, since 3.3 / 3.4 / 3.5 all extend
+   the same modules and need to know what is now there.
+4. Confirmation the oracle still passes and §3 items 1, 2 and 3 hold — no identifier or
+   response-shape drift, and no route versioning added.
+5. Deploy status stated explicitly: deployed to `CareerVpCrudDevx` with the characterization result,
+   or the undeployed debt named.
+6. Any residue you could not clear, enumerated with a named owner step — the ratchet-that-holds
+   pattern 3.1-GREEN used. A loosened assertion is a rule-5 stop; an enumerated residue is not.
+7. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clauses D-H4
+  and P-01 in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow, THEN the technical detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  update the 3.2-GREEN row with a plain-English status, the commit, today's date, deploy status, and
+  anything 3.3 / 3.4 / 3.5 must resolve first — in particular the added repository surface and any
+  enumerated residue (or write "none").
+```
 
 ---
 
