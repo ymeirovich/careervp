@@ -111,7 +111,8 @@ def test_cv_tailoring_no_vpr_returns_202_not_500(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(cv_tailoring_handler, 'mark_requested_artifact_pending', mark_pending)
 
     response = cv_tailoring_handler.lambda_handler(
-        _event('/cv-tailoring/generate', {'cv_id': 'cv-1', 'job_id': 'app-1'}),
+        # scope-lock §3 item 3: CV-tailoring sends `vpr_id: null`, never omitted.
+        _event('/cv-tailoring/generate', {'cv_id': 'cv-1', 'job_id': 'app-1', 'vpr_id': None}),
         _context(),
     )
 

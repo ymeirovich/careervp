@@ -64,6 +64,30 @@ The four RED tests may drive implementation changes only in:
 
 Out of scope for all four tests: `company_research_store.py::_legacy_table_name` and the inner `_legacy_read_cover_letter_by_scan` query fallback remain owned by 3.5; `dynamo_dal_handler.py` internal key construction remains owned by a later wave; `infra/` and the D-M god-class/GSI work remain owned by 3.4; request-path Scans remain owned by 3.3; auth, trial, and user-pool keying remain owned by Wave-6 D-H8; F-04 closure remains owned by Wave 4 pending human review of the handler overlap. Scope-lock v2.7.0 remains in force: no parity harness, dual-read window, legacy-id probe, migration, backfill, cutover. No compatibility reader is introduced.
 
+## Affected existing tests (inventory)
+
+Added 2026-07-27 after 3.2-GREEN. The original RED brief carried no
+affected-existing-test inventory, which is the root defect behind both §0.3
+amendment proposals (`RUNBOOK-RULES.md:301-303`). Both reconciliations below were
+human-approved before landing; neither pinned RED test was modified.
+
+- `tests/integration/test_downstream_dependency_202.py::test_cv_tailoring_no_vpr_returns_202_not_500`
+  sent `{cv_id, job_id}` with `vpr_id` **omitted** and asserted HTTP 202. That payload
+  contradicts scope-lock §3 item 3 (`CV-tailoring sends vpr_id: null (never omitted)` —
+  null-vs-absent is load-bearing), the committed oracle schema
+  `contract/schemas/CVTailoringRequest.json` (`required: [cv_id, job_id, vpr_id]`), and
+  `src/frontend/lib/types.ts:517`. It passed only because of the handler bypass B-3-6
+  settled TRUE — the defect AC-DH4-2 exists to remove. **Reconciliation: option 1** —
+  the fixture now sends `vpr_id: None`. No contract change; the contract already said this.
+- `tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url`
+  omitted both `application_id` and `job_id`, relying on
+  `interview_prep_submit_handler.py`'s `or api_request.vpr_id` application-key fallback.
+  AC-P01-1 requires that request to be refused with HTTP 400 before dependency
+  resolution. **Reconciliation: option A1** — the public request contract is tightened
+  (v3.0.0) and the fixture now sends `application_id`. The rejected alternative was
+  branching on Pydantic `model_fields_set`, which would preserve the fallback behind a
+  present-versus-absent check and reintroduce compatibility machinery under a new name.
+
 ## Acceptance Criteria
 
 **AC-DH4-1** - Given a hub `artifact_id`, when status is requested, then the endpoint resolves that opaque id and returns the same artifact identity.
