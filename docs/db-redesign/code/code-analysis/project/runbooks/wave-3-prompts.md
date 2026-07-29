@@ -107,7 +107,7 @@ cover-letter and interview-prep paths (clause P-01). Every Track D spec it needs
 |---|---|---|---|---|---|
 | 3.1-RED / 3.1-GREEN | D-H2, D-H3 | One module owns every DynamoDB key; surface `ValidationException` instead of hiding it as "not found" | `D-H2-D-H3-key-authority-spec.md` | 0.6 + Wave-2 GATE | **full, below** |
 | 3.2 | D-H4, P-01 | Store a canonical `artifact_id` + resolved upstreams → fixes cover-letter/interview-prep | `D-H4-P-01-canonical-artifact-spec.md` | 3.1 | **full, below** (3.2-SPEC → 3.2-RED → 3.2-GREEN) |
-| 3.3 | D-H7 | Eliminate request-path Scans | `D-H7-request-path-scans-spec.md` | 3.1 | skeleton |
+| 3.3 | D-H7 | Eliminate request-path Scans | `D-H7-request-path-scans-spec.md` | 3.1 | **full, below** (3.3-SPEC → 3.3-RED → 3.3-GREEN) |
 | 3.4 | D-M1, D-M2, D-M3, D-M5, D-M6, D-Q | God-class split; stop dual-key CV write; minimized GSI; retire `userEmail` PK; access-pattern doc; quick wins | `D-M-seams-bundle-spec.md` | 3.1 | skeleton |
 | 3.5 | D-H9 | Complete the FE-UI-044 CR canonical-store migration; retire the legacy `users-table` CR read path | `D-H9-company-research-migration-spec.md` | 3.1 | skeleton |
 | GATE | — | Re-runnable wave demonstration + re-read all `B-3-*` bets | — | all | skeleton |
@@ -132,6 +132,13 @@ concurrently against the same module. 3.4 additionally touches `infra/` (the min
 - After 3.1-GREEN, 3.2 / 3.3 / 3.5 touch **different feature read paths** and can be filled in and
   run in parallel — but each edits `CoreRepository`, so coordinate ownership (one open editor at a
   time) exactly as §2 warns.
+- **3.3 is the exception, pending its own evidence.** At the 2026-07-29 fill-in the pre-flight found
+  no request-path Scan that is 3.3's own (bet `B-3-8`), which points at 3.3 touching neither module
+  — in which case it needs **no lock at all** and runs freely alongside 3.4/3.5. That is **decision
+  point DP-1 in §3.3**, resolved by 3.3-SPEC, not assumed here. A second decision, **DP-2**, can
+  pull one line of `infra/api_construct.py` into 3.3 and therefore into 3.4's `infra/` lock; §3.3
+  carries the rule-10 stopping condition that hands the large IAM reading to 3.4 instead. **Read the
+  3.3-SPEC ledger row before scheduling 3.3 against anything else.**
 - **3.4 last, or carefully coordinated:** it retires the `userEmail` PK and reshapes a GSI (stateful
   infra), the highest blast radius in the wave. Run it alone against `infra/` and gate every stateful
   change on `cdk diff` showing zero replacement (bet `B-3-4`).
@@ -982,16 +989,572 @@ ALSO REQUIRED (standing rule for every wave prompt — see
 |---|---|
 | **Clause** | D-H7 |
 | **Spec** | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md` |
-| **Acceptance criteria** | (read from the spec at fill-in) |
-| **Claude / Codex** | opus/high · gpt-5-codex/high |
+| **Acceptance criteria** | AC-DH7-1, AC-DH7-2 |
+| **Claude / Codex** | opus/high · gpt-5-codex/high (rule 15 — Claude side verbatim from `redesign-execution-plan.md:314`; Codex side resolved per rule 16 from that row's bare `codex/high` using the spec's `tooling` frontmatter pin, exactly as 3.2 did. **Not Fable — rule 18 forbids routing RED to it.**) |
 | **Depends on** | 3.1-GREEN |
 | **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only; no merge to `main`) |
-| **Rule 7** | Contained change — single session, RED-first with pasted failing output, is acceptable |
-| **Bets** | none new — relies on 3.1's key authority to replace Scans with keyed Queries/GSIs |
+| **Rule 7** | **RED and GREEN are separate sessions.** The Wave-0 skeleton said a single session was acceptable for a "contained change"; the 2026-07-29 fill-in **overrides that**, for two reasons stated here so the override is visible rather than inherited: (a) DP-2 below can pull `infra/` into this step, which is not contained; (b) `B-3-8` makes this likely a **guard-rail** step, and a guard-rail is the exact case where one session writes the assertion around whatever the code already does. A separate RED session cannot do that. |
+| **Bets** | **`B-3-8`** (added 2026-07-29, pre-settled toward FALSE — see `ISSUES.md`): *there is a live request-path Scan that is 3.3's own to remove.* If false, 3.3 is guard-rail + regression test only. **`B-3-4`** applies only if DP-2 resolves toward `infra/`. |
 
-**In plain English.** Replace every `Scan` on a request path with a keyed `Query`/GSI lookup, so
-read latency and cost stop scaling with table size. No money-path or reconcile Scan is in scope here
-(those were settled in Wave 2, step 2.5).
+**In plain English.** Make it impossible for a request path to call DynamoDB `Scan` — so read
+latency and cost stop scaling with table size, and one tenant's query can never walk another
+tenant's rows. Reconcile and offline-migration scans stay (Wave-2 step 2.1-GREEN settled that
+explicitly).
+
+**Read `B-3-8` in `ISSUES.md` before anything else in this step.** The pre-flight inventory found
+**three** `.scan(` sites repository-wide and **all three are already owned by other decisions** —
+the reconcile scan Wave 2 chose to keep, the legacy cover-letter scan that belongs to 3.5, and the
+offline backfill script the spec itself allow-lists. So the honest expectation is that 3.3 removes
+nothing and instead *nails the door shut*: a static guard that fails the build when a scan reappears,
+plus a GSI-shape assertion. That is a real deliverable, and pretending otherwise is how a step grows
+scope to stay interesting.
+
+**The spec is stale and must be pinned before RED (rule 14).** Its Evidence cites
+`subscription_repository.py:127-129` as a surviving "money-path scan fallback"; live, that function
+already queries `customer-id-index` and the money-path scan was removed in Wave-2 2.1-GREEN. It also
+never mentions the two findings that actually give 3.3 content (DP-2 below). Rule 14 forbids a RED
+session from pinning its own spec, which is why **3.3-SPEC exists as a separate visible action** —
+the same split 3.2 used, for the same reason.
+
+### Two decision points — DEFERRED ON PURPOSE, each with the test that resolves it
+
+Neither is decided here, because neither can be decided honestly from the Wave-0 spec. Both are
+**resolved by evidence during 3.3**, and rule 10 requires each deferral to carry a stopping
+condition rather than just a home. **Whoever resolves one owes a plain-English explanation in the
+`wave-3-status.md` row** — which option, what evidence chose it, and what it means for the steps
+that come after. A silently-taken option is a rule-5 stop.
+
+**DP-1 — Does 3.3 touch `CoreRepository` / `TableRegistry` at all?**
+This is the §2 serialization question, and it has three possible answers:
+
+| Option | What it means | When it applies |
+|---|---|---|
+| **A — no touch** | 3.3 adds only a static source guard and an infra/synth assertion. No repository edit. **No serialization conflict; runs fully parallel to 3.4 and 3.5.** | If `B-3-8` settles FALSE — the expected outcome. |
+| **B — new write to the module** | A genuine artifacts/core request-path scan exists, so 3.3 adds a keyed query helper to `table_registry.py` / `core_repository.py`. **Serialization lock applies:** one open editor, do not run concurrently with 3.4 or 3.5. | If `B-3-8` settles TRUE *and* the site is on the artifacts/core table. |
+| **C — read-only use** | 3.3 calls an *existing* 3.2-era helper to build a replacement query and adds nothing. A dependency, not an edit — **no contention.** | If `B-3-8` settles TRUE and the existing surface already covers the replacement. |
+
+- **Resolved by:** `B-3-8`'s tier-1 inventory, executed in **3.3-SPEC** (its first action).
+- **Stopping condition (rule 10):** if 3.3-SPEC cannot classify all three known sites — plus any
+  new one — as *kept*, *another step's*, or *3.3's own*, using a decision that already exists in
+  `wave-2-status.md`, `wave-3-status.md`, or the spec, then **STOP and escalate**. Do not resolve an
+  ambiguous site by assigning it to 3.3; that is how a step annexes 3.5's work.
+- **Note:** subscription/billing keying is **not** `TableRegistry`'s (users table, `USER#{id}` /
+  `SUBSCRIPTION#CURRENT`), and `B-3-5` parks user/application keying for Wave-6 D-H8. A scan found
+  there is Option A regardless.
+
+**DP-2 — Does AC-DH7-1 mean "no Scan in source" or "no Scan permitted by IAM"?**
+AC-DH7-1 reads *"when handlers/repositories execute, then DynamoDB Scan is never called"* and does
+not say which. The two readings are very different in size, and the live findings force the question:
+
+- `infra/careervp/api_construct.py:941` still grants `dynamodb:Scan` on the artifacts table and its
+  `type-index` to a runtime Lambda. Wave-2 2.1-GREEN removed the Scan action from `BillingLambda`
+  **only**; this grant survived and nothing tests it.
+- CDK's `grant_read_data` / `grant_read_write_data` **include `dynamodb:Scan` implicitly**, and
+  `api_construct.py` calls them ~20 times. Under the IAM reading, every runtime Lambda currently
+  *can* scan even with zero scans in source.
+
+| Option | What it means | Cost |
+|---|---|---|
+| **Source-only** | The guard is static analysis over `handlers/`+`dal/`+`logic/`. `infra/` untouched. **No collision with 3.4.** | Small. Leaves the IAM surface open, which must then be named as enumerated residue with an owner. |
+| **Source + the one explicit grant** | Also removes the literal `"dynamodb:Scan"` at `api_construct.py:941`. Touches `infra/`, one line, one synth assertion. | Small, but **takes the `infra/` serialization lock** and needs `B-3-4`'s isolated-template-diff proof. |
+| **Source + IAM closure** | Also narrows ~20 `grant_*_data` calls to explicit action lists. | **Large, and 3.4 is already reshaping the same file.** Almost certainly belongs in 3.4 or later, not here. |
+
+- **Resolved by:** **3.3-SPEC**, as a pinned decision recorded in the spec's Evidence and Fix Plan.
+- **Stopping condition (rule 10):** if 3.3-SPEC resolves toward *Source + IAM closure*, **STOP
+  before RED** and hand the IAM half to 3.4 — `api_construct.py` is the file 3.4 already serializes,
+  and two steps reshaping it concurrently is the Wave-2 `api_construct.py` incident replayed. Record
+  the handoff in both rows.
+- **Whichever option is taken,** the untouched remainder is enumerated residue with a named owner
+  step (3.1-GREEN's ratchet-that-holds pattern), never silence.
+
+---
+
+# PROMPT 3.3-SPEC — pin the D-H7 assertion values, settle `B-3-8`, resolve DP-1/DP-2 (spec + ISSUES.md only)
+
+> **Clause:** D-H7 · **Spec:** [`specs/D-H7-request-path-scans-spec.md`](../specs/D-H7-request-path-scans-spec.md)
+> (full path: `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md`)
+> **Acceptance criteria:** AC-DH7-1, AC-DH7-2 — **pinned, never renumbered, never widened**
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 16 — precision authoring against an existing contract. **Not Fable:** rule 18 routes
+> precision authoring away from Fable for the same reason it routes RED away, and this session
+> writes no implementation.)
+>
+> **What this session is.** The separate visible action rule 14 requires: a precision edit to one
+> spec's Evidence + "RED Tests to Write First" sections, `B-3-8` settled in `ISSUES.md`, and DP-1 and
+> DP-2 decided **on evidence, in writing, before a single test exists**. It writes **no test and no
+> implementation**. It is the direct analogue of 3.2-SPEC.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.1-GREEN row and the 3.2-GREEN row. 3.3 depends on 3.1-GREEN only, but 3.2-GREEN
+landed first and left named open items — read them so you do not trip over one.
+
+  1. Confirm 3.1-GREEN's foundation is real, from the interpreter, not the column:
+        cd "$(git rev-parse --show-toplevel)" && git log --oneline -8
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run python -c "from careervp.dal.core_repository import CoreRepository; from careervp.dal.table_registry import TableRegistry; print(sorted(n for n in dir(CoreRepository) if not n.startswith('_')))"
+     If either module is missing or unimportable, STOP — 3.3 has no foundation.
+
+  2. Read 3.2-GREEN's open items. Three matter to you and NONE of them are yours to fix:
+     (a) the v3.0.0 adversarial review is not discharged — a human owes it;
+     (b) 3.2 is UNDEPLOYED debt against CareerVpCrudDevx;
+     (c) the residue list with named owners.
+     You are a docs-only session: none of these block you, and none of these are yours. Do not
+     "help" with any of them.
+
+  3. Confirm the suite is green right now, so 3.3-RED's later failures are unambiguous:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q 2>&1 | tail -5
+
+You are performing a PRECISION EDIT on
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md,
+and settling one bet in
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md.
+
+You may edit EXACTLY those two files, plus the 3.3-SPEC row in wave-3-status.md. You may not touch
+any file under /Users/yitzchak.meirovich/Documents/code5/careervp/src/ or
+/Users/yitzchak.meirovich/Documents/code5/careervp/infra/, any test, or either
+project-scope-lock twin.
+
+--------------------------------------------------------------------------------
+WHY THIS SESSION EXISTS (rule 14)
+--------------------------------------------------------------------------------
+D-H7-request-path-scans-spec.md is a 52-line Wave-0 spec, status: draft. Its three RED-test lines
+name behaviors but not values ("assert no .scan( calls outside allow-list" does not say what the
+allow-list IS). Its Evidence is provably stale in a way that points the wrong direction. And it
+never mentions the IAM surface at all. A RED session cannot legally write tests from it.
+
+HARD BOUNDARY on what pinning means. You may make each RED-test description state exact values,
+exact scope, and exact out-of-scope exclusions; you may correct and extend the Evidence section; and
+you may record the DP-1/DP-2 decisions in the Fix Plan. You may NOT:
+  - add, remove, rename, or renumber an acceptance criterion (AC-DH7-1 and AC-DH7-2 stand),
+  - add a fourth RED test,
+  - change what D-H7 requires. That is the contract twins' text and a §0.3 amendment.
+  - re-introduce anything v2.7.0 removed (no parity harness, no dual-read, no backfill).
+If pinning a value turns out to require any of the above, STOP and say which one and why.
+
+--------------------------------------------------------------------------------
+STEP 1 — SETTLE B-3-8 (rule 9). This is your FIRST action; everything else depends on it.
+--------------------------------------------------------------------------------
+Read B-3-8 in ISSUES.md in full — belief, why-it-is-a-bet, tier-1 check, fallback already decided.
+Your job is to CONFIRM or REFUTE it live, not re-invent it.
+
+Run the tier-1 check:
+    cd "$(git rev-parse --show-toplevel)/src/backend" && grep -rn "\.scan(" careervp/ scripts/
+    cd "$(git rev-parse --show-toplevel)/src/backend" && grep -rn "dynamodb:Scan" ../../infra/careervp/
+
+Then classify EVERY hit against a decision that ALREADY EXISTS — in wave-2-status.md,
+wave-3-status.md, or the spec — never against your own judgement of what looks like a request path.
+The pre-flight (2026-07-29) found exactly three source hits and one IAM hit; confirm each live, and
+where live disagrees, THE DELTA IS THE FINDING. Record it; do not quietly adopt either number.
+
+  - subscription_repository.py:415 (scan_active_subscriptions) — Wave-2 2.1-GREEN's row says
+    "preserve scan_active_subscriptions and BillingReconcileLambda Scan access". KEPT. Not yours.
+  - dynamo_dal_handler.py:800 (legacy_read_cover_letter ValidationException fallback) — request-path
+    but legacy; 3.1-GREEN's residue (c) assigns the legacy cover-letter scan family to 3.5. NOT
+    YOURS. Do not annex it, however tempting: it is the only site that would make 3.3 a "real" fix,
+    and taking it is exactly the scope drift this runbook keeps paying for.
+  - scripts/cr_migration_backfill.py:261 — offline; the spec's own Fix Plan item 3 allow-lists
+    offline scripts, and v2.7.0 deletes this file at 3.5.
+
+If all sites are owned elsewhere, B-3-8 is FALSE and its pre-decided fallback is IN FORCE: 3.3 ships
+as guard-rail + regression test only. Write that into ISSUES.md as the settled status, with the
+concrete artifact that settled it. Do NOT treat "the step turned out smaller" as a problem to solve.
+
+If you find a FOURTH site the pre-flight missed, that is the finding of the session: classify it,
+and if it is genuinely 3.3's own, B-3-8 is TRUE and the fallback does not fire.
+
+--------------------------------------------------------------------------------
+STEP 2 — RESOLVE DP-1 AND DP-2, IN WRITING, ON EVIDENCE
+--------------------------------------------------------------------------------
+Both are specified in wave-3-prompts.md §3.3 ("Two decision points"), with their options, what
+resolves each, and their rule-10 stopping conditions. Read that section, then decide each and record
+the decision in the spec's Fix Plan plus the ledger row. Name the OPTION LETTER, the evidence, and
+the consequence for later steps. An undecided site is how Wave 2 blocked itself (§0.5).
+
+  DP-1 (does 3.3 touch CoreRepository/TableRegistry?) follows directly from Step 1. If B-3-8 is
+  FALSE, the answer is Option A — no touch, no serialization conflict, 3.3 runs parallel to 3.4/3.5.
+  Say so explicitly so 3.4 and 3.5 can be scheduled without asking.
+
+  DP-2 (does AC-DH7-1 mean source-only or IAM?) you must decide on cost, and confirm both live
+  findings first:
+      cd "$(git rev-parse --show-toplevel)/infra" && sed -n '930,950p' careervp/api_construct.py
+      cd "$(git rev-parse --show-toplevel)/infra" && grep -c "grant_read_data\|grant_read_write_data" careervp/api_construct.py
+  RECOMMENDED, and say why if you depart from it: "Source + the one explicit grant" — the static
+  guard over handlers/dal/logic PLUS removing the literal "dynamodb:Scan" at api_construct.py:941.
+  It is one line of infra, it closes the one grant that is demonstrably wider than any caller needs,
+  and it is provable with a synth assertion. The ~20 implicit grant_*_data calls are NOT in scope:
+  3.4 is already reshaping api_construct.py, and two steps in that file concurrently is the Wave-2
+  incident replayed. Enumerate the implicit-grant surface as residue owned by 3.4, with the count.
+  If you take the one-line infra option, say in the row that 3.3 now holds the infra/ lock for that
+  edit and B-3-4's isolated-template-diff technique applies to it.
+
+--------------------------------------------------------------------------------
+STEP 3 — PIN THE THREE RED TESTS
+--------------------------------------------------------------------------------
+The spec names three. Keep exactly three; pin each to exact values.
+
+  test_dh7_no_scan_in_runtime_handlers_or_dal (AC-DH7-1)
+      Pin: the exact directories scanned; the exact allow-list, ENUMERATED SITE BY SITE with the
+      decision that allow-lists each (not a directory wildcard); whether the check is a
+      frozen-baseline ratchet (may shrink, never grow — B-3-5's pattern from 3.1) or an absolute
+      zero-occurrences assertion, and WHY that choice fits what 3.3 is actually scoped to satisfy.
+      Pin how the scan is performed (AST vs regex) and how a false negative is prevented — a regex
+      for ".scan(" misses `getattr(table, 'scan')` and `table.__getattr__`. State the known limits.
+      If DP-2 took the infra option, pin the IAM half here too: exactly which policy statement, and
+      the exact synth assertion that proves "dynamodb:Scan" is absent from it.
+
+  test_dh7_subscription_lookup_uses_query (AC-DH7-1)
+      NOTE THE TRAP: the money-path fix already landed in Wave-2 2.1-GREEN, and
+      tests/unit/test_l1_list_endpoints.py:225-276 already asserts query-not-scan on the list paths.
+      Pin what this test adds that those do not, or pin it explicitly as a LABELLED REGRESSION GUARD
+      over get_subscription_by_customer_id's customer-id-index query. Pin that it must NOT assert
+      anything about scan_active_subscriptions, which is deliberately retained — an over-broad
+      assertion here would break the reconcile path Wave 2 chose to keep.
+
+  test_dh7_no_status_only_gsi_partition_key (AC-DH7-2)
+      Pre-flight found this ALREADY SATISFIED: infra/careervp/api_db_construct.py:384-393 defines
+      "status-index" with partition_key=userId and sort_key=status — user-scoped, high-cardinality,
+      status only in the sort position. The name is a red herring. CONFIRM live, then pin this as a
+      LABELLED REGRESSION GUARD that passes on day one, enumerating every GSI in
+      api_db_construct.py by name and asserting the shape of each partition key. Pin the exact list
+      of index names so a newly-added GSI fails the test rather than slipping past it.
+
+Every test that passes on day one is labelled a guard IN THE SPEC, with the reason — B-3-6's
+handling. A guard is not a failure of the step; an unlabelled guard is.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. The tier-1 inventory: every .scan( and dynamodb:Scan hit, with its classification and the
+   EXISTING decision that owns it. Deltas from the pre-flight's four hits called out explicitly.
+2. B-3-8 settled TRUE or FALSE in ISSUES.md, with the concrete settling artifact, and whether its
+   pre-decided fallback is in force.
+3. DP-1 and DP-2 each resolved, by option letter, with the evidence and the consequence for 3.4/3.5.
+   If DP-2 resolved toward IAM closure, the rule-10 STOP and the handoff to 3.4 instead.
+4. The edited Evidence and "RED Tests to Write First" sections, quoted in full, with every assertion
+   value pinned, every allow-list entry enumerated, and every day-one-green test labelled a guard.
+5. Explicit confirmation that AC-DH7-1 and AC-DH7-2 are unchanged in id, count, and text.
+6. Confirmation that ZERO files under /Users/yitzchak.meirovich/Documents/code5/careervp/src/ and
+   /Users/yitzchak.meirovich/Documents/code5/careervp/infra/ were modified (`git diff --stat`).
+7. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause D-H7 in
+  project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  add a 3.3-SPEC row with a plain-English status, the commit, today's date, and what 3.3-RED must
+  resolve first — in particular how B-3-8 settled and which option DP-1 and DP-2 took, each in one
+  sentence a non-engineer could follow.
+```
+
+---
+
+# PROMPT 3.3-RED — request-path Scan elimination (tests only)
+
+> **Clause:** D-H7 · **Spec:** [`specs/D-H7-request-path-scans-spec.md`](../specs/D-H7-request-path-scans-spec.md)
+> (full path: `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md`)
+> **Acceptance criteria:** AC-DH7-1, AC-DH7-2
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16 — Claude side verbatim from `redesign-execution-plan.md:314`; Codex side resolved from
+> that row's bare `codex/high` per rule 16 and the spec's `tooling` frontmatter pin.
+> **Not Fable — rule 18 forbids routing RED to it.**)
+>
+> **Rule 7 applies** — see the override note in §3.3's field table. RED and GREEN are two different
+> sessions. This one writes tests only and carries an **absolute prohibition** on touching
+> implementation files.
+>
+> **Requires 3.3-SPEC to have landed.** Without the precision edit there is no legal set of
+> assertion values, no settled `B-3-8`, and no DP-1/DP-2 decision — the standing check below stops.
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.3-SPEC row AND the 3.1-GREEN row. If either left anything open, deal with that first.
+
+  1. Confirm 3.1-GREEN's foundation is real, from the interpreter, not the column:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run python -c "from careervp.dal.core_repository import CoreRepository; from careervp.dal.table_registry import TableRegistry; print('importable')"
+
+  2. Confirm the suite is green before you add a failing test:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q 2>&1 | tail -5
+
+  3. Confirm the ratchets from 3.1 and the contracts from 3.2 still hold — you must not regress them:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3 or dh4 or p01" 2>&1 | tail -10
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md
+exists, that its "RED Tests to Write First" section names tests covering AC-DH7-1 and AC-DH7-2, and
+that each cited test states exact assertion values. Specifically:
+  - grep the RED-test section for the word "or" — no "or"-shaped assertion may remain;
+  - confirm the allow-list is ENUMERATED SITE BY SITE, not a directory wildcard. An unenumerated
+    allow-list is an undefined placeholder and fails rule 14 check 3 exactly as "or" does.
+If either fails, 3.3-SPEC has NOT landed properly. STOP. Do not pin the values yourself inside this
+session — that is 3.3-SPEC's separate visible action, and folding it in here is the precise thing
+rule 14 forbids.
+
+You are implementing clause D-H7, acceptance criteria AC-DH7-1 and AC-DH7-2, from the spec above.
+
+You are the RED session. You write TEST FILES ONLY. You may not create or edit any file under
+/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/,
+/Users/yitzchak.meirovich/Documents/code5/careervp/src/frontend/, or
+/Users/yitzchak.meirovich/Documents/code5/careervp/infra/careervp/ except to READ it. Not
+temporarily, not "to see if it works." If you believe an implementation file must change, write the
+test that proves it and stop.
+
+--------------------------------------------------------------------------------
+FIRST — read how B-3-8 settled, and which options DP-1 and DP-2 took
+--------------------------------------------------------------------------------
+B-3-8 is in
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/ISSUES.md.
+DP-1 and DP-2 are recorded in the 3.3-SPEC ledger row and the spec's Fix Plan. Read all three. Your
+job is to write the tests the settled position implies, not to re-litigate any of them.
+
+  - If B-3-8 settled FALSE (expected): 3.3 is a GUARD-RAIL STEP. Some or all of your tests will pass
+    on day one. Write them, label each in its docstring as a guard WITH THE REASON, and report them
+    as such in the rule-13 block below. Do not bend a guard into failing, do not delete it, and do
+    not treat its green as evidence that D-H7 is done. A guard that fails when a scan reappears is
+    the deliverable.
+  - If DP-2 took the source-only option, you write NO infra test for IAM. If it took "source + the
+    one explicit grant", you write the synth assertion the spec pins for api_construct.py:941 — and
+    that one WILL fail today, because the grant is live.
+  - If DP-1 took Option A (expected), you add nothing to CoreRepository/TableRegistry and there is no
+    serialization lock to hold.
+
+--------------------------------------------------------------------------------
+THEN — write these tests, and only these (from the spec's pinned "RED Tests to Write First")
+--------------------------------------------------------------------------------
+Three tests. The spec is authoritative for every assertion value after 3.3-SPEC's precision edit —
+READ IT. Do not re-derive values from the summaries below, and do not widen them. The summaries
+exist so you can tell whether you are reading the right section, not so you can skip it.
+
+  test_dh7_no_scan_in_runtime_handlers_or_dal
+      Static analysis over the exact directories the spec pins, asserting no scan call survives
+      outside the spec's ENUMERATED allow-list. Cite AC-DH7-1. Use the detection technique the spec
+      pins (AST if pinned — a regex for ".scan(" misses getattr-style access) and state its known
+      limits in the docstring.
+
+  test_dh7_subscription_lookup_uses_query
+      Exactly what the spec pins, and NOT MORE. It must NOT assert anything about
+      scan_active_subscriptions: that scan is deliberately retained for BillingReconcileLambda per
+      Wave-2 2.1-GREEN, and an over-broad assertion here silently breaks the reconcile path. Cite
+      AC-DH7-1.
+
+  test_dh7_no_status_only_gsi_partition_key
+      Synth the tables and assert every GSI partition key is user-scoped, high-cardinality, or
+      sparse, over the exact enumerated index list the spec pins. Expected to pass on day one —
+      "status-index" has partition key userId, with status only in the sort position. Label it a
+      guard. Cite AC-DH7-2.
+
+OUT OF SCOPE, and say so explicitly in the test module docstring so 3.3-GREEN inherits the boundary:
+  - `dal/dynamo_dal_handler.py:800` — the legacy cover-letter ValidationException scan fallback.
+    It IS a request path and it IS a real scan, and it belongs to **3.5** (D-H9 legacy-path
+    demolition; 3.1-GREEN residue (c)). Do not write a test that would force its removal here.
+  - `dal/subscription_repository.py:415` (`scan_active_subscriptions`) — retained on purpose.
+  - `scripts/cr_migration_backfill.py:261` — offline; allow-listed, and deleted at 3.5.
+  - The ~20 implicit `grant_read_data` / `grant_read_write_data` Scan grants in `api_construct.py` —
+    3.4's, per DP-2. Do not narrow them here.
+  - The three residues 3.1-GREEN recorded, and everything 3.2-GREEN listed with a named owner.
+  - Auth/trial/user-pool keying (Wave-6 D-H8) and the D-M god-class split (3.4).
+
+RULE 13 — a test that has not been observed to fail is not a test. This step needs MORE care here
+than 3.1 or 3.2 did, because most of these tests are expected to pass on day one, and rule 13's own
+incident (`api-client.test.ts`) was exactly a permanently-green test nobody had watched fail.
+
+For EVERY test that passes on day one, you must prove it CAN fail, by temporary mutation, and paste
+the failure output verbatim:
+  - the static guard: temporarily add a `.scan(` call to a runtime module, watch the guard fail,
+    revert, confirm `git diff --stat` is clean over `src/backend/careervp/`;
+  - the GSI test: temporarily flip an index's partition key to `status` in the construct, re-synth,
+    watch it fail, revert;
+  - the subscription test: temporarily point the lookup at `scan`, watch it fail, revert.
+Paste all three. An unmutated guard is decorative, and this repo has shipped one before.
+
+Do NOT resolve a missing symbol with a skip-guard — a skipped test is not a red test. Attempt the
+import/attribute access inside the test, catch it, and fail on your own message naming the exact
+symbol, e.g. `pytest.fail('AC-DH7-1: <symbol> not available at <module>')`.
+
+No real network calls in any test — moto/stub/synth only. Secrets stay under the P-06 rules.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. Confirmation (rule 14) that the spec existed, named AC-DH7-1/AC-DH7-2, stated exact assertion
+   values with no "or"-shaped assertion, and carried an ENUMERATED allow-list — including the greps
+   you ran. Or, if not, what you found and where you stopped.
+2. How B-3-8 settled and which options DP-1/DP-2 took, and what each implied for the tests you wrote.
+3. For each test: RED or day-one-green guard. For every RED, verbatim failure output and a one-line
+   why. For every guard, the verbatim mutation-failure output proving it can fail, plus confirmation
+   the mutation was reverted and `git diff --stat` is clean over the implementation trees.
+4. The exact list of symbols (if any) 3.3-GREEN must create.
+5. Confirmation that the 3.1 ratchets and 3.2 contracts still pass unchanged.
+6. Confirmation that ZERO files under src/backend/careervp/, src/frontend/, and infra/careervp/ were
+   modified (`git diff --stat`).
+7. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause D-H7 in
+  project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  update the 3.3-RED row with a plain-English status, the commit, today's date, which tests are
+  guards versus RED, and anything 3.3-GREEN must resolve first (or write "none").
+```
+
+---
+
+# PROMPT 3.3-GREEN — make them pass
+
+> **Clause:** D-H7 · **Spec:** [`specs/D-H7-request-path-scans-spec.md`](../specs/D-H7-request-path-scans-spec.md)
+> **Acceptance criteria:** AC-DH7-1, AC-DH7-2
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15 — Claude side verbatim from `redesign-execution-plan.md:314`. **Deliberately `opus`, not
+> `fable`:** the plan's row says `opus/high`, and rule 18 does not license a fill-in session to
+> re-route a step the plan already tiered.)
+>
+> Run in a **FRESH session** that has not seen 3.3-RED's reasoning. `/clear` is the minimum; a
+> separate invocation is preferred. The failing tests are a contract you did not write and **may not
+> edit** — that clause is the entire firewall. No relaxing an assertion, no widening an allow-list,
+> no `xfail`, no `skip`. If a test looks genuinely *wrong* (not merely inconvenient), STOP and raise
+> a §0.3 amendment.
+>
+> **Whether you hold the contention lock depends on DP-1** (§3.3). Under Option A — the expected
+> outcome — 3.3 touches neither `CoreRepository` nor `TableRegistry`, and runs safely in parallel
+> with 3.4/3.5. Under Option B you hold the lock: one open editor, do not start if another Wave-3
+> step is mid-flight against those modules. **Read the 3.3-SPEC row and know which one you are
+> before you write a line.**
+
+```
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.3-RED row (and, above it, 3.3-SPEC and 3.1-GREEN). If any left something open — a
+B-3-8 outcome, a DP-1/DP-2 option, a symbol list, a guard-versus-RED classification — deal with that
+FIRST. Confirm the current state with a real command; do not trust the ledger:
+
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh7" 2>&1 | tail -40
+
+Expect a MIX: the tests 3.3-RED classified as day-one guards pass, and only the tests it classified
+as RED fail. Check that mix against the 3.3-RED row rather than assuming.
+  - If a test the row calls RED is passing, STOP — the stimulus is wrong, not the codebase correct.
+  - If a test the row calls a guard is FAILING, STOP — something regressed between RED and now.
+  - If EVERY dh7 test passes and the row says so (B-3-8 FALSE + DP-2 source-only), then this GREEN
+    session has no failing test to fix. That is a legitimate outcome, not a problem to solve by
+    inventing work: verify, record, and close. Do NOT go find a scan to remove.
+
+You are implementing clause D-H7 (AC-DH7-1, AC-DH7-2). You make the RED tests pass by writing
+implementation code ONLY. You may not edit any test file and you may not edit the spec's RED-test
+brief. If a test looks genuinely wrong, STOP and raise a §0.3 amendment — never a quiet edit.
+
+--------------------------------------------------------------------------------
+WHAT TO BUILD (from the spec's Fix Plan, as pinned by 3.3-SPEC)
+--------------------------------------------------------------------------------
+1. Whatever the RED tests actually demand, and nothing else. Under the expected outcome (B-3-8
+   FALSE) that is: the static guard is already satisfied by the source tree, and the only genuine
+   failure is DP-2's one-line infra edit — remove the literal "dynamodb:Scan" action from the
+   artifacts_table policy statement at infra/careervp/api_construct.py:941, leaving PutItem,
+   GetItem, UpdateItem, DeleteItem, Query intact on the table and its type-index.
+
+2. If DP-1 took Option B, add the keyed query helper to
+   careervp/dal/table_registry.py / careervp/dal/core_repository.py — they are the key and
+   repository authority 3.1 established and 3.2 extended, and 3.3 does not create a second one.
+
+3. Public semantics stay byte-stable. Replacing a Scan with a Query changes internal access, never
+   the response shape. Prove it against the oracle
+   (/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/F-frontend-oracle-spec.md),
+   §3 items 1, 2 and 3. **No route versioning** — adding one is a rule-5 stop.
+
+BEFORE THE INFRA EDIT, if DP-2 put one in scope — prove zero stateful replacement with the ISOLATED
+TEMPLATE DIFF, not a live `cdk diff` (§0.5, W2 2.3-root-cause, and B-3-4's named technique):
+    cd "$(git rev-parse --show-toplevel)/infra" && ENVIRONMENT=devx uv run cdk synth CareerVpCrudDevx > /tmp/after.json
+    cd "$(git rev-parse --show-toplevel)" && git stash
+    cd "$(git rev-parse --show-toplevel)/infra" && ENVIRONMENT=devx uv run cdk synth CareerVpCrudDevx > /tmp/before.json
+    cd "$(git rev-parse --show-toplevel)" && git stash pop
+    diff /tmp/before.json /tmp/after.json
+An IAM policy-action removal must show as an IAM-only diff with ZERO stateful resource changes. If
+the diff touches a table, a GSI, the RestApi, or the Cognito pool, STOP — the two IMMUTABLE laws are
+in play and this is no longer a one-line change.
+
+FORWARD-THINKING ONLY (v2.7.0 / O-3). No migration, no dual-read, no backfill, no cutover.
+
+OUT OF SCOPE — leave every one of these alone; each belongs to a named later step:
+  - dal/dynamo_dal_handler.py:800, the legacy cover-letter scan fallback — **3.5**. This is the one
+    that will tempt you, because removing it would make this step feel substantial. It is 3.5's, it
+    is gated on 3.5's retirement-register evidence, and taking it here is a rule-5 stop.
+  - dal/subscription_repository.py:415 (scan_active_subscriptions) — retained on purpose (Wave-2
+    2.1-GREEN). Removing it breaks BillingReconcileLambda.
+  - scripts/cr_migration_backfill.py — offline, allow-listed, deleted at 3.5.
+  - The ~20 implicit grant_*_data Scan grants in api_construct.py — 3.4's, per DP-2.
+  - The D-M god-class split and all other infra/ work (3.4); auth/trial keying (Wave-6 D-H8);
+    F-04 (Wave 4); the carried-in P-07b / I-05 / I-06. Do not fix I-05's red test as a side effect.
+
+--------------------------------------------------------------------------------
+VERIFY — with fresh evidence, not assertion
+--------------------------------------------------------------------------------
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh7" 2>&1 | tail -20                      # the D-H7 tests pass
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3 or dh4 or p01" 2>&1 | tail -20  # 3.1 ratchets + 3.2 contracts NOT regressed
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_l1_list_endpoints.py -q 2>&1 | tail -10      # the pre-existing no-scan list tests still pass
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/ tests/integration/ -q 2>&1 | tail -10            # full suite green, zero regressions
+  cd "$(git rev-parse --show-toplevel)/src/backend" && make coverage-tests                                                        # exit 0; core-branch ratchet held (3.2-GREEN measured core 55.79)
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_frontend_oracle_schema_emission.py tests/unit/test_route_parity_openapi.py -q 2>&1 | tail -10
+  cd "$(git rev-parse --show-toplevel)" && uv run python src/backend/scripts/check_scope_lock_integrity.py --base HEAD
+If the infra edit is in scope, additionally:
+  cd "$(git rev-parse --show-toplevel)/infra" && uv run pytest tests/ -q 2>&1 | tail -10
+  cd "$(git rev-parse --show-toplevel)" && uv run python src/backend/scripts/validate_naming.py --path infra --strict
+
+D-H7's verification tier is in the clause — read it, and if it is not satisfied by the unit and
+synth suites alone, either deploy CareerVpCrudDevx (manual-dispatch only, no merge to `main`) and
+characterize against the raw invoke URL
+https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/, or state the undeployed debt
+explicitly in the ledger row. **3.2-GREEN already left undeployed debt as Wave-3's first** — its row
+says "do not let it accumulate as Wave 2 did." If you also do not deploy, say so plainly and say
+that the debt is now two steps deep. Do not let the count go unstated.
+
+--------------------------------------------------------------------------------
+OUTPUT REQUIRED
+--------------------------------------------------------------------------------
+1. Fresh verbatim output for the D-H7 tests, the 3.1/3.2 ratchets, the pre-existing list-endpoint
+   no-scan tests, the full suite, mypy --strict, the coverage gate (with measured numbers), the
+   oracle tests, and — if infra was touched — the infra suite and naming check.
+2. Confirmation that ZERO test files and ZERO spec RED-briefs were modified (`git diff --stat` over
+   the test dirs and the spec); any new characterization test files listed separately and named.
+3. If infra was touched: the isolated before/after template diff, quoted, showing an IAM-only change
+   with zero stateful replacement, and explicit confirmation the RestApi and Cognito pool logical
+   ids are byte-stable.
+4. The exact CoreRepository / TableRegistry surface 3.3 added — or an explicit statement that it
+   added none (Option A), so 3.4 and 3.5 know the module is untouched and unlocked.
+5. Confirmation the oracle still passes and §3 items 1, 2 and 3 hold — no identifier or
+   response-shape drift, no route versioning added.
+6. Deploy status stated explicitly: deployed to CareerVpCrudDevx with the characterization result,
+   or the undeployed debt named AND the running count of undeployed Wave-3 steps.
+7. Any residue you could not clear, enumerated with a named owner step — in particular the surviving
+   scan sites and the implicit IAM grant surface, each with its owner and count. A loosened
+   assertion is a rule-5 stop; an enumerated residue is not.
+8. A git commit message.
+
+ALSO REQUIRED (standing rule for every wave prompt — see
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) clause D-H7 in
+  project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow, THEN the technical detail, and flag it for human review. Do not mark the step done.
+- Update
+  /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md:
+  update the 3.3-GREEN row with a plain-English status, the commit, today's date, deploy status, and
+  anything 3.4 / 3.5 must resolve first — in particular whether CoreRepository/TableRegistry was
+  touched (DP-1), whether the infra/ lock was taken (DP-2), and the enumerated residue with owners
+  (or write "none").
+```
 
 ---
 
@@ -1075,8 +1638,12 @@ unit-tested to fail on purpose. But it hardcodes `WAVE2_BETS`, `WAVE2_CLAUSES`, 
 **not** create `wave3_gate.py`. A forked gate script drifts from the original, and then two scripts
 disagree about what a wave close means.
 
-**Re-read all five `B-3-*` bets** at the GATE (rule 9) and record each as settled TRUE/FALSE with the
-concrete artifact that settled it, in `wave-3-status.md`. Only then may Wave 4 be authorized.
+**Re-read all eight `B-3-*` bets** at the GATE (rule 9) and record each as settled TRUE/FALSE with
+the concrete artifact that settled it, in `wave-3-status.md`. The count has grown twice since this
+line was written — `B-3-6`/`B-3-7` at 3.2-SPEC and `B-3-8` at the 3.3 fill-in — so count them in
+`ISSUES.md` rather than trusting this number. Retired bets (`B-3-1`, `B-3-3`) are re-read too: rule
+9 keeps them precisely so a vanished bet is not mistaken for an unsettled one. Only then may Wave 4
+be authorized.
 
 **Also re-check the tooling, not just its output** (§0.5, W0): `scope-diff.py`'s hardcoded
 `--tests-dir` default made the Wave-0 GATE unpassable in a way that looked like a clean run.

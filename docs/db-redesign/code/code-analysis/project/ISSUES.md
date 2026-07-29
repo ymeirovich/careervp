@@ -564,7 +564,7 @@ owns the handler-name fix itself. Status: **settled — belief was FALSE, port n
 
 Per `RUNBOOK-RULES.md` rule 9. Each is a belief Wave 3 rests on that could be false, with the
 **cheapest** check that would show it false (rule 9's five-tier ladder) and the fallback decided
-now, while the answer is still genuinely unknown. **All seven are re-read at the Wave-3 gate** and
+now, while the answer is still genuinely unknown. **All eight are re-read at the Wave-3 gate** and
 recorded there as settled TRUE/FALSE with the concrete artifact that settled them.
 
 Promoted from the seed table in
@@ -879,3 +879,150 @@ still resolve the stored opaque id. D-H4 owns this failure; D-H3 is not widened.
 the exception was swallowed, and the hub served a null identity. The write path is implicated.
 `application_repository.py` is therefore in the pinned file list, and
 `test_dh4_status_endpoint_resolves_hub_artifact_id` carries the forced-failure stimulus.
+
+---
+
+## B-3-8 — There is a live request-path Scan that is 3.3's own to remove
+
+- **Load-bearing for:** 3.3's entire shape — whether D-H7 is a behavior change or a guard-rail —
+  and therefore whether 3.3 touches `CoreRepository` / `TableRegistry` at all (§2 serialization).
+- **Added 2026-07-29** at 3.3 fill-in, following the `B-3-5` / `B-3-6` / `B-3-7` precedent: a
+  pre-flight inventory found the spec's own Evidence pointing at sites that other steps already
+  decided. Added *before* 3.3-SPEC pins anything, which is the point of rule 9.
+
+**The belief.** D-H7 has at least one live runtime `.scan(` call site on a request path that is
+3.3's own to replace with a keyed `Query`/GSI lookup.
+
+**Why it is a bet.** `D-H7-request-path-scans-spec.md`'s Fix Plan items 1–2 are inventory-and-replace
+work, and the step is titled "Eliminate request-path Scans" — both presuppose something to eliminate.
+If the belief is false, 3.3 is Fix Plan items 3–4 only (a static guard plus a GSI-shape assertion),
+its RED tests are regression guards that pass on day one, and its file list never reaches the
+repository modules. Discovering that inside GREEN leaves two bad options — invent scope to justify
+the step, or quietly shrink it — and both are rule-5 stops. This is the same failure mode `B-3-2`
+was written for on D-H3.
+
+**The cheapest-tier check (tier 1 — live source read, zero new code).**
+
+```
+cd "$(git rev-parse --show-toplevel)/src/backend" && grep -rn "\.scan(" careervp/ scripts/
+```
+
+then classify every hit against decisions that already exist, rather than against the spec.
+
+**PRE-SETTLED TOWARD FALSE at fill-in (2026-07-29).** Three hits repository-wide, all three already
+owned:
+
+| Site | Classification | Who owns it |
+|---|---|---|
+| `src/backend/careervp/dal/subscription_repository.py:415` (`scan_active_subscriptions`, paginated) | Reconcile path, not request path | **Deliberately kept.** Wave-2 `2.1-GREEN`'s ledger row: "preserve `scan_active_subscriptions` and `BillingReconcileLambda` Scan access; money path and reconcile are separate Lambdas." |
+| `src/backend/careervp/dal/dynamo_dal_handler.py:800` (`legacy_read_cover_letter`, `ValidationException` → `scan(..., Limit=1)`) | Request path, but legacy | **3.5** (D-H9 legacy-path demolition) — same legacy cover-letter family 3.1-GREEN recorded as residue (c). |
+| `src/backend/scripts/cr_migration_backfill.py:261` | Offline migration script | Allow-listed by the spec's own Fix Plan item 3; deleted outright at 3.5 under v2.7.0. |
+
+**The spec's Evidence is stale and points the wrong way.** It cites
+`subscription_repository.py:127-129` as "still falls back to a money-path scan." Live, `:127-129` is
+`get_subscription_by_customer_id`, which already queries `customer-id-index` with no scan — Wave-2
+`2.1-GREEN` removed that money-path scan and the matching `dynamodb:Scan` IAM grant from
+`BillingLambda`. The only scan in that file is the reconcile one at `:415` that Wave 2 chose to keep.
+Record the delta in the spec; do not adopt either number silently.
+
+**The fallback, decided now.** If FALSE, **D-H7/3.3 ships as guard-rail + regression test only** —
+the static source guard (AC-DH7-1) and the GSI-shape assertion (AC-DH7-2) — with **no behavior
+change**. This is `B-3-2`'s fallback shape applied to D-H7, and `B-3-6`'s handling applied to the
+tests: each guard is LABELLED as a guard in its docstring with the reason, the ledger row records
+that it passed on day one and why, and it is neither deleted nor bent into failing. Explicitly, 3.3
+does **not** go hunting for a scan to justify itself, and does **not** annex
+`dynamo_dal_handler.py:800` from 3.5 — a step that grows to stay interesting is the drift this
+project keeps paying for.
+
+**Two live findings that give 3.3 real content either way** (recorded here so 3.3-SPEC pins them
+rather than rediscovering them):
+
+1. **`infra/careervp/api_construct.py:941` still grants `dynamodb:Scan`** on the artifacts table
+   (+ its `type-index`) to a runtime Lambda. Wave-2 `2.1-GREEN` removed the Scan action from
+   `BillingLambda` only; this grant survived and no test covers it.
+2. **CDK's `grant_read_data` / `grant_read_write_data` include `dynamodb:Scan` implicitly**, and
+   `api_construct.py` calls them ~20 times. So "no scan in source" and "no scan permitted by IAM"
+   are two very different assertions, and AC-DH7-1 ("DynamoDB Scan is never called") does not say
+   which one it means. **3.3-SPEC must decide and pin this**, because the IAM reading pulls `infra/`
+   into 3.3 and collides with 3.4's `infra/` serialization lock. See the decision point recorded in
+   `wave-3-prompts.md` §3.3.
+
+**Also confirmed at fill-in, and it is good news.** AC-DH7-2's risk ("no low-cardinality
+`STATUS#{status}` GSI partition key") is already satisfied: the one suspiciously-named index,
+`status-index` on the applications table (`infra/careervp/api_db_construct.py:384-393`), has
+partition key `userId` and sort key `status` — user-scoped and high-cardinality, with `status` only
+in the sort position. The name is a red herring. Pin that, so the AC-DH7-2 test is written as a guard
+against a future regression rather than as a fix.
+
+## ✅ SETTLED **FALSE** — 2026-07-29 by step 3.3-SPEC. Fallback IN FORCE.
+
+**The settling artifact:** the tier-1 grep above, run live on 2026-07-29 from `src/backend`, returned
+**exactly three** `.scan(` hits — `subscription_repository.py:415`, `dynamo_dal_handler.py:800`,
+`scripts/cr_migration_backfill.py:261` — and `grep -rn "dynamodb:Scan" ../../infra/careervp/` returned
+**exactly one** — `api_construct.py:941`. Each of the three source hits was classified against a
+decision that **already existed**, never against the spec or against judgement: Wave-2 `2.1-GREEN`'s
+ledger row (site 1, deliberately retained for `BillingReconcileLambda`), `3.1-GREEN`'s residue (c)
+(site 2, owned by **3.5**), and the D-H7 spec's own Fix Plan item 3 (site 3, offline). **No site is
+3.3's own.** The full inventory with its owning-decision column is pinned in
+`specs/D-H7-request-path-scans-spec.md` → Evidence **E-1**, which is the artifact of record.
+
+**Therefore the pre-decided fallback is IN FORCE, exactly as written:** D-H7/3.3 ships as
+**guard-rail + regression test only** — the static source guard (AC-DH7-1) and the GSI-shape
+assertion (AC-DH7-2) — with **no read-path behaviour change**. Each day-one-green assertion is
+LABELLED a guard in its docstring with the reason, and the 3.3-SPEC ledger row records that they pass
+on day one. 3.3 did **not** hunt for a scan to justify itself and did **not** annex
+`dynamo_dal_handler.py:800` from 3.5.
+
+**One qualification, and it is the only thing 3.3 actually changes:** DP-2 resolved toward
+*"source + the one explicit grant"*, so 3.3 removes the literal `"dynamodb:Scan"` at
+`api_construct.py:941`. That is an **IAM-surface** narrowing, not a read-path change — no caller
+scans the artifacts table (which is why the grant is provably over-wide), so the fallback's
+"no behaviour change" holds for the data path. It is the single red-before/green-after assertion in
+the step.
+
+**Deltas found live against the fill-in pre-flight — recorded, not silently adopted:**
+
+1. **The three-source-hits / one-IAM-hit count is CONFIRMED exactly.** No delta.
+2. **Implicit-grant count: "~20" → exactly `22`.** `grep -c "grant_read_data\|grant_read_write_data"
+   careervp/api_construct.py` returns **22**. `22` is the pinned number for the residue 3.4 inherits.
+3. **A FOURTH scan-shaped site the tier-1 regex structurally cannot see — and it does NOT flip this
+   bet.** `careervp/handlers/artifact_cleanup_handler.py:188` calls
+   `deps.jobs_repo.scan_by_status('CANCELLED', has_result_key=True)`, but **`scan_by_status` does not
+   exist** — no definition anywhere in the repo, and it is absent from `dir(JobsRepository)`. `deps`
+   is typed `Any`, so `mypy --strict` cannot see it, and the call sits inside
+   `except Exception: logger.warning('Cleanup: scan failed'); return []`. **Classified as NOT a Scan:**
+   no DynamoDB Scan is ever issued (the attribute lookup raises first), and
+   `artifact_cleanup_handler` is the **EventBridge-scheduled reaper**, not a request path — the same
+   category as the retained reconcile scan. `B-3-8` therefore stays **FALSE**. It is nevertheless a
+   **latent bug — the CANCELLED-orphan sweep silently reaps nothing on every run — and it is NOT
+   3.3's to fix (rule 5). FLAGGED FOR HUMAN REVIEW as a new-issue candidate; no owner is asserted
+   here, because assigning one would be 3.3 inventing scope.** Its bounded consequence for 3.3 is
+   recorded as a named **known limit** of the guard in the spec's RED test 1.
+4. **The spec's Evidence was stale in both directions.** `subscription_repository.py:127-129` does not
+   contain a money-path scan; those exact lines are now a section divider and the
+   `upsert_subscription` decorator, so the citation pointed at **nothing**. The live
+   `get_subscription_by_customer_id` (`:102-125`) already queries `customer-id-index`.
+5. **The pre-existing duplicate of RED test 2 is not the test the spec cited.** Wave-0 pointed at
+   `test_l1_list_endpoints.py:222-272`, which covers the **list** DAL methods only. The actual
+   duplicate is `tests/unit/test_p14_p15_billing_idempotency.py:198-220` (**AC-P15-1**), which already
+   asserts index name, partition key, equality value and `scan.assert_not_called()` for
+   `get_subscription_by_customer_id`. RED test 2 is therefore pinned as a **labelled
+   duplicate-by-design guard whose added value is AC ownership, not new coverage** — stated plainly
+   rather than dressed up.
+6. **Two vacuous-pass traps found and pinned** (both confirmed by building the stack live): the
+   `artifacts_table` policy lives in the **`CrudFeaturesNestedStack`** template
+   (`features_template`), **not** the parent — an IAM assertion against the parent finds nothing and
+   passes; and tables are `TableV2`, so the CFN type is **`AWS::DynamoDB::GlobalTable`** while
+   `AWS::DynamoDB::Table` has a live count of **0**.
+7. **AC-DH7-2's "good news" is CONFIRMED live** from the synthesized template:
+   `status-index` `KeySchema == [('userId','HASH'), ('status','RANGE')]`. Additionally, all **8** GSIs
+   were enumerated, and one PK is neither user-scoped nor high-cardinality — `entity-index`
+   (`knowledgeType`). It is **not 3.3's**: pre-existing rather than a scan replacement, **zero live
+   callers** in `careervp/`, and already owned by **D-M5** (3.4) and **Q-07** (Wave 4). Recorded as a
+   named exception inside the test's frozen baseline — enumerated residue, not silence.
+
+**Consequences locked by this settlement:** **DP-1 = Option A** (3.3 touches neither `CoreRepository`
+nor `TableRegistry`; **no §2 serialization lock; 3.3 runs parallel to 3.4 and 3.5**).
+**DP-2 = "source + the one explicit grant"** (3.3 holds the `infra/` lock for the single
+`api_construct.py:941` edit; `B-3-4`'s isolated-template-diff technique applies; the **22** implicit
+grants are 3.4's). Both are written up in the spec's Fix Plan and in the 3.3-SPEC ledger row.
