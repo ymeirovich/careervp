@@ -938,7 +938,6 @@ class ApiConstruct(Construct):
                                 "dynamodb:UpdateItem",
                                 "dynamodb:DeleteItem",
                                 "dynamodb:Query",
-                                "dynamodb:Scan",
                             ],
                             resources=[
                                 artifacts_table.table_arn,
