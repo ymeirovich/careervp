@@ -381,6 +381,36 @@ Lambda role, source `infra/careervp/api_construct.py:932-950`, literal to remove
   replacement markers on stateful resources; the only expected difference is the removal of the single
   `Action` element.
 
+> **⛔ SCOPE THE ASSERTION TO THE INLINE STATEMENT ONLY. Do NOT union it with the role's attached
+> default policy — that assertion is UNSATISFIABLE by 3.3 and would deadlock GREEN.**
+>
+> The obvious thing to copy is the repo's existing "no Scan grant" test,
+> `src/backend/tests/infrastructure/test_p15_billing_iam.py` (AC-P15-1, Wave-2 2.1). Its
+> `_role_policy_actions` helper deliberately **unions** a role's inline `Policies` with every
+> standalone `AWS::IAM::Policy` whose `Roles` list references that role — and for the shared role
+> here, that union includes `dynamodb:Scan` from a **second, independent source**. Verified live on
+> 2026-07-29 against the synthesized template:
+>
+> ```
+> shared role     : CareerVpCrudDevCrudServiceRoleArn305AAC1B
+> attached policy : ServiceRoleArnDefaultPolicy2B096FD3   | Scan present: True
+> INLINE has Scan : True     ATTACHED(default policy) has Scan : True     UNION has Scan : True
+> ```
+>
+> The attached `...DefaultPolicy...` Scan comes from the **22 implicit `grant_read_data` /
+> `grant_read_write_data` calls** (Evidence E-3 F-2), which are **3.4's**. A union-style assertion
+> therefore stays red after 3.3 removes `api_construct.py:941`, and 3.3-GREEN may not edit the test —
+> so the step would dead-end in a §0.3 amendment. Per DP-2 that outcome is explicitly out of scope:
+> the P-15 precedent is the right *pattern* for finding a role across parent and nested templates, and
+> the wrong *breadth* for this assertion.
+>
+> **Pin, therefore:** select the role by the presence of inline `PolicyName == "artifacts_table"`, and
+> assert **only** on that statement's `Action` list. Assert **nothing** about
+> `ServiceRoleArnDefaultPolicy2B096FD3` or any other attached policy. A companion assertion is
+> permitted and encouraged: that `dynamodb:Scan` **is still present** in the attached default policy,
+> labelled as **3.4's residue**, so the 22-grant surface is proven-and-owned rather than silently
+> assumed — and so a future reader cannot mistake this test for full IAM closure.
+
 **Out of scope, enumerated as residue owned by 3.4:** the **22** implicit
 `grant_read_data`/`grant_read_write_data` calls in `api_construct.py` (Evidence E-3 F-2). Part B
 asserts **nothing** about them — an assertion here would fail on day one against work 3.3 is

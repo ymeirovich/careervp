@@ -1050,14 +1050,17 @@ not say which. The two readings are very different in size, and the live finding
   `type-index` to a runtime Lambda. Wave-2 2.1-GREEN removed the Scan action from `BillingLambda`
   **only**; this grant survived and nothing tests it.
 - CDK's `grant_read_data` / `grant_read_write_data` **include `dynamodb:Scan` implicitly**, and
-  `api_construct.py` calls them ~20 times. Under the IAM reading, every runtime Lambda currently
-  *can* scan even with zero scans in source.
+  `api_construct.py` calls them ~20 times — **live count pinned at 3.3-SPEC: exactly 22.** Under the
+  IAM reading, every runtime Lambda currently *can* scan even with zero scans in source. **Confirmed
+  live:** these land in the shared role's attached `ServiceRoleArnDefaultPolicy2B096FD3`, which
+  carries `dynamodb:Scan` independently of the inline `artifacts_table` statement — so the two
+  readings are not merely different in size, they have different *homes* in the template.
 
 | Option | What it means | Cost |
 |---|---|---|
 | **Source-only** | The guard is static analysis over `handlers/`+`dal/`+`logic/`. `infra/` untouched. **No collision with 3.4.** | Small. Leaves the IAM surface open, which must then be named as enumerated residue with an owner. |
 | **Source + the one explicit grant** | Also removes the literal `"dynamodb:Scan"` at `api_construct.py:941`. Touches `infra/`, one line, one synth assertion. | Small, but **takes the `infra/` serialization lock** and needs `B-3-4`'s isolated-template-diff proof. |
-| **Source + IAM closure** | Also narrows ~20 `grant_*_data` calls to explicit action lists. | **Large, and 3.4 is already reshaping the same file.** Almost certainly belongs in 3.4 or later, not here. |
+| **Source + IAM closure** | Also narrows ~20 (**live: 22**) `grant_*_data` calls to explicit action lists. | **Large, and 3.4 is already reshaping the same file.** Almost certainly belongs in 3.4 or later, not here. |
 
 - **Resolved by:** **3.3-SPEC**, as a pinned decision recorded in the spec's Evidence and Fix Plan.
 - **Stopping condition (rule 10):** if 3.3-SPEC resolves toward *Source + IAM closure*, **STOP
@@ -1286,13 +1289,27 @@ and read the 3.3-SPEC row AND the 3.1-GREEN row. If either left anything open, d
   3. Confirm the ratchets from 3.1 and the contracts from 3.2 still hold — you must not regress them:
         cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3 or dh4 or p01" 2>&1 | tail -10
 
+  4. NOTE THE TWO TEST ROOTS. `pytest tests/unit -k "dh7"` will NOT see the synth-based D-H7 tests.
+     Whenever you or a later step select the D-H7 suite, name both roots explicitly:
+        cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit tests/infrastructure -q -k "dh7" 2>&1 | tail -20
+     (plus `cd infra && uv run pytest tests/ -q -k "dh7"` if you homed the synth tests there instead).
+     Reporting a partial selector as "all D-H7 tests pass" is a false green.
+
 BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
 /Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H7-request-path-scans-spec.md
 exists, that its "RED Tests to Write First" section names tests covering AC-DH7-1 and AC-DH7-2, and
 that each cited test states exact assertion values. Specifically:
-  - grep the RED-test section for the word "or" — no "or"-shaped assertion may remain;
+  - confirm no ASSERTION VALUE is "or"-shaped — i.e. no test is told to accept either of two
+    outcomes ("assert the key is userId or user_id"), which is the vagueness rule 14 exists to catch.
+    **Check assertion values, NOT the bare word.** A grep for `\bor\b` over this section is the WRONG
+    check and will fire on ordinary prose: the pinned section legitimately contains "annexing 3.5's
+    site or dropping dal/ from scope", "a variable, or eval/exec", and — quoting an option it
+    explicitly REJECTS — "every PK is user-scoped or high-cardinality". The test name
+    `test_dh7_no_scan_in_runtime_handlers_or_dal` and AC-DH7-2's own text also contain the word. Seven
+    prose hits were confirmed at pinning time; **none is an assertion, and none is a reason to stop.**
+    Read the value each assertion pins and judge whether it names one outcome or a choice.
   - confirm the allow-list is ENUMERATED SITE BY SITE, not a directory wildcard. An unenumerated
-    allow-list is an undefined placeholder and fails rule 14 check 3 exactly as "or" does.
+    allow-list is an undefined placeholder and fails rule 14 check 3 exactly as a vague value does.
 If either fails, 3.3-SPEC has NOT landed properly. STOP. Do not pin the values yourself inside this
 session — that is 3.3-SPEC's separate visible action, and folding it in here is the precise thing
 rule 14 forbids.
@@ -1332,23 +1349,58 @@ Three tests. The spec is authoritative for every assertion value after 3.3-SPEC'
 READ IT. Do not re-derive values from the summaries below, and do not widen them. The summaries
 exist so you can tell whether you are reading the right section, not so you can skip it.
 
-  test_dh7_no_scan_in_runtime_handlers_or_dal
-      Static analysis over the exact directories the spec pins, asserting no scan call survives
-      outside the spec's ENUMERATED allow-list. Cite AC-DH7-1. Use the detection technique the spec
-      pins (AST if pinned — a regex for ".scan(" misses getattr-style access) and state its known
-      limits in the docstring.
+  test_dh7_no_scan_in_runtime_handlers_or_dal        [TWO PARTS, ONE TEST — do not split it]
+      Part A — static analysis over the exact directories the spec pins, asserting no scan call
+      survives outside the spec's ENUMERATED allow-list (exactly two entries). Use the detection
+      technique the spec pins (AST — a regex for ".scan(" misses getattr-style access AND
+      false-positives on ScanIndexForward and on log strings) and state its known limits in the
+      docstring. Day-one green: label it a guard. The spec pins a FROZEN-BASELINE RATCHET, not an
+      absolute zero-occurrences assertion — do not "tighten" it to zero, which is unsatisfiable
+      without annexing 3.5's site.
+      Part B — the IAM half, because DP-2 resolved AC-DH7-1 to mean source AND the one explicit
+      grant. This is the ONLY assertion in 3.3 that is red today. **Read the spec's ⛔ block before
+      writing it:** assert on the inline `artifacts_table` statement ONLY. Do NOT union it with the
+      role's attached DefaultPolicy — Scan is present there too, from the 22 implicit grants that are
+      3.4's, so a union assertion can never go green in 3.3 and GREEN may not edit your test.
+      Both parts cite AC-DH7-1. **Part B is NOT a fourth test** — the spec keeps exactly three.
 
   test_dh7_subscription_lookup_uses_query
       Exactly what the spec pins, and NOT MORE. It must NOT assert anything about
       scan_active_subscriptions: that scan is deliberately retained for BillingReconcileLambda per
-      Wave-2 2.1-GREEN, and an over-broad assertion here silently breaks the reconcile path. Cite
-      AC-DH7-1.
+      Wave-2 2.1-GREEN, and an over-broad assertion here silently breaks the reconcile path. Keep
+      scan.assert_not_called() bounded to the single get_subscription_by_customer_id invocation. Cite
+      AC-DH7-1. Day-one green, and a DELIBERATE DUPLICATE of AC-P15-1's existing coverage at
+      tests/unit/test_p14_p15_billing_idempotency.py:198-220 — label it a guard whose added value is
+      AC ownership, not new coverage. Say that plainly in the docstring rather than dressing it up.
 
   test_dh7_no_status_only_gsi_partition_key
-      Synth the tables and assert every GSI partition key is user-scoped, high-cardinality, or
-      sparse, over the exact enumerated index list the spec pins. Expected to pass on day one —
-      "status-index" has partition key userId, with status only in the sort position. Label it a
-      guard. Cite AC-DH7-2.
+      Synth the tables and assert EXACTLY what the spec pins, which is NOT "every partition key is
+      user-scoped, high-cardinality, or sparse". That broader assertion was considered and REJECTED
+      at 3.3-SPEC: `entity-index` has partition key `knowledgeType`, so it would FAIL on day one and
+      could only be made green by reshaping the knowledge table — which belongs to D-M5 (3.4) and
+      Q-07 (Wave 4). Writing it is a rule-5 scope-drift stop.
+      The pinned assertions are: (a) no GSI's partition key is `status` or `status#`-prefixed — the
+      prohibition the clause actually states; and (b) set equality against the frozen 8-entry
+      (IndexName, KeySchema) baseline, so a NEWLY ADDED GSI fails rather than slipping past. Use
+      resource type AWS::DynamoDB::GlobalTable (tables are TableV2; AWS::DynamoDB::Table counts ZERO
+      and asserting against it passes vacuously) and assert the resource set is non-empty first.
+      `entity-index` is a named, owned exception recorded IN the baseline — enumerated, not hidden.
+      Expected to pass on day one — label it a guard. Cite AC-DH7-2.
+
+WHERE THE TEST FILES GO — pin this, because the D-H7 suite spans TWO pytest roots and a careless
+selector silently skips half of it:
+  - Part A and test_dh7_subscription_lookup_uses_query are pure Python / mock →
+    src/backend/tests/unit/test_dh7_request_path_scans.py
+  - Part B and test_dh7_no_status_only_gsi_partition_key need a CDK synth →
+    src/backend/tests/infrastructure/test_dh7_scan_iam_and_gsi_shape.py
+    (that is the established home for synth-based IAM contracts — see the P-15 precedent
+    test_p15_billing_iam.py, whose parent+nested-stack template collection technique you SHOULD
+    reuse; only its action-set BREADTH is wrong for D-H7, per the spec's ⛔ block.)
+  - `infra/tests/infrastructure/` is the alternative home and its conftest offers ready-made
+    `synthesized_template` / `features_template` fixtures. Either root is acceptable; PICK ONE,
+    state which, and make sure the verification selector below actually reaches it.
+  - Writing under src/backend/tests/ and infra/tests/ is permitted. The prohibition covers
+    src/backend/careervp/, src/frontend/, and infra/careervp/ — implementation, not tests.
 
 OUT OF SCOPE, and say so explicitly in the test module docstring so 3.3-GREEN inherits the boundary:
   - `dal/dynamo_dal_handler.py:800` — the legacy cover-letter ValidationException scan fallback.
@@ -1356,8 +1408,9 @@ OUT OF SCOPE, and say so explicitly in the test module docstring so 3.3-GREEN in
     demolition; 3.1-GREEN residue (c)). Do not write a test that would force its removal here.
   - `dal/subscription_repository.py:415` (`scan_active_subscriptions`) — retained on purpose.
   - `scripts/cr_migration_backfill.py:261` — offline; allow-listed, and deleted at 3.5.
-  - The ~20 implicit `grant_read_data` / `grant_read_write_data` Scan grants in `api_construct.py` —
-    3.4's, per DP-2. Do not narrow them here.
+  - The **22** implicit `grant_read_data` / `grant_read_write_data` Scan grants in `api_construct.py`
+    (live count pinned at 3.3-SPEC; the earlier "~20" was an estimate) — 3.4's, per DP-2. Do not
+    narrow them here, and do not write an assertion that would require them narrowed.
   - The three residues 3.1-GREEN recorded, and everything 3.2-GREEN listed with a named owner.
   - Auth/trial/user-pool keying (Wave-6 D-H8) and the D-M god-class split (3.4).
 
@@ -1365,14 +1418,24 @@ RULE 13 — a test that has not been observed to fail is not a test. This step n
 than 3.1 or 3.2 did, because most of these tests are expected to pass on day one, and rule 13's own
 incident (`api-client.test.ts`) was exactly a permanently-green test nobody had watched fail.
 
-For EVERY test that passes on day one, you must prove it CAN fail, by temporary mutation, and paste
-the failure output verbatim:
-  - the static guard: temporarily add a `.scan(` call to a runtime module, watch the guard fail,
-    revert, confirm `git diff --stat` is clean over `src/backend/careervp/`;
-  - the GSI test: temporarily flip an index's partition key to `status` in the construct, re-synth,
-    watch it fail, revert;
-  - the subscription test: temporarily point the lookup at `scan`, watch it fail, revert.
-Paste all three. An unmutated guard is decorative, and this repo has shipped one before.
+For EVERY test that passes on day one, you must prove it CAN fail and paste the failure output
+verbatim. **Prove it WITHOUT editing any implementation file** — the prohibition above is absolute and
+has no "temporarily" exemption, so structure each guard as a pure function over an input you control
+and feed it a poisoned input. All three are provable this way:
+  - the static guard (Part A): write a throwaway `.py` file containing `table.scan(...)` into pytest's
+    `tmp_path` and point the AST detector at that directory. It must report the site. Also feed it
+    `getattr(table, 'scan')(...)`, `fn = table.scan`, and `get_paginator('scan')` to prove forms 2-4
+    are caught, plus `ScanIndexForward=False` and a `"list-scan fallback"` log string to prove neither
+    false-positives. No source file is touched.
+  - the GSI test: pass the assertion helper a hand-built template dict whose GSI has
+    `KeySchema=[{'AttributeName':'status','KeyType':'HASH'}]` and confirm it fails; and a dict with a
+    9th index to confirm the frozen-baseline set equality fails on an addition.
+  - the subscription test: no mutation needed anywhere — configure the MagicMock so the repository's
+    call lands on `scan` instead of `query` (that is the whole point of the double) and confirm the
+    assertion fails.
+Paste all three. An unmutated guard is decorative, and this repo has shipped one before. Factor each
+detector so it takes its input as a parameter; a guard that can only run against the real tree is a
+guard you cannot prove, and that is a design smell, not an excuse.
 
 Do NOT resolve a missing symbol with a skip-guard — a skipped test is not a red test. Attempt the
 import/attribute access inside the test, catch it, and fail on your own message naming the exact
@@ -1440,7 +1503,14 @@ and read the 3.3-RED row (and, above it, 3.3-SPEC and 3.1-GREEN). If any left so
 B-3-8 outcome, a DP-1/DP-2 option, a symbol list, a guard-versus-RED classification — deal with that
 FIRST. Confirm the current state with a real command; do not trust the ledger:
 
-  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh7" 2>&1 | tail -40
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit tests/infrastructure -q -k "dh7" 2>&1 | tail -40
+
+**Name BOTH roots.** The D-H7 suite spans `tests/unit/` (static guard + subscription) and
+`tests/infrastructure/` (the IAM synth assertion + the GSI shape test); if 3.3-RED homed the synth
+tests in `infra/tests/` instead, run `cd infra && uv run pytest tests/ -q -k "dh7"` as well. A
+selector that reaches only `tests/unit/` will show you a clean pass while the one genuinely-red test
+was never collected — read the 3.3-RED row for where the files landed and confirm the collected count
+matches.
 
 Expect a MIX: the tests 3.3-RED classified as day-one guards pass, and only the tests it classified
 as RED fail. Check that mix against the 3.3-RED row rather than assuming.
@@ -1492,21 +1562,25 @@ OUT OF SCOPE — leave every one of these alone; each belongs to a named later s
   - dal/subscription_repository.py:415 (scan_active_subscriptions) — retained on purpose (Wave-2
     2.1-GREEN). Removing it breaks BillingReconcileLambda.
   - scripts/cr_migration_backfill.py — offline, allow-listed, deleted at 3.5.
-  - The ~20 implicit grant_*_data Scan grants in api_construct.py — 3.4's, per DP-2.
+  - The **22** implicit grant_*_data Scan grants in api_construct.py — 3.4's, per DP-2. They put
+    dynamodb:Scan in the shared role's ATTACHED DefaultPolicy, which is why RED's IAM assertion is
+    scoped to the inline artifacts_table statement only. Removing line 941 does NOT clear the union,
+    and it is not supposed to. Do not "finish the job" by narrowing them — that is 3.4's file lock.
   - The D-M god-class split and all other infra/ work (3.4); auth/trial keying (Wave-6 D-H8);
     F-04 (Wave 4); the carried-in P-07b / I-05 / I-06. Do not fix I-05's red test as a side effect.
 
 --------------------------------------------------------------------------------
 VERIFY — with fresh evidence, not assertion
 --------------------------------------------------------------------------------
-  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh7" 2>&1 | tail -20                      # the D-H7 tests pass
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit tests/infrastructure -q -k "dh7" 2>&1 | tail -20  # BOTH ROOTS — the D-H7 tests pass
   cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit -q -k "dh2 or dh3 or dh4 or p01" 2>&1 | tail -20  # 3.1 ratchets + 3.2 contracts NOT regressed
   cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_l1_list_endpoints.py -q 2>&1 | tail -10      # the pre-existing no-scan list tests still pass
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_p14_p15_billing_idempotency.py -q 2>&1 | tail -10  # AC-P15-1 money-path scan test (spec Done-when)
   cd "$(git rev-parse --show-toplevel)/src/backend" && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
-  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/ tests/integration/ -q 2>&1 | tail -10            # full suite green, zero regressions
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/ tests/integration/ tests/infrastructure/ -q 2>&1 | tail -10   # full suite; tests/infrastructure/ is where the D-H7 synth tests live — omitting it is a false green
   cd "$(git rev-parse --show-toplevel)/src/backend" && make coverage-tests                                                        # exit 0; core-branch ratchet held (3.2-GREEN measured core 55.79)
   cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit/test_frontend_oracle_schema_emission.py tests/unit/test_route_parity_openapi.py -q 2>&1 | tail -10
-  cd "$(git rev-parse --show-toplevel)" && uv run python src/backend/scripts/check_scope_lock_integrity.py --base HEAD
+  cd "$(git rev-parse --show-toplevel)" && uv run python scripts/ci/check_scope_lock_integrity.py --base HEAD   # NOTE: scripts/ci/, NOT src/backend/scripts/ — the old path in this runbook did not exist
 If the infra edit is in scope, additionally:
   cd "$(git rev-parse --show-toplevel)/infra" && uv run pytest tests/ -q 2>&1 | tail -10
   cd "$(git rev-parse --show-toplevel)" && uv run python src/backend/scripts/validate_naming.py --path infra --strict
