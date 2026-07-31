@@ -1637,29 +1637,312 @@ ALSO REQUIRED (standing rule for every wave prompt — see
 | | |
 |---|---|
 | **Clause** | D-M1, D-M2, D-M3, D-M5, D-M6, D-Q |
-| **Spec** | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-M-seams-bundle-spec.md` |
-| **Acceptance criteria** | (read from the spec at fill-in — this is a multi-clause bundle; map each AC to its D-M* clause) |
+| **Spec** | `../specs/D-M-seams-bundle-spec.md` (**62 lines, `status: draft`** — thin, and its Evidence is stale; see finding F-1) + `../specs/D-M6-D-Q-canonical-storage-shape-spec.md` (202 lines, owns D-M6/D-Q outright since v2.7.0) |
+| **Acceptance criteria** | **AC-DM1-1, AC-DM2-1, AC-DM5-1 exist. AC-DM3-1, AC-DM6-1 and AC-DQ-1 DO NOT EXIST** — three of the six clauses have a RED test listed with no acceptance criterion behind it (finding F-2). 3.4-SPEC must resolve this before RED. |
 | **Claude / Codex** | opus/high · gpt-5-codex/high |
-| **Depends on** | 3.1-GREEN |
-| **Deploy target** | `CareerVpCrudDevx` (manual-dispatch only; no merge to `main`) — **touches `infra/` (GSI + PK), highest blast radius in the wave** |
-| **Rule 7** | RED and GREEN separate — the `userEmail` PK retirement is stateful infra (D-M2/D-M5 are canonical-shape rewrites, **not** migration cutovers — v2.7.0/`O-3`) |
-| **Bets** | `B-3-4` (GSI/PK changes stay under the CFN ceiling and cause ZERO stateful replacement — isolated synth-template diff per change, never a single replacing change) — `B-3-1` **retired** at scope-lock v2.7.0, so D-M2/D-M5 are not parity-gated |
+| **Depends on** | 3.1-GREEN (landed `f438355`), 3.2-GREEN (landed `a485293`), 3.3-GREEN (landed `14d943f`) |
+| **Deploy target** | `CareerVpCrudDevx`. **Since 2026-07-31 the `db-redesign` push path deploys `CareerVpCrudDevx` automatically** (`db-redesign-checks.yml` → `make deploy-devx`), so a sync IS a deploy. Read §0.6 before pushing an infra change. |
+| **Rule 7** | RED and GREEN separate. **D-M5 is a table REPLACEMENT, not an in-place change** (finding F-4) — the single highest-blast-radius item in Wave 3. |
+| **Bets** | `B-3-4` (carried; isolated synth-template diff per infra change) · **`B-3-9`, `B-3-10`, `B-3-11`** — added at this fill-in, see `ISSUES.md` |
 
-**In plain English.** Split the god-class read/write path behind `CoreRepository`, stop the dual-key
-CV write, minimize the GSI, retire the `userEmail` primary key, and produce the access-pattern doc
-(D-M6) that proves every §1a endpoint and every §1b/§1c async path maps to a named Query/GSI with
-zero Scan — including status-by-`artifact_id` and a sparse in-flight index. D-M6 is a hard dependency
-of the Wave-6 D-H8 single-table collapse; get it right here. Serialize all `infra/` edits.
+**In plain English.** Six jobs in one step: break up the one huge database file, stop writing every
+CV/cover-letter record under two different key schemes at once, stop copying every column into every
+index, stop using people's email addresses as a database primary key, write down the list of every way
+the app reads data, and apply a handful of small database settings fixes.
 
-**Zero-replacement proof uses the ISOLATED template diff, not a live `cdk diff`** (§0.5, W2
-2.3-root-cause): `ENVIRONMENT=devx cdk synth CareerVpCrudDevx` at HEAD, then again with the change
-stashed, and diff the two synthesized templates directly — no live stack involved. Wave 2 lost a
-session to a live diff reporting six stacks of drift that turned out to be pre-existing devx
-staleness unrelated to the change under test. Deploy `CareerVpCrudDevx` per infra-touching change
-rather than accumulating undeployed debt; if you do not deploy, say so in the ledger row.
+The pre-flight found that three of those six are in worse shape than the spec says, and one of them
+(the email primary key) cannot be done without destroying and recreating a live table. That is not a
+reason to skip it — the table is expected to be empty — but it is a reason it must be gated on
+evidence rather than assumed.
 
 ---
 
+### Live pre-flight findings — 2026-07-31, all docs-only, zero source/test/infra files touched
+
+These are recorded here so 3.4-SPEC starts from live truth rather than the spec's text (§0.2: live
+truth supersedes static claims).
+
+- **F-1 — the spec's Evidence is stale in four places.** It calls `dynamo_dal_handler.py` a
+  "1,128-LOC god-class"; live it is **1144** lines (it grew during Waves 1–3). It cites the knowledge
+  table at `api_db_construct.py:337-361`; live it is **`:430-460`**. It cites `user_id-index` GSIs at
+  `:115-117,235-237`; live they are at **`:151`** (users) and **`:323`** (jobs). It cites
+  `coverage.xml:2` as showing "branch coverage is currently zero"; branch coverage has been **on since
+  T-01** and 3.3-GREEN measured core branch **55.79%**. Fix the Evidence, do not build from it.
+- **F-2 — three clauses have a RED test but no acceptance criterion.** The spec lists
+  `test_dm3_...`, `test_dm6_...` and a D-Q obligation, but its Acceptance Criteria section defines only
+  **AC-DM1-1, AC-DM2-1, AC-DM5-1**. Rule 14 forbids RED from inventing an AC. 3.4-SPEC must either
+  author AC-DM3-1 / AC-DM6-1 / AC-DQ-1 against the scope-lock clause text, or hand those clauses to a
+  later step — and say which, in writing.
+- **F-3 — D-M2's dual-key write is confirmed live and is worse than "dual-key".** At
+  `dynamo_dal_handler.py:535-552` one `put_item` writes **three** overlapping conventions on a single
+  item: the canonical pair (`applicationId`, `artifactId`), the legacy pair (`pk`, `sk`), **and** both
+  spellings of the type field (`artifactType` *and* `artifact_type`). The same shape recurs at `:452`.
+  This is the write that made bet `B-3-1` unachievable.
+- **F-4 — D-M5 requires a DynamoDB TABLE REPLACEMENT, and this collides with `B-3-4` head-on.**
+  The knowledge table (`api_db_construct.py:435-441`) has partition key **`userEmail`** and sort key
+  `knowledgeType`. A partition-key change is not an in-place update: CloudFormation deletes and
+  recreates the table. `B-3-4`'s standing assertion is *zero stateful replacement*. The two cannot
+  both hold, so 3.4 must take the exception **explicitly and on evidence** — Q-07 records the table as
+  *"declares userEmail, empty"*, and emptiness is a live fact that must be re-verified in `devx`
+  immediately before the change, not inherited from a 2026-07 note. This is **DP-4**.
+- **F-5 — D-M5/Q-07 will BREAK a D-H7 test, by design, and 3.4 is authorized to re-record it.**
+  `tests/infrastructure/test_dh7_scan_iam_and_gsi_shape.py::_GSI_BASELINE` freezes the GSI set as
+  **set equality** over 8 `(IndexName, KeySchema)` pairs, including
+  `('entity-index', (('knowledgeType','HASH'), ('entityId','RANGE')))`. Recreating the knowledge table
+  on a surrogate key changes that pair, so the D-H7 test fails. **That is the baseline working as
+  intended** — its own docstring says a change "is a deliberate schema decision that must be
+  re-recorded, not absorbed." 3.4 therefore updates `_GSI_BASELINE` **as a recorded schema decision**,
+  which is the one sanctioned exception to "do not edit another step's test". It is NOT a licence to
+  touch any other D-H7 assertion. **Note the narrow scope:** D-M3 changes `projection_type` only, and
+  the baseline captures `(IndexName, KeySchema)` — **projections do not break it**. Only a key-schema
+  change or an added/removed index does.
+- **F-6 — D-M3 is 8 sites, all `ProjectionType.ALL`, and changing one is a GSI delete+create.**
+  Every GSI in `api_db_construct.py` is `projection_type=dynamodb.ProjectionType.ALL`
+  (`:148, 158, 165, 320, 327, 392, 458, 499`). DynamoDB cannot alter a GSI's projection in place, and
+  a table has limits on concurrent index creation, so this is a **sequenced, per-index** change, never
+  one batch. This is **DP-5**.
+- **F-7 — D-Q's two concrete items are quantified, and the TTL half is a LIVE DEFECT, not a tidy-up.**
+  **PITR:** 8 tables sit at `recovery_period_in_days=7` and 2 already at 35
+  (`:190, :217`) — so "7d→35d" is **8 sites**, not all of them. **TTL:** declared attributes are
+  inconsistent across tables — `expiration` (`:187, 350, 415, 442, 483`), `ttl` (`:309`), `expiresAt`
+  (`:521`) — while the code writes a **different** attribute than the table declares in at least two
+  places: the artifacts table declares `expiration` but `dynamo_dal_handler.py:452,551` writes `'ttl'`,
+  and the knowledge table declares `expiration` but `knowledge_repository.py:50,99` writes `'ttl'`.
+  **Those items therefore never expire** — silent unbounded storage growth against NFR-DATA-3 and the
+  cost model. **Connection reuse:** no `botocore.config.Config` / `max_pool_connections` anywhere in
+  `careervp/` — unimplemented, not partially done.
+- **F-8 — a dead read path in the same family as the reaper bug, recorded so D-M6 catches it.**
+  `jobs_repository.py:115` queries `ENTITY_TYPE_INDEX_NAME = 'entity_type-index'`. That index is
+  declared in `infra/careervp/specs/dynamodb_spec.yaml:118` but was **never built in CDK** and does not
+  appear in the live 8-GSI baseline, so the query always raises and returns `[]`. `list_jobs()` has
+  **zero callers**, so this is **dead code, not a live failure** — but it is exactly the drift D-M6's
+  inventory exists to surface, and it must appear there.
+
+---
+
+### Recommended restructure — 3.4 is too big for one RED/GREEN pair
+
+**This is a recommendation the human may reject; it is not taken unilaterally.** Six clauses, one of
+them a table replacement, all sharing `api_construct.py` / `api_db_construct.py` — the §2 contention
+hotspot. Wave 2 lost a session to exactly this shape.
+
+Proposed sub-steps, in dependency order:
+
+| Sub-step | Clauses | Touches `infra/`? | Why separate |
+|---|---|---|---|
+| **3.4-SPEC** | all six | no | Fix F-1's stale Evidence, resolve F-2's three missing ACs, settle `B-3-9`/`B-3-10`/`B-3-11`, resolve DP-3…DP-6 |
+| **3.4a-RED / 3.4a-GREEN** | D-M1, D-M2 | **no** — pure Python | Can run concurrently with nothing else touching `dal/`; no deploy risk; no §2 infra lock |
+| **3.4b-RED / 3.4b-GREEN** | D-M3, D-M5, D-Q | **yes** | Holds the `infra/` lock. Contains the only stateful replacement in Wave 3. Must be sequenced per-index (F-6) |
+| **3.4c** | D-M6 | no (doc) | `verification: doc`. Consumes 3.4a/3.4b's landed truth, so it runs LAST or its inventory is stale on arrival |
+
+D-M6 running last matters beyond tidiness: it is a **hard dependency of the Wave-6 D-H8 collapse**
+(`hard_dep_of: D-H8`). An inventory written against pre-3.4 keys documents a shape that no longer
+exists.
+
+---
+
+### Four decision points — DEFERRED ON PURPOSE, each with the evidence that resolves it
+
+Same discipline as 3.3's DP-1/DP-2: **whoever resolves one owes a plain-English explanation in their
+ledger row.** Do not guess; do not let RED resolve them implicitly by writing an assertion.
+
+**DP-3 — do D-M3/D-M6/D-Q stay in 3.4 at all?** F-2 says three of six clauses have no AC.
+*Option A:* 3.4-SPEC authors the three missing ACs from the scope-lock clause text and all six ship
+here. *Option B:* D-M3 and D-Q ship here (both are narrow, quantified by F-6/F-7) and D-M6 becomes
+its own step 3.4c. *Option C:* only D-M1/D-M2/D-M5 ship and D-M3/D-M6/D-Q move to a new step.
+*Resolving evidence:* read the scope-lock clause text for each (`project-scope-lock.yaml:118-121`) and
+judge whether it states a testable outcome without invention. **Recommended: B.**
+**Rule-10 STOP:** if authoring an AC requires deciding *what the system should do* rather than
+*recording what the clause already says*, stop and raise a §0.3 amendment — that is a contract change
+wearing a spec's clothes.
+
+**DP-4 — how is D-M5's table replacement authorized?** F-4. *Option A:* verify the live `devx`
+knowledge table is empty (`aws dynamodb scan --table-name <devx knowledge table> --select COUNT`),
+record the count in the ledger row, and take the replacement as a recorded `B-3-4` exception.
+*Option B:* add a new surrogate-keyed table alongside, leave `userEmail` declared-and-unused, and
+retire it at 3.5. *Option C:* defer D-M5 to Q-07 in Wave 4 and ship 3.4 without it.
+*Resolving evidence:* the live item count, plus whether anything reads the knowledge table at all
+(3.3-RED already found `entity-index` has **zero live callers** in `careervp/`).
+**Recommended: A, conditional on a measured count of 0.** If the count is non-zero, O-3 says the data
+is disposable test data — but "disposable" is a human call to make explicitly, not an agent's to
+assume, so a non-zero count is a **STOP and ask**, not a delete.
+
+**DP-5 — is D-M3 one change or eight?** F-6. *Option A:* one commit, all 8 projections minimized,
+one deploy. *Option B:* one index per commit and per deploy, each with its own isolated template diff.
+*Resolving evidence:* whether the isolated template diff shows GSI **replacement markers**, and
+whether DynamoDB permits the resulting concurrent index operations on a `TableV2`.
+**Recommended: B.** Option A is the "single replacing change" that `B-3-4`'s fallback explicitly
+forbids.
+
+**DP-6 — what does "minimized" mean per index?** A projection cannot be minimized without knowing
+which attributes each query actually reads — which is **D-M6's inventory**. This is a genuine ordering
+conflict: D-M3 needs D-M6's output, but D-M6 should run last to see final keys.
+*Option A:* D-M6's inventory runs FIRST as a read-only recon (before any change), and is then
+refreshed at 3.4c. *Option B:* D-M3 minimizes only where the reading code is unambiguous and
+enumerates the rest as residue. *Option C:* swap the order — D-M6 before D-M3.
+**Recommended: A** — one cheap read-only pass up front, one authoritative pass at the end. Note this
+means the word "minimized" is *not* resolvable at 3.4-SPEC time for every index; say so rather than
+pinning a number you cannot defend.
+
+---
+
+```
+# PROMPT 3.4-SPEC — fix stale Evidence, resolve the missing ACs, settle B-3-9/10/11, resolve DP-3..DP-6 (spec + ISSUES.md only)
+
+STANDING CHECK — before doing anything else: open
+/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md
+and read the 3.4, 3.3-GREEN, 3.2-GREEN and 3.1-GREEN rows. Confirm the current state with real
+commands; do not trust the ledger:
+
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit tests/infrastructure -q -k "dh7 or dh2 or dh3 or dh4 or p01" 2>&1 | tail -10
+  cd "$(git rev-parse --show-toplevel)/src/backend" && wc -l careervp/dal/dynamo_dal_handler.py
+  cd "$(git rev-parse --show-toplevel)/infra" && grep -c "projection_type=dynamodb.ProjectionType.ALL" careervp/api_db_construct.py
+
+Expect 12 passed, 1144 lines, and 8. If any differs, the pre-flight findings below are stale and you
+re-derive them before pinning anything.
+
+You are SPEC ONLY. You may edit exactly three things: the two D-M specs, `ISSUES.md`, and your own
+ledger row. You may NOT create or edit a single test file, and you may NOT touch anything under
+`src/` or `infra/`. Prove it at the end with `git status --porcelain src/ infra/` (must be empty).
+
+--------------------------------------------------------------------------------
+WHAT TO SETTLE — in this order
+--------------------------------------------------------------------------------
+1. FIX F-1's stale Evidence in `../specs/D-M-seams-bundle-spec.md`. Four wrong citations are named in
+   the runbook's 3.4 pre-flight findings. Re-read each one live and correct it. Also flip
+   `status: draft` if it is now pinned. Record every delta — a corrected citation is a finding, not
+   a silent edit.
+
+2. RESOLVE F-2 / DP-3 — the three MISSING acceptance criteria. AC-DM3-1, AC-DM6-1 and AC-DQ-1 do not
+   exist. Either author them from the scope-lock clause text VERBATIM, or move those clauses out of
+   3.4. Rule 14: RED may not invent an AC. Whichever you choose, write the plain-English reason.
+   **Rule-10 STOP:** if authoring an AC means DECIDING system behavior rather than RECORDING clause
+   text, stop and raise a §0.3 amendment.
+
+3. SETTLE `B-3-9`, `B-3-10`, `B-3-11` in `ISSUES.md` (they are written there; the tier-1 check is in
+   each entry). Settle each against decisions that ALREADY EXIST, never against this spec.
+
+4. RESOLVE DP-4 (D-M5's table replacement), DP-5 (D-M3 one-change-or-eight) and DP-6 (what
+   "minimized" means). Each has options, resolving evidence, a recommendation and a stopping
+   condition in the runbook §3.4. **DP-4 requires a LIVE item count against the devx knowledge
+   table.** A non-zero count is a STOP-and-ask, not a delete.
+
+5. PIN each RED description to exact values — counts, file:line, attribute names, expected action
+   lists. 3.3-SPEC's precedent: pin the vacuous-pass traps too. Two are already known and carry
+   forward: tables synthesize as `AWS::DynamoDB::GlobalTable` (`AWS::DynamoDB::Table` counts **0**),
+   and the shared Lambda role lives in the FEATURES nested stack, not the parent.
+
+6. RECORD THE F-5 COLLISION EXPLICITLY. If DP-4 lands on a key-schema change, D-H7's `_GSI_BASELINE`
+   set equality WILL fail, and 3.4b is authorized to re-record that one constant as a recorded schema
+   decision — and nothing else in either D-H7 file. State this in the spec so 3.4b does not stop on
+   it, and state the boundary so 3.4b does not widen it.
+
+FORWARD-THINKING ONLY (v2.7.0 / O-3). No migration, no dual-read, no backfill, no cutover.
+
+OUT OF SCOPE — each belongs to a named step:
+  - `dal/dynamo_dal_handler.py:800` legacy cover-letter scan, `scripts/cr_migration_backfill.py`,
+    `company_research_store::_legacy_table_name`, `_legacy_read_cover_letter_by_scan`'s inner
+    fallback — ALL 3.5.
+  - `dal/subscription_repository.py:415` — retained on purpose (Wave-2 2.1-GREEN).
+  - `handlers/artifact_cleanup_handler.py:188`'s non-existent `jobs_repo.scan_by_status` — assigned to
+    D-M6 at the 2026-07-31 fill-in because the fix needs an index decision. D-M6 INVENTORIES it and
+    names the required access pattern; it does not implement the reaper.
+  - `entity_type-index` (F-8) — same: D-M6 inventories, does not fix.
+  - F-04 (Wave 4); auth/trial keying (Wave-6 D-H8); the carried-in P-07b / I-05 / I-06.
+  - The v3.0.0 adversarial review — a human owes it; see
+    `../specs/amendments/D-H4-P-01-v3.0.0-adversarial-review-handoff.md`.
+
+VERIFY
+  cd "$(git rev-parse --show-toplevel)" && git status --porcelain src/ infra/    # MUST be empty
+  cd "$(git rev-parse --show-toplevel)/src/backend" && uv run pytest tests/unit tests/infrastructure -q 2>&1 | tail -5   # unchanged baseline
+  cd "$(git rev-parse --show-toplevel)" && uv run python scripts/ci/check_scope_lock_integrity.py --base HEAD
+
+OUTPUT REQUIRED
+1. The four corrected Evidence citations, before-and-after.
+2. DP-3/DP-4/DP-5/DP-6 each resolved, with the option taken and a plain-English why.
+3. `B-3-9`/`B-3-10`/`B-3-11` each settled TRUE or FALSE with the live evidence.
+4. The live devx knowledge-table item count (DP-4), quoted.
+5. Whether AC-DM3-1/AC-DM6-1/AC-DQ-1 were authored or the clauses moved — and if authored, the
+   clause text each was derived from.
+6. Confirmation that zero files under `src/` and `infra/` changed.
+7. A git commit message.
+
+ALSO REQUIRED (standing rule — see RUNBOOK-RULES.md): compare what you built against this prompt and
+against clauses D-M1/D-M2/D-M3/D-M5/D-M6/D-Q in `project-scope-lock.yaml`. If everything matches, say
+so in one plain sentence. If ANYTHING drifted, STOP, write one plain-English sentence a non-engineer
+could follow, then the technical detail, flag it for human review, and do not mark the step done.
+Update the 3.4-SPEC row in `wave-3-status.md`.
+```
+
+---
+
+```
+# PROMPT 3.4a-RED / 3.4a-GREEN — D-M1 + D-M2, pure Python, no infra (fill in after 3.4-SPEC lands)
+
+Do not fill this in until 3.4-SPEC has pinned AC values and resolved DP-3. Then write it to the
+3.2/3.3 shape, with these constraints already known:
+
+- **Scope is `dal/` + the handlers that import it. ZERO files under `infra/`.** This sub-step does not
+  hold the §2 infra lock and may run concurrently with anything that does not touch `dal/`.
+- **D-M2's target is `dynamo_dal_handler.py:535-552` and `:452`** — one `put_item` writing THREE
+  overlapping conventions (canonical `applicationId`/`artifactId`, legacy `pk`/`sk`, and BOTH
+  `artifactType` and `artifact_type`). AC-DM2-1 is "exactly one canonical key home". RED must assert
+  on the WRITTEN ITEM's attribute set via moto, not on source text.
+- **D-M2 is coupled to D-Q's TTL defect (F-7).** The same items write `'ttl'` while the artifacts
+  table declares `expiration`. If DP-3 keeps D-Q in 3.4, decide in SPEC whether the TTL attribute
+  rename lands with D-M2's write change (one item, one write path) or separately in 3.4b. Do not let
+  both sub-steps edit that dict.
+- **D-M1 must not become a rewrite.** AC-DM1-1 says the god-class "shrinks behind compatibility
+  seams" — the authority to extend is `CoreRepository` / `TableRegistry` (3.1's, extended by 3.2).
+  3.3 added NOTHING to them, so the surface is exactly what the 3.2-GREEN row item 6 lists.
+  **§2 serialization applies: 3.4a and 3.5 may not both edit those modules.**
+- Characterization tests BEFORE the split (§9.2, and 3.1-GREEN's precedent of a new characterization
+  file that is not a RED-brief edit).
+- Full verification matrix, both pytest roots, and the coverage ratchet: core branch must not fall
+  below **55.79%** (3.3-GREEN's measured floor).
+```
+
+---
+
+```
+# PROMPT 3.4b-RED / 3.4b-GREEN — D-M3 + D-M5 + D-Q, holds the infra/ lock (fill in after 3.4-SPEC lands)
+
+Do not fill this in until 3.4-SPEC has resolved DP-4, DP-5 and DP-6. Constraints already known:
+
+- **THIS SUB-STEP HOLDS THE `infra/` LOCK.** `api_construct.py` and `api_db_construct.py` may not be
+  edited by any concurrent step. 3.3-GREEN released the lock on 2026-07-31.
+- **The two IMMUTABLE laws bind every commit:** never move the `RestApi`, never move the Cognito user
+  pool; both logical ids stay byte-stable. Prove it per change with the ISOLATED TEMPLATE DIFF
+  (`B-3-4`, §0.5, W2 2.3-root-cause) — never a live `cdk diff`:
+      cd infra && ENVIRONMENT=devx uv run cdk synth CareerVpCrudDevx > /tmp/after.json
+      git stash && cd infra && ENVIRONMENT=devx uv run cdk synth CareerVpCrudDevx > /tmp/before.json && cd .. && git stash pop
+      diff /tmp/before.json /tmp/after.json
+  3.3-GREEN's precedent: compare the parsed templates structurally too (logical-id set equality,
+  changed-resource list, and byte-stability of every GlobalTable / Bucket / nested Stack) — a textual
+  diff alone under-reports.
+- **D-M5 is the ONLY sanctioned stateful replacement in Wave 3** and only under DP-4's recorded
+  option. Re-verify the live item count immediately before the change. A non-zero count is a STOP.
+- **D-M3 is sequenced per index (DP-5), 8 sites, all currently `ProjectionType.ALL`.** A GSI
+  projection change is a delete+create; never batch them into one replacing change.
+- **F-5: if the knowledge-table key schema changes, D-H7's `_GSI_BASELINE` fails by design.** 3.4b
+  re-records that ONE constant in
+  `tests/infrastructure/test_dh7_scan_iam_and_gsi_shape.py` as a recorded schema decision, states the
+  before/after pair in its ledger row, and touches NOTHING else in either D-H7 file. Re-recording the
+  baseline is sanctioned; loosening any assertion is a rule-5 stop.
+- **D-Q is quantified (F-7):** PITR is **8** tables at 7 days (2 already at 35); the TTL attribute is
+  inconsistent across 7 declarations AND mismatched against the writing code in at least two places,
+  so those items never expire. Connection reuse is unimplemented. Fix what DP-3 kept in scope and
+  enumerate the rest as residue with an owner.
+- **The 22 implicit `grant_*_data` calls in `api_construct.py` are THIS step's** — DP-2 handed them to
+  3.4 at 3.3-SPEC. They put `dynamodb:Scan` in 9 attached `...DefaultPolicy...` resources (live count
+  verified 2026-07-31). 3.3 removed only the ONE explicit inline grant. When you narrow them, D-H7's
+  IAM assertion stays green: it is scoped to the inline `artifacts_table` statement and asserts
+  nothing about the attached policies — deliberately, so this step could not be blocked by it.
+- **A sync is now a deploy.** `db-redesign-checks.yml` deploys `CareerVpCrudDevx` on push. Do not push
+  a stateful-replacement change without the isolated diff proof in hand first.
+```
+
+---
 ## 3.5 — Legacy-path demolition, gated by a retirement register
 
 | | |

@@ -1026,3 +1026,96 @@ nor `TableRegistry`; **no §2 serialization lock; 3.3 runs parallel to 3.4 and 3
 **DP-2 = "source + the one explicit grant"** (3.3 holds the `infra/` lock for the single
 `api_construct.py:941` edit; `B-3-4`'s isolated-template-diff technique applies; the **22** implicit
 grants are 3.4's). Both are written up in the spec's Fix Plan and in the 3.3-SPEC ledger row.
+
+---
+
+## B-3-9 — D-M5's `userEmail` PK retirement can be done without a stateful table replacement
+
+- **Load-bearing for:** whether 3.4 contains the only stateful replacement in Wave 3, and therefore
+  whether `B-3-4`'s standing "zero stateful replacement" assertion holds across the whole wave.
+- **Added 2026-07-31** at the 3.4 fill-in, before 3.4-SPEC runs, following the `B-3-8` precedent.
+
+**The belief.** D-M5 / Q-07 can move the knowledge table off the PII `userEmail` partition key
+in-place, or otherwise without CloudFormation deleting and recreating the table.
+
+**Why it is a bet.** It is almost certainly **FALSE**, and it is written down precisely so 3.4 cannot
+discover it mid-GREEN. A DynamoDB partition-key change is not an in-place update: CFN replaces the
+table. Live shape confirmed 2026-07-31 at `infra/careervp/api_db_construct.py:435-441` — partition key
+`userEmail`, sort key `knowledgeType`. `B-3-4` asserts zero stateful replacement on every infra-touching
+step. Both cannot hold, so 3.4 either takes a **recorded exception** or defers the clause. Finding that
+out inside GREEN leaves two bad options — deploy a replacing change unproven, or quietly drop the
+clause — and both are rule-5 stops.
+
+**The cheapest-tier check (tier 1 — read + one isolated synth diff, no live stack).**
+
+```
+cd "$(git rev-parse --show-toplevel)/infra" && sed -n '430,460p' careervp/api_db_construct.py
+# then the isolated template diff with the key change applied, looking for a replacement marker
+```
+
+**Fallback decided now (if FALSE, which is expected).** Take DP-4 Option A: re-verify the live `devx`
+knowledge-table item count immediately before the change, record it in the ledger row, and take the
+replacement as an **explicitly recorded `B-3-4` exception** justified by v2.7.0/O-3 (data is
+disposable). **A non-zero count is a STOP-and-ask, not a delete** — "disposable" is a human ruling to
+make explicitly, never an agent's to assume. If the human declines the exception, D-M5 defers to Q-07
+in Wave 4 and 3.4 ships the other five clauses.
+
+---
+
+## B-3-10 — D-M3's GSI projections can be minimized from the reading code alone
+
+- **Load-bearing for:** whether D-M3 can ship in 3.4 at all, or whether it is blocked behind D-M6.
+
+**The belief.** For each of the 8 GSIs, the attributes each query actually reads are determinable from
+`careervp/` source, so "minimize projections to required attributes" is a decidable change.
+
+**Why it is a bet.** All 8 GSIs are `projection_type=dynamodb.ProjectionType.ALL` (verified live
+2026-07-31 at `api_db_construct.py:148, 158, 165, 320, 327, 392, 458, 499`). "Minimized" has no meaning
+without the per-index attribute list, and that list is **D-M6's inventory** — which should run last to
+see post-3.4 keys. If the belief is false for some indexes, D-M3 cannot pin a number and a RED test
+asserting "not ALL" would force a guess. At least two indexes are already known to be unreadable this
+way: `entity-index` has **zero live callers**, and `entity_type-index` is queried by
+`jobs_repository.py:115` but **was never built in CDK**, so no live read proves anything about it.
+
+**The cheapest-tier check (tier 1 — enumerate callers per index name).**
+
+```
+cd "$(git rev-parse --show-toplevel)/src/backend" && for i in email-index user_id-index customer-id-index idempotency-key-index status-index entity-index type-index; do echo "== $i"; grep -rn "$i" careervp/ | grep -v "INDEX_NAME =" ; done
+```
+
+**Fallback decided now.** DP-6 Option A: D-M6 runs a cheap **read-only inventory pass FIRST**, D-M3
+minimizes only the indexes whose readers are unambiguous, and every remaining index is **enumerated as
+residue with its owner** rather than guessed. An index with zero live callers is not evidence for
+`KEYS_ONLY` — it is evidence the index itself may be dead, which is a different clause's decision.
+
+---
+
+## B-3-11 — D-Q's quick wins are independent of each other and of D-M2
+
+- **Load-bearing for:** whether D-Q can be split across sub-steps, or must ship as one unit.
+
+**The belief.** D-Q's four items — connection reuse, pagination, schema-enforced TTL, PITR 7d→35d —
+are mutually independent and independent of D-M2's write change, so they can be sequenced freely.
+
+**Why it is a bet.** It is **FALSE for the TTL item**, which is why this is written down. Verified live
+2026-07-31: the TTL attribute is declared inconsistently across tables — `expiration`
+(`api_db_construct.py:187, 350, 415, 442, 483`), `ttl` (`:309`), `expiresAt` (`:521`) — **and the
+writing code disagrees with the declaration in at least two places**: the artifacts table declares
+`expiration` while `dynamo_dal_handler.py:452,551` writes `'ttl'`, and the knowledge table declares
+`expiration` while `knowledge_repository.py:50,99` writes `'ttl'`. Those items therefore **never
+expire** (silent unbounded growth against NFR-DATA-3 and the cost model). Fixing it means changing the
+same `put_item` dict that **D-M2** rewrites at `dynamo_dal_handler.py:535-552` and `:452`. Two
+sub-steps editing one dict is the parallel-edit failure §9.2/§9.3 forbids.
+
+**The cheapest-tier check (tier 1 — compare declaration against writer, per table).**
+
+```
+cd "$(git rev-parse --show-toplevel)" && grep -n "time_to_live_attribute" infra/careervp/api_db_construct.py
+cd src/backend && grep -rn "'ttl'\|'expiration'\|'expiresAt'" careervp/dal/
+```
+
+**Fallback decided now.** PITR (8 tables at 7 days; 2 already at 35) and connection reuse (no
+`botocore.config.Config` anywhere in `careervp/`) are genuinely independent and may ship in 3.4b
+standalone. **The TTL item is bound to D-M2** and ships in whichever sub-step owns that write dict —
+decided once at 3.4-SPEC, never by both. Pagination is unquantified at fill-in time and 3.4-SPEC must
+either quantify it live or move it out with a named owner.

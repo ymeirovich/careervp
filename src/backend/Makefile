@@ -107,6 +107,25 @@ deploy: build
 	npx cdk acknowledge 34892
 	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
 
+# Wave-3 / `db-redesign` deploy target — the P-26 parallel-cutover stack.
+#
+# Deliberately a SEPARATE target rather than parameterizing `deploy` above:
+# `make deploy` is invoked by seven workflows (company-research, cv-tailoring,
+# cover-letter, main-serverless-service, ui-upgrade-checks, deploy-staging,
+# db-redesign-checks) and its hardcoded `CareerVpCrudDev` is load-bearing for
+# all of them. Parameterizing it would silently repoint deploy-staging.yml,
+# which declares STACK_NAME=CareerVpCrudStaging but currently deploys
+# CareerVpCrudDev — a pre-existing mismatch that is NOT this target's to fix.
+#
+# Requires ENVIRONMENT=devx: `infra/app.py` only instantiates CareerVpCrudDevx
+# under that environment, so a `dev` environment here would fail to find the
+# stack rather than deploy the wrong one.
+DEVX_STACK_NAME ?= CareerVpCrudDevx
+
+deploy-devx: build
+	npx cdk acknowledge 34892
+	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+
 # P-28: automation is CreateChangeSet-only. `create-changeset` synthesizes and creates a
 # CFN change set WITHOUT executing it (`--no-execute`); a human-gated job runs
 # `execute-changeset`. Never call `make deploy` (create+execute) from automation.

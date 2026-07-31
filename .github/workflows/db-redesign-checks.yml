@@ -22,7 +22,10 @@ env:
   NODE_VERSION: '22'
   AWS_REGION: 'us-east-1'
   UV_VERSION: '0.5.21'
-  STACK_NAME: 'CareerVpCrudDev'
+  # Wave-3 deploy target is the P-26 parallel-cutover stack (project-wide since
+  # 2026-07-25). `CareerVpCrudDev` is being retired; deploying it from this
+  # branch produced deploy evidence against a stack Wave 3 does not verify.
+  STACK_NAME: 'CareerVpCrudDevx'
 
 jobs:
   # ── Backend: Ruff Lint ─────────────────────────────────────────────────────
@@ -198,17 +201,21 @@ jobs:
           role-session-name: db-redesign-backend-${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK deploy (Lambda code only)
+      # Full CloudFormation deploy of the devx stack (NOT Lambda code only — the
+      # previous label understated this; `cdk deploy` applies every template
+      # change, IAM and infra included).
+      - name: CDK deploy (full stack → CareerVpCrudDevx)
         working-directory: src/backend
         env:
-          ENVIRONMENT: dev
+          ENVIRONMENT: devx
+          DEVX_STACK_NAME: ${{ env.STACK_NAME }}
         run: |
           set -o pipefail
-          make deploy 2>&1 | tee /tmp/deploy.log || {
+          make deploy-devx 2>&1 | tee /tmp/deploy.log || {
             if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)" /tmp/deploy.log; then
               echo "::warning::Stack locked — waiting and retrying once..."
               sleep 30
-              make deploy
+              make deploy-devx
             else
               exit 1
             fi
