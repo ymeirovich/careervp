@@ -152,6 +152,26 @@ explicitly forbidden from touching the worker path.
 completed VPR. So cv-tailoring and cover-letter/interview-prep resolve their VPR upstream by
 different means, and only the latter two fail.
 
+**Confirmed on a second run (2026-08-01, after the table above).** Two alternative
+explanations were tested and both are eliminated:
+
+1. *"The probe never passed `application_id` to `/vpr/generate`."* `VPRGenerateRequest` accepts
+   an optional `application_id`, so the VPR might simply have been unattributed. Re-run with
+   `application_id` **passed**: VPR `81817fd3-…` again reached `completed`, and the artifacts
+   table again held **0** VPR rows under the application (`5ebd442d-…`) and **0** under the VPR
+   request id. `POST /cover-letter/generate` and `POST /interview-prep/generate` both returned
+   `409 upstream_required missing:["vpr"]` exactly as before. **Passing `application_id` changes
+   nothing; the defect is not a client omission.**
+2. *"Only the VPR fails to register."* No — CV-tailoring `cv-tail-f2e4d203-…` reported
+   `completed` on that same run and **also has no artifact row**. Across both runs the only
+   artifact ever written to `careervp-artifacts-table-devx` is `company_research`.
+
+**Restated, wider than first recorded:** it is not that the VPR specifically fails to register.
+The canonical artifacts table is essentially **not being populated by the generators at all** —
+only the company-research path writes to it. Generators that report `completed` leave no
+canonical artifact behind, and every consumer that resolves upstreams through that table
+therefore sees an empty application.
+
 ### 5.2 `F-DEVX-2` — the live-API suites authenticate with the wrong token type
 
 Both helpers take `access_token` from the login response:
@@ -189,10 +209,13 @@ response for an unrouted method, easily misread as an authorization failure.
 
 ### 5.5 `F-DEVX-5` — `POST /gap-analysis/questions` runs at the API Gateway timeout
 
-Two consecutive runs: **27 965 ms** (200) and **29 222 ms** (**504**). The API Gateway
-integration cap is 29 s, so this wire fails intermittently on latency alone. When it 504s the
-whole downstream chain silently empties (no gap ids → cover-letter and interview-prep 400 on
-`gap_response_ids must not be empty`).
+Observed across runs: **27 965 ms** (200), **29 222 ms** (504), then on a later run
+**29 257 ms (504) → 29 218 ms (504) → 28 238 ms (200)**. That is **3 timeouts in 5 calls**; the
+wire only succeeds when the model happens to come back a second or so under the 29 s API Gateway
+integration cap. This is not occasional flakiness — it is a wire sitting on its ceiling. When it
+504s the whole downstream chain silently empties (no gap ids → cover-letter and interview-prep
+400 on `gap_response_ids must not be empty`), which is how a timeout here masquerades as a
+validation error three wires later.
 
 ### 5.6 `F-DEVX-6` — CV parse 500s when the model returns a work entry with no company
 

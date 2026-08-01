@@ -1,0 +1,277 @@
+{
+  "step": "3.2-CLOSEOUT-A",
+  "stack": "CareerVpCrudDevx",
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "user_email": "char-94cb353d9c@careervp.com",
+  "cv_id": "631e575e-e647-48f7-b803-9d445dc911fa",
+  "job_id": "5ebd442d-41e7-4df6-a985-2b873ccea216",
+  "vpr_id": "81817fd3-7e05-4f1f-a727-e527daf4c381",
+  "wires": [
+    {
+      "wire": "POST /auth/register",
+      "status": 201,
+      "ms": 7350,
+      "note": "",
+      "response_excerpt": "{\"access_token\": \"eyJraWQiOiJ0Wm1yVzJ2RGFxZ3NIbm5GRlhsdDM2TlNDZlpDek40S09nNnErQ2ZMSzlnPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJmNDE4MTRlOC01MGUxLTcwMGYtM2IzMS0wZmQ1ZjdiMDg3OWEiLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9iQVo2amI2SFAiLCJjbGllbnRfaWQiOiIxMGM3MmgwcTZjc2hlN2RoM3R1cDZlazlkZSIsIm9yaWdpbl9qdGkiOiI4YWJjYTFhOS02OTk5LTRmNGUtYjE3NC00MDg2MGRiOGZkNmQiLCJldmVudF"
+    },
+    {
+      "wire": "POST /auth/login",
+      "status": 200,
+      "ms": 973,
+      "note": "",
+      "response_excerpt": "{\"access_token\": \"eyJraWQiOiJ0Wm1yVzJ2RGFxZ3NIbm5GRlhsdDM2TlNDZlpDek40S09nNnErQ2ZMSzlnPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJmNDE4MTRlOC01MGUxLTcwMGYtM2IzMS0wZmQ1ZjdiMDg3OWEiLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9iQVo2amI2SFAiLCJjbGllbnRfaWQiOiIxMGM3MmgwcTZjc2hlN2RoM3R1cDZlazlkZSIsIm9yaWdpbl9qdGkiOiJiMDAzMTFhYy02ZmM4LTQzZjYtYWQ5My00MWQwOTE1ZTc5NDUiLCJldmVudF"
+    },
+    {
+      "wire": "GET /users/me",
+      "status": 401,
+      "ms": 187,
+      "note": "[access_token -- what the test helpers send]",
+      "response_excerpt": "{\"error\": \"UNAUTHORIZED\", \"code\": \"UNAUTHORIZED\", \"request_id\": \"fda768e5-4e11-4e49-b9e0-79964732244a\"}"
+    },
+    {
+      "wire": "GET /users/me",
+      "status": 200,
+      "ms": 4695,
+      "note": "[id_token -- what the authorizer accepts]",
+      "response_excerpt": "{\"id\": \"f41814e8-50e1-700f-3b31-0fd5f7b0879a\", \"user_id\": \"f41814e8-50e1-700f-3b31-0fd5f7b0879a\", \"email\": \"f41814e8-50e1-700f-3b31-0fd5f7b0879a@example.com\", \"name\": \"\", \"preferences\": {}, \"created_at\": \"2026-08-01T09:54:29.953995+00:00\", \"updated_at\": \"2026-08-01T09:54:29.953995+00:00\"}"
+    },
+    {
+      "wire": "POST /users/me/cv",
+      "status": 201,
+      "ms": 9882,
+      "note": "[live CVUploadRequest shape, text path]",
+      "response_excerpt": "{\"success\": true, \"user_cv\": {\"user_id\": \"f41814e8-50e1-700f-3b31-0fd5f7b0879a\", \"full_name\": \"Jane Doe\", \"cv_id\": \"631e575e-e647-48f7-b803-9d445dc911fa\", \"language\": \"en\", \"contact_info\": {\"name\": \"Jane Doe\", \"phone\": null, \"email\": \"jane.doe@example.com\", \"location\": \"London, UK\", \"linkedin\": null}, \"email\": \"jane.doe@example.com\", \"phone\": null, \"location\": \"London, UK\", \"linkedin\": null, \"expe"
+    },
+    {
+      "wire": "POST /jobs",
+      "status": 201,
+      "ms": 7796,
+      "note": "[live JobCreateRequest shape, reachable url]",
+      "response_excerpt": "{\"id\": \"5ebd442d-41e7-4df6-a985-2b873ccea216\", \"job_id\": \"5ebd442d-41e7-4df6-a985-2b873ccea216\", \"user_id\": \"f41814e8-50e1-700f-3b31-0fd5f7b0879a\", \"title\": \"Senior Backend Engineer\", \"company_name\": \"Integration Labs\", \"description\": \"Build secure backend APIs, queues, and CI guardrails. Requires Python, AWS Lambda, DynamoDB, and CI/CD experience.\", \"status\": \"active\", \"url\": \"https://example.com"
+    },
+    {
+      "wire": "POST /company-research/fetch",
+      "status": 202,
+      "ms": 3609,
+      "note": "[live CompanyResearchRequest shape]",
+      "response_excerpt": "{\"request_id\": \"comp-res-0a8afd63-0b91-47aa-aef1-031b09b0dcce\", \"status\": \"processing\"}"
+    },
+    {
+      "wire": "POST /gap-analysis/questions",
+      "status": 504,
+      "ms": 29257,
+      "note": "[attempt 1/3 -- 29s API GW cap]",
+      "response_excerpt": "{\"error\": \"DEFAULT_5XX\", \"code\": \"DEFAULT_5XX\", \"request_id\": \"68dd8faa-6e9f-48c2-890f-3b1b8a73f706\"}"
+    },
+    {
+      "wire": "POST /gap-analysis/questions",
+      "status": 504,
+      "ms": 29218,
+      "note": "[attempt 2/3 -- 29s API GW cap]",
+      "response_excerpt": "{\"error\": \"DEFAULT_5XX\", \"code\": \"DEFAULT_5XX\", \"request_id\": \"0b3fc0c7-21c9-4b1a-8994-ae05d3605bf3\"}"
+    },
+    {
+      "wire": "POST /gap-analysis/questions",
+      "status": 200,
+      "ms": 28238,
+      "note": "[attempt 3/3 -- 29s API GW cap]",
+      "response_excerpt": "{\"job_id\": \"5ebd442d-41e7-4df6-a985-2b873ccea216\", \"cv_id\": \"631e575e-e647-48f7-b803-9d445dc911fa\", \"questions\": [{\"id\": \"Q1\", \"text\": \"Your CV mentions 'designing DynamoDB single-table data models'\\u2014what was the scale (items stored, query throughput, cost optimization %), and did you own the architectural decision or execute it under guidance?\", \"question_id\": \"Q1\", \"question\": \"Your CV menti"
+    },
+    {
+      "wire": "POST /jobs/5ebd442d-41e7-4df6-a985-2b873ccea216/gap-responses",
+      "status": 200,
+      "ms": 2545,
+      "note": "",
+      "response_excerpt": "{\"status\": \"saved\", \"job_id\": \"5ebd442d-41e7-4df6-a985-2b873ccea216\", \"responses_saved\": 10}"
+    },
+    {
+      "wire": "POST /vpr/generate",
+      "status": 202,
+      "ms": 4565,
+      "note": "[application_id PASSED this time]",
+      "response_excerpt": "{\"request_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"estimated_time_seconds\": 120, \"webhook_url\": \"/vpr/81817fd3-7e05-4f1f-a727-e527daf4c381\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 4049,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"pending\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 593,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 575,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 584,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 515,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 819,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 560,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 590,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 819,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 586,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 841,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 531,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 655,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 554,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 815,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 557,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 569,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 755,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"processing\", \"created_at\": \"2026-08-01T09:56:25.249882+00:00\", \"started_at\": \"2026-08-01T09:56:29.282094+00:00\"}"
+    },
+    {
+      "wire": "GET /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": 200,
+      "ms": 1297,
+      "note": "[poll vpr]",
+      "response_excerpt": "{\"id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"job_id\": \"81817fd3-7e05-4f1f-a727-e527daf4c381\", \"status\": \"completed\", \"result\": {\"uvp\": \"Value proposition generated\", \"differentiators\": [{\"text\": \"Value proposition generated\", \"source\": \"cv\"}, {\"text\": \"Cross-functional delivery across engineering disciplines\", \"source\": \"cv\"}, {\"text\": \"Cloud-native implementation experience with measurable imp"
+    },
+    {
+      "wire": "POLL /vpr/81817fd3-7e05-4f1f-a727-e527daf4c381/status",
+      "status": null,
+      "ms": null,
+      "note": "vpr terminal_state=completed polls=19",
+      "response_excerpt": ""
+    },
+    {
+      "wire": "POST /cv-tailoring/generate",
+      "status": 202,
+      "ms": 13442,
+      "note": "",
+      "response_excerpt": "{\"request_id\": \"cv-tail-f2e4d203-4a0e-416e-a1ab-0bd7eb637268\", \"job_id\": \"cv-tail-f2e4d203-4a0e-416e-a1ab-0bd7eb637268\", \"status\": \"completed\", \"estimated_time_seconds\": 0}"
+    },
+    {
+      "wire": "GET /cv-tailoring/cv-tail-f2e4d203-4a0e-416e-a1ab-0bd7eb637268/status",
+      "status": 200,
+      "ms": 695,
+      "note": "[poll cv-tailoring]",
+      "response_excerpt": "{\"id\": \"cv-tail-f2e4d203-4a0e-416e-a1ab-0bd7eb637268\", \"status\": \"completed\", \"version\": 1, \"language\": \"en\", \"generated_at\": \"2026-08-01T09:58:23.682560+00:00\", \"result\": {\"tailored_cv\": \"Senior Backend Engineer with expertise in secure API design, AWS Lambda, and CI/CD pipelines. Proven track record building scalable backend systems using Python and DynamoDB.\", \"cv_sections\": {\"experience\": [{\"s"
+    },
+    {
+      "wire": "POLL /cv-tailoring/cv-tail-f2e4d203-4a0e-416e-a1ab-0bd7eb637268/status",
+      "status": null,
+      "ms": null,
+      "note": "cv-tailoring terminal_state=completed polls=1",
+      "response_excerpt": ""
+    },
+    {
+      "wire": "POST /cover-letter/generate",
+      "status": 409,
+      "ms": 6286,
+      "note": "",
+      "response_excerpt": "{\"status\": \"upstream_required\", \"generating\": [], \"missing\": [\"vpr\"], \"chain_execution_arn\": null, \"requested_artifact\": \"cover_letter\"}"
+    },
+    {
+      "wire": "POST /interview-prep/generate",
+      "status": 409,
+      "ms": 5876,
+      "note": "[FIXED fixture shape: application_id present]",
+      "response_excerpt": "{\"status\": \"upstream_required\", \"generating\": [], \"missing\": [\"vpr\"], \"chain_execution_arn\": null, \"requested_artifact\": \"interview_prep\"}"
+    },
+    {
+      "wire": "POST /interview-prep/generate",
+      "status": 400,
+      "ms": 518,
+      "note": "[OLD broken shape: no application identity -- v3.0.0 expects HTTP 400]",
+      "response_excerpt": "{\"error\": \"application_id/job_id is required\", \"status_code\": 400, \"code\": \"MISSING_REQUIRED_FIELD\"}"
+    }
+  ]
+}
