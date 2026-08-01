@@ -166,6 +166,15 @@ explanations were tested and both are eliminated:
    `completed` on that same run and **also has no artifact row**. Across both runs the only
    artifact ever written to `careervp-artifacts-table-devx` is `company_research`.
 
+3. *"This step's devx deploy introduced it."* Eliminated by a control run against
+   **`CareerVpCrudDev`** — a stack this step never deployed, carrying v3.0.0 since 2026-07-27 via
+   the pre-repoint CI job. Same result: VPR `2b239197-…` reached `completed`, and
+   `careervp-artifacts-table-dev` holds **0** VPR rows under the application
+   (`b6d9f04e-…`) and **0** under the VPR request id — only `company_research`. The control also
+   reproduced the `access_token`→401 / `id_token`→200 split and 504'd `/gap-analysis/questions`
+   **3 times out of 3**. **So F-DEVX-1, F-DEVX-2 and F-DEVX-5 are pre-existing and
+   stack-independent; the 2026-08-01 devx deploy did not cause any of them.**
+
 **Restated, wider than first recorded:** it is not that the VPR specifically fails to register.
 The canonical artifacts table is essentially **not being populated by the generators at all** —
 only the company-research path writes to it. Generators that report `completed` leave no
