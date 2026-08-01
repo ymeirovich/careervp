@@ -120,11 +120,33 @@ concurrently against the same module. 3.4 additionally touches `infra/` (the min
 `userEmail` PK retirement) — serialize its infra edits the way Wave 2 serialized `api_construct.py`.
 
 ```
-3.1-RED → 3.1-GREEN ─┬─→ 3.2 ─┐
-                     ├─→ 3.3 ─┤
-                     ├─→ 3.5 ─┼─→ GATE
-                     └─→ 3.4 ─┘   (3.4 is highest blast radius: infra GSI + PK retirement)
+3.1-RED → 3.1-GREEN ─┬─→ 3.2 → 3.2-CLOSEOUT-A → 3.2-CLOSEOUT-B → [human: v4.0.0 twin commit]
+                     │                                                        │
+                     ├─→ 3.3 ✅                                               ▼
+                     │                                     3.6-SPEC → 3.6-RED → 3.6-GREEN
+                     │                                                        │
+                     │                                                        ▼
+                     └──────────────────────────────────→ 3.4 ──────────────→ 3.5 ──→ GATE
+                        (3.4 = highest blast radius: infra GSI + PK retirement)
 ```
+
+**Order note added 2026-08-01 — 3.6 runs BEFORE 3.4, despite the number.** Step numbers in this file
+are identities, not a sequence (3.3 already ran before 3.4). Three reasons 3.6 goes first:
+
+1. **3.4 authors the D-M6 access-pattern document**, which must prove every endpoint maps to a named
+   Query or GSI. If regeneration still exists when that document is written, it documents a path
+   that is about to be deleted, and the document is wrong the day after it lands.
+2. **3.4 is the highest-blast-radius step in the wave.** Landing a small, contained change first
+   gives one clean deploy-and-verify cycle that proves the live-API harness works *before* the risky
+   step depends on it.
+3. **3.5 needs 3.6 anyway.** D-H9 picks up the interview-prep worker's `vpr_id` residue (round 2
+   finding F1) as a retirement-register item, and that residue only becomes unreachable once
+   regeneration is gone. Since 3.6 must precede 3.5, putting it ahead of 3.4 costs nothing.
+
+**3.6 does not take the `CoreRepository`/`TableRegistry` lock.** Verified 2026-08-01:
+`/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/handlers/vpr_submit_handler.py`
+references neither module. 3.6-SPEC re-verifies this; if it has become false, 3.6 serializes against
+3.4 like everything else in §2.
 
 - **Nothing in Wave 3 starts before 3.1-GREEN lands** — 3.1 builds the key authority *and* the
   key authority that 3.2/3.4/3.5 all build on. The spec is explicit: D-H2/D-H3 "must precede D-H4,
@@ -979,6 +1001,274 @@ ALSO REQUIRED (standing rule for every wave prompt — see
   update the 3.2-GREEN row with a plain-English status, the commit, today's date, deploy status, and
   anything 3.3 / 3.4 / 3.5 must resolve first — in particular the added repository surface and any
   enumerated residue (or write "none").
+```
+
+---
+
+## 3.2-CLOSEOUT — discharge the v3.0.0 review and pay the undeployed debt
+
+| | |
+|---|---|
+| **Clause** | D-H4, P-01 — **no new clause.** This step closes the five open problems the `3.2-GREEN` row recorded. |
+| **Spec** | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md` |
+| **Acceptance criteria** | None new. Two uninventoried live-API fixtures are reconciled under **AC-P01-1**'s already-approved A1 reconciliation, and the §0.3/§9.2 adversarial-review condition on scope-lock v3.0.0 is discharged. |
+| **Claude / Codex** | opus/high · gpt-5-codex/high (rule 15 — inherited from the 3.2 row of `redesign-execution-plan.md`; rule 16 — live-state verification plus deploy characterization over an already-pinned spec, so `high` not `max`. **Not Fable — rule 18 keeps it off recon and verification work.**) |
+| **Depends on** | 3.2-GREEN |
+| **Deploy target** | `CareerVpCrudDevx` |
+| **Rule 7** | **Not applicable.** No new RED test is pinned. Two existing fixtures are reconciled under a reconciliation the human already approved — the same class of change as the other seven, per the affected-existing-test inventory in the spec. |
+| **Bets** | none |
+
+**In plain English.** Step 3.2 finished its code but left five things open, and two of them now
+block everything downstream. The first is that nothing was ever deployed or exercised against a
+running stack, so nobody has evidence the interview-prep chain actually works. The second is that
+the two test suites which *could* provide that evidence are themselves broken — they send a request
+shape the v3.0.0 contract now refuses, and they skip silently on a developer laptop, so the green
+local suite hides it. This step deploys, fixes those two suites, runs them for real, and puts the
+two adversarial reviews into the repository where the next reader can find them.
+
+**Why this is one step and not paperwork.** The two suites are the only thing in the tree that
+proves the product works end to end. Every unit and integration test mocks DynamoDB and SQS. Until
+they run, `P-01`'s `e2e+characterization` and `D-H4`'s `contract+integration` verification modes
+cannot be claimed, and the Wave-3 GATE cannot honestly pass.
+
+**Two adversarial reviews exist and neither is committed.** Round 1 (`claude-opus-5`, 2026-07-31)
+and round 2 (`claude-fable-5`, 2026-07-31, auditing round 1) both returned
+`CONFIRM-WITH-CONDITIONS`. Round 2's report is at
+`/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/amendments/adversarial-review-round2-fable.txt`.
+Round 1's is **not in the repository** — it survives only in a session transcript. Recovering and
+committing it is part of prompt A.
+
+**Do not act on round 1's condition C3.** It says the spec's affected-test count of eight is wrong
+and should be seven or nine. Round 2 refuted that: eight is correct once B1's CV-tailoring fixture
+is counted. What is actually wrong is one sentence claiming all seven remaining tests were the same
+class found by running the suite — six were. Fix the sentence, keep the number.
+
+---
+
+### 3.2-CLOSEOUT-A — deploy, characterize, and commit the reviews
+
+```
+You are running step 3.2-CLOSEOUT-A of Wave 3 in the CareerVP redesign. You are closing the
+"undeployed debt" and broken-e2e problems that step 3.2-GREEN left open. Repo root:
+/Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before doing anything else: open
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md. If the step immediately
+before this one (3.2-GREEN, in dependency order) left something open or unresolved, deal with that
+FIRST — do not start this step's own work with unfinished business behind you. Then confirm THIS
+step's own prerequisites are actually met right now, using a real command (not memory, not this
+file) — if they are not, STOP and say so in plain English.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md exists, that
+it has an "Affected existing tests (inventory)" section, and that AC-P01-1 states exact assertion
+values. You are NOT authoring a new RED test in this step — you are adding two fixtures to an
+existing approved reconciliation. If the spec does not carry that inventory, STOP.
+
+DO, IN THIS ORDER:
+
+1. RECOVER AND COMMIT THE REVIEWS. Round 2's report is already at
+   docs/db-redesign/code/code-analysis/project/specs/amendments/adversarial-review-round2-fable.txt.
+   Round 1's is not committed; recover its full text from the session transcript under
+   ~/.claude/projects/-Users-yitzchak-meirovich-Documents-code5-careervp/ (search the .jsonl files
+   for the string "CONFIRM-WITH-CONDITIONS" in a final assistant message dated 2026-07-31, model
+   claude-opus-5). Commit both under specs/amendments/ with clear filenames. If you cannot recover
+   round 1, say so plainly and continue — do not fabricate or reconstruct it.
+
+2. RECONCILE THE TWO BROKEN LIVE-API FIXTURES. Both send an interview-prep body with no application
+   identity, which v3.0.0 now refuses with HTTP 400:
+   - src/backend/tests/integration/test_full_pipeline_integration.py — the /interview-prep/generate
+     body around line 139
+   - src/backend/tests/e2e/test_e2e_happy_path_full_job_application.py — the /interview-prep/generate
+     body around line 134
+   Re-read both live; the line numbers are a 2026-08-01 baseline and may have moved. In each, add
+   'application_id': job_id to the request body. job_id is already in scope at both call sites —
+   confirm that before editing. Add NOTHING else. Do not relax an assertion, do not change an
+   expected status, do not touch any other test.
+
+3. ADD BOTH TO THE SPEC INVENTORY and fix the one wrong sentence. In
+   docs/db-redesign/code/code-analysis/project/specs/D-H4-P-01-canonical-artifact-spec.md, section
+   "Affected existing tests (inventory)": add the two tests above as a new bullet explaining they
+   were missed because they skip when API_BASE is unset. Then correct the sentence reading "the
+   other seven were found only by running the full suite ... all seven are the same class" — six fit
+   that description; the eighth is B1's CV-tailoring fixture, found via the B1 amendment, not the
+   suite. DO NOT change the total of eight. Round 1's condition C3 is wrong on this point and round
+   2 refuted it.
+
+4. CLEAR THE MERGE BLOCKER. Run:
+     python3 scripts/ci/check_scope_lock_integrity.py --base origin/main --head HEAD
+   It currently FAILS because the checker reads only the tip commit's message and the tip carries no
+   Scope-Lock-Approved-By trailer. Put the trailer on this step's commit so the branch can merge.
+   Record in the ledger that this mitigation decays every time a later commit moves the tip — the
+   real fix is to make the checker iterate the commit range, which is round 1's defect N2 and is
+   owned by P-28, NOT by this step. Do not fix the checker here.
+
+5. DEPLOY TO DEVX. The workflow .github/workflows/db-redesign-checks.yml now targets
+   STACK_NAME: 'CareerVpCrudDevx' (repointed in commit a8ef789). Note for the record: the v3.0.0
+   backend commits were auto-deployed to CareerVpCrudDev under the earlier target, so the code has
+   been live on the old stack since 2026-07-27 — the adversarial review's claim that it was
+   undeployed was wrong. Deploy to devx and confirm the stack reaches a completed state.
+
+6. RUN THE LIVE-API SUITES FOR REAL — this is the actual deliverable. Resolve the devx API base URL
+   live (do not hardcode one from any document; the recorded URLs in docs/ are for the OLD stack),
+   export API_BASE, and run:
+     cd src/backend && API_BASE=<resolved> uv run pytest tests/integration/test_full_pipeline_integration.py tests/e2e/ -v
+   Quote the real output. If tests skip, say they skipped and why — a skipped suite is not a passing
+   suite. If the interview-prep step fails asynchronously after a 202, capture the failure and the
+   worker logs: that is the F1 worker-path finding reproducing, and it is a FINDING to record, not
+   something to fix in this step.
+
+7. RECORD THE CHARACTERIZATION BASELINE. Write a dated evidence file under docs/evidence/ capturing
+   what the deployed stack actually did for each wire: which endpoints returned what, which async
+   jobs completed, which failed. This is the before-picture that step 3.6 will be measured against.
+
+DO NOT: edit either project-scope-lock twin (they are write-protected from agent sessions under
+§0.3 — a human commits those). Do not edit
+src/backend/tests/unit/test_dh4_p01_canonical_artifact.py, the pinned RED test, under any
+circumstance. Do not fix the interview-prep worker path. Do not remove any regeneration code — that
+is step 3.6 and it is not authorized yet.
+
+OUTPUT REQUIRED:
+- The real output of the live-API run, quoted, with an explicit statement of what passed, what
+  failed, and what skipped.
+- The path of the evidence file you wrote.
+- A plain-English statement of whether P-01's e2e+characterization and D-H4's contract+integration
+  verification modes can now be claimed, and if not, exactly what is still missing.
+- Any new defect found while running against the live stack, with its location — flagged, not fixed.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) the matching
+  clause in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update wave-3-status.md: add/update this step's row with a plain-English status, the commit,
+  today's date, and anything the NEXT step must resolve first (or write "none").
+```
+
+---
+
+### 3.2-CLOSEOUT-B — prepare the record correction and the D-H10 clause (agent drafts, human commits)
+
+> **Read this before running it.** The scope-lock twins are write-protected from agent sessions
+> (§0.3). Round 1's defect **N1** found that protection has already been defeated twice, with the
+> CI guard unable to tell. This prompt therefore produces *drafts a human applies* — it does not
+> edit either twin. That is the point, not an inconvenience.
+
+```
+You are running step 3.2-CLOSEOUT-B of Wave 3 in the CareerVP redesign. You are preparing — NOT
+applying — one twin-synced scope-lock edit that does two things at once: corrects the v3.0.0 record
+per two adversarial reviews, and adds the new D-H10 clause for the no-regeneration decision. Repo
+root: /Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before doing anything else: open
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md. If step 3.2-CLOSEOUT-A left
+something open or unresolved, deal with that FIRST. Then confirm THIS step's prerequisites live: both
+adversarial review reports must be committed under specs/amendments/, and the two live-API suites
+must have been run against devx. If either is untrue, STOP and say so in plain English.
+
+CONTEXT — the human decision this encodes, given 2026-08-01:
+  "No artifact regeneration. Artifacts are generated once; the only way to change one afterwards is
+   the AI Assist inline edit path (POST /ai/assist). Retry on a FAILED artifact stays. Regenerate on
+   a COMPLETED artifact goes. The force flag on VPRGenerateRequest is REJECTED, not ignored — we are
+   in dev, there are no real users, and no client will be sending it once it is removed."
+
+DO:
+
+1. READ BOTH REVIEWS in full from specs/amendments/ before writing anything. Their condition sets
+   are the source for the corrections below. Note that round 2 REFUTES three of round 1's claims —
+   where they disagree, round 2 is later and audited round 1 with live commands, but verify anything
+   load-bearing yourself rather than trusting either.
+
+2. WRITE THE D-H10 AMENDMENT PROPOSAL at
+   docs/db-redesign/code/code-analysis/project/specs/amendments/D-H10-no-regeneration-amendment.md,
+   in the same format as the existing amendment proposals in that directory (read
+   D-H4-P-01-submit-test-conflict-amendment.md for the field table format). It must record:
+   - clause_id: D-H10 (NEW clause, not an amendment to an existing one)
+   - semver: MAJOR — §0.3's ladder counts "drop a feature", and VPRGenerateRequest.force is a public
+     request field being removed. Target version 4.0.0.
+   - Adversarial review: state your own assessment of whether §9.2 requires one. The requirement
+     keys on amending an IMMUTABLE invariant, a locked decision, or one of the ten §3
+     frontend-contract items. None of the ten is changed; items 4 (status enum, includes 'edited')
+     and 5 (PATCH optimistic concurrency) are relied on MORE HEAVILY but not altered. If you reach a
+     different reading than "no review required", say so and give your reasoning — do not rubber
+     stamp this one.
+   - What the clause covers, in both halves: (a) AI Assist (POST /ai/assist, FE-UI-046/047) becomes
+     the contracted edit path for a generated artifact — note that it currently exists in production
+     code with NO clause in either twin, which is itself the gap this closes; (b) regeneration of a
+     COMPLETED artifact is retired.
+   - The live evidence, read fresh, for every surface the decision retires. The 2026-08-01 baseline
+     is: the force field at src/backend/careervp/models/api_models.py:203; the force_regenerate
+     branch at src/backend/careervp/handlers/vpr_submit_handler.py:284-334; the Regenerate action and
+     confirmation dialog in src/frontend/app/applications/[id]/page.tsx (around :202, :257, :288,
+     :364); the regenerate copy at src/frontend/app/applications/[id]/vpr/page.tsx:426-431; and the
+     suite src/backend/tests/e2e/test_vpr_regeneration_flow.py. RE-CONFIRM EVERY ONE LIVE. A stale
+     list is the failure this project keeps recording.
+   - Explicitly: Retry on FAILED stays. Say why the distinction is load-bearing — killing Retry would
+     strand users on any transient failure, which is not what the decision asked for.
+   - The margin question, as an open item rather than an answer: POST /ai/assist advertises itself as
+     free and consuming no application credit, and I found no rate limit, quota, or throttle in
+     src/backend/careervp/handlers/ai_assist_handler.py. Check whether one exists elsewhere — API
+     Gateway usage plan, the subscription check, or the logic layer. If none exists, record it as a
+     named open question against the 91% margin target, owned by the D-H10 spec. Do not build one.
+
+3. DRAFT THE TWIN EDIT AS A PATCH THE HUMAN APPLIES. Write it to
+   docs/db-redesign/code/code-analysis/project/specs/amendments/v4.0.0-twin-edit-draft.md as literal
+   before/after blocks for both project-scope-lock.md and project-scope-lock.yaml. DO NOT EDIT THE
+   TWINS. The draft must carry, in one release:
+   (a) The new D-H10 clause row in both twins, tier and track chosen and justified.
+   (b) The v3.0.0 record corrections both reviews agreed on: scope the "vpr_id fallback REMOVED"
+       claim to the SUBMIT BOUNDARY ONLY (round 2 finding F1 proved the pattern survives in the async
+       worker at src/backend/careervp/handlers/interview_prep_handler.py:848-860); replace the
+       "O-3 forbids legacy-id resolution" citation with D-H9 plus §3 item 1 in ALL of its locations
+       — round 2 counted nine to ten, round 1 counted five, so enumerate them yourself with a grep
+       and report the real number; strike the refuted "no second generateInterviewPrep caller" claim
+       and record frontend/app/dashboard/jobs/[jobId]/page.tsx:354 as a second tracked caller that is
+       inert only because amplify.yml builds src/frontend; record that the code was deployed to
+       CareerVpCrudDev before the review ran.
+   (c) Sync the O-3 row in project-scope-lock.md §10 to the YAML's RESOLVED state — they have been
+       desynced since commit 9260f37.
+   (d) The §12 change-log annotation, in the v2.0.0 precedent format, recording what the two rounds
+       of refutation materially changed. Round 2's report already contains a drafted annotation in
+       its section 6 — use it as the base, verify its claims, and extend it to cover D-H10.
+   (e) The three verbatim MD/YAML drifts round 2 found in the v3.0.0 clause annotations.
+
+4. LIST THE OWNER STEPS the reviews left unassigned, as a short table with a proposed owner for
+   each: F1 and F2 (worker-path client-vpr_id routing, dormant unguarded submit path) → D-H9's
+   retirement register as new items, picked up by step 3.5; F3 (application_id != job_id mismatch
+   never detected) → D-H4 follow-on; N1 (agent-executed twin commits) → governance, not a wave step;
+   N2 (the integrity checker's tip-only scoping) → P-28; N3 (the blanket except Exception: return at
+   src/backend/careervp/handlers/artifact_dependency_utils.py:188-195) → D-H4 follow-on; N4
+   (InterviewPrepRequest absent from CONTRACT_MODELS, fixture-only item-10 oracle) → the
+   F-frontend-oracle step; F4 (B1 rode in with no decision token or trailer) → record it in the same
+   twin commit. Propose. Do not open them yourself.
+
+DO NOT: edit project-scope-lock.md or project-scope-lock.yaml. Do not commit anything to either
+twin. Do not author the D-H10 spec — that is step 3.6-SPEC. Do not delete any regeneration code.
+
+OUTPUT REQUIRED:
+- The two files you wrote, with paths.
+- Your reading on whether §9.2 requires an adversarial review for D-H10, with the clause text you
+  based it on.
+- The real count of O-3 miscitation sites from your own grep, and where they are.
+- The margin finding: does a rate limit on POST /ai/assist exist anywhere, yes or no, with the
+  command that establishes it.
+- A numbered list of exactly what the human must do, ending in the human-executed twin commit
+  carrying a version bump to 4.0.0, twin sync, the §12 row, and:
+    Scope-Lock-Approved-By: <name> <date>
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) the matching
+  clause in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update wave-3-status.md: add/update this step's row with a plain-English status, the commit,
+  today's date, and anything the NEXT step must resolve first (or write "none").
 ```
 
 ---
@@ -1966,12 +2256,336 @@ resolution works.
 
 ---
 
+## 3.6 — Artifact editing model: generate once, edit inline (no regeneration)
+
+| | |
+|---|---|
+| **Clause** | **D-H10 (NEW)** — does not exist in either twin yet. `3.2-CLOSEOUT-B` prepares it; a human commits it at scope-lock **v4.0.0**. **This step may not start until that commit lands.** |
+| **Spec** | `/Users/yitzchak.meirovich/Documents/code5/careervp/docs/db-redesign/code/code-analysis/project/specs/D-H10-artifact-editing-model-spec.md` — **does not exist.** Authored by 3.6-SPEC below. |
+| **Acceptance criteria** | AC-DH10-1, AC-DH10-2, AC-DH10-3 — defined by 3.6-SPEC, not invented here |
+| **Claude / Codex** | SPEC and RED: opus/high · gpt-5-codex/high. GREEN: fable/high · gpt-5-codex/high (rule 15 — new row, so rule 16 governs both sides: SPEC is judgment-heavy authoring against a product decision, RED is precision authoring once the spec pins values, GREEN is multi-file backend-plus-frontend implementation against a pinned spec, which is rule 18's Fable case) |
+| **Depends on** | 3.2-CLOSEOUT-A and -B, **and** the human's v4.0.0 twin commit |
+| **Deploy target** | `CareerVpCrudDevx` |
+| **Rule 7** | **RED and GREEN are separate sessions.** This deletes a user-facing capability across backend, frontend, and tests. One session would write the assertion around whatever it happened to delete. |
+| **Bets** | **`B-3-9`** *(new — seed in `ISSUES.md` before running 3.6-SPEC)*: nothing outside the frontend Regenerate control and the `force` flag depends on regeneration. Disproving check: a live inventory of every caller and every test. **`B-3-10`** *(new)*: AI Assist can genuinely replace regeneration for every artifact type a user could previously regenerate. Disproving check: DP-1 below. **If `B-3-10` settles FALSE, D-H10 is blocked, not scoped down** — removing the only remedy for a bad artifact would be a product regression, not a simplification. |
+
+**In plain English.** Today a user with a poor artifact can press Regenerate and get a fresh one.
+That creates a problem: regenerating an upstream artifact leaves everything downstream built from
+the old version, so the system would need to track staleness, notify, and re-run — complexity and
+cost the product does not want. The decision, taken 2026-08-01, is to remove regeneration entirely.
+An artifact is generated once and thereafter edited in place through the existing AI Assist inline
+editor. Retry on a *failed* artifact stays; only Regenerate on a *completed* one goes.
+
+**Why this is a Wave-3 step and not a product backlog item.** Regeneration is what mints a second
+`vpr_id` for one application. Remove it and a `vpr_id` is valid for the life of the application,
+which is what makes the identity rules in `§3` items 1–3 true in practice rather than on paper. It
+also turns the interview-prep worker's surviving `vpr_id` fallback — round 2's finding **F1**, at
+`/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/handlers/interview_prep_handler.py:848-860`
+— from a live defect into unreachable residue that **3.5** can delete on evidence.
+
+**AI Assist is unclaused production code.** `POST /ai/assist` (FE-UI-046/047) ships today with a
+handler, its own nested stack, a registered route, and unit tests, and appears **nowhere** in either
+twin. D-H10 is the first clause to govern it. That gap is why DP-1 below is not a formality.
+
+### Two decision points — DEFERRED ON PURPOSE, each with the evidence that resolves it
+
+**DP-1 — Does AI Assist actually cover what regeneration covered?** *(resolved by 3.6-SPEC; owns
+`B-3-10`)*
+Regeneration replaced a whole artifact. AI Assist rewrites **one field** — its own module docstring
+says so. Before anything is deleted, 3.6-SPEC must inventory, live: every artifact type a user can
+regenerate today, and for each, whether the AI Assist editor is reachable in the frontend and which
+fields it can rewrite. **Stopping condition (rule 10):** if any artifact type has no inline edit
+path, STOP and emit a rule-5 flag. Do not narrow D-H10 to "the types AI Assist happens to support"
+— that is a product decision the human has not made, and shipping it would leave users with an
+artifact they can neither fix nor replace.
+
+**DP-2 — How does `force` get rejected?** *(resolved by 3.6-SPEC, one command)*
+The human decided reject, not ignore. *How* depends on the base model: read
+`/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/careervp/models/api_models.py` and
+determine whether `APIModel` forbids extra fields. If it does, deleting `force` from
+`VPRGenerateRequest` makes an incoming `force` a 400 with no handler code at all, and the RED test
+pins the Pydantic error. If it does not, an explicit handler guard is required and the envelope it
+returns must be chosen deliberately — in which case pin the **§3 item 10** conformant shape
+(`error`, `classification`, `error_code`, `field`), **not** the `{error, status_code, code}` family.
+Both adversarial reviews found that family non-conformant, and the pinned 403 in
+`test_dh4_p01_canonical_artifact.py:37-42` is the in-repo example of doing it right. Do not repeat
+v3.0.0's mistake in the step that cleans up after it.
+
+---
+
+### 3.6-SPEC — author the D-H10 spec
+
+```
+You are running step 3.6-SPEC of Wave 3 in the CareerVP redesign. You are AUTHORING a spec that does
+not exist yet, for the new clause D-H10. Repo root:
+/Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before doing anything else: open
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md. If step 3.2-CLOSEOUT-B left
+anything open, deal with that FIRST. Then confirm THIS step's prerequisites live with real commands:
+(a) clause D-H10 exists in BOTH project-scope-lock.md and project-scope-lock.yaml at version 4.0.0;
+(b) the human's twin commit carries a Scope-Lock-Approved-By trailer. If either is untrue, STOP —
+you would be authoring a spec for a clause that does not exist, which is exactly the ordering failure
+that produced the v3.0.0 review.
+
+RULE 14 NOTE, INVERTED: normally a prompt confirms its spec exists before writing tests. Here there
+is no spec and no test — you are writing the spec itself. Every RED description you author must name
+EXACT assertion values read live from the tree. No "or". No undefined placeholders. A later RED
+session will be forbidden from inventing what you leave vague, so vagueness here becomes a STOP
+there.
+
+AUTHOR docs/db-redesign/code/code-analysis/project/specs/D-H10-artifact-editing-model-spec.md,
+matching the structure of the adopted exemplar
+docs/db-redesign/code/code-analysis/project/specs/D-H9-legacy-path-demolition-spec.md — read it
+first for the frontmatter, the Evidence table, the Fix Plan, the "RED Tests to Write First" section,
+and the Acceptance Criteria format.
+
+RESOLVE DP-1 FIRST — it can block the whole step:
+  Inventory live: every artifact type a user can currently regenerate (check the frontend hub at
+  src/frontend/app/applications/[id]/page.tsx and every backend generate handler), and for each,
+  whether the AI Assist inline editor is reachable and which fields it can rewrite (start at
+  src/backend/careervp/handlers/ai_assist_handler.py and
+  src/frontend/components/RichTextEditor/RichTextEditor.tsx). Settle bet B-3-10 in ISSUES.md with
+  the evidence. IF ANY ARTIFACT TYPE HAS NO INLINE EDIT PATH: STOP. Emit a rule-5 flag naming the
+  gap in plain English and do not author the removal half of the spec. Removing the only remedy for
+  a bad artifact is a product regression; the human has not agreed to that and must rule on it.
+
+RESOLVE DP-2 — read src/backend/careervp/models/api_models.py and determine whether APIModel forbids
+extra fields. State the answer and the line that establishes it. That answer decides whether the
+force rejection is free (Pydantic) or needs an explicit guard, and the spec must say which.
+
+THE SPEC MUST CONTAIN:
+
+1. An Evidence table of every surface D-H10 retires, each re-read LIVE with a current line number.
+   The 2026-08-01 baseline, all of which you must re-confirm: VPRGenerateRequest.force at
+   src/backend/careervp/models/api_models.py:203; the force_regenerate branch at
+   src/backend/careervp/handlers/vpr_submit_handler.py:284-334; the Regenerate action and its
+   confirmation dialog in src/frontend/app/applications/[id]/page.tsx (~:202, :257, :288, :364); the
+   regenerate copy at src/frontend/app/applications/[id]/vpr/page.tsx:426-431; the suite
+   src/backend/tests/e2e/test_vpr_regeneration_flow.py. Mark each row runtime-conditional or not,
+   the way D-H9's Evidence table does. A stale list is the failure this project keeps recording.
+
+2. A positive-proof requirement BEFORE any deletion, borrowed from D-H9's retirement gate: the
+   replacement must be shown to work before the thing it replaces is removed. For D-H10 that means
+   the AI Assist edit path is proven to set status 'edited', preserve artifact_id, and persist
+   through the PATCH concurrency contract in scope-lock §3 item 5 — all green before one line of
+   regeneration code is deleted.
+
+3. A negative-proof requirement: instrument the force_regenerate branch with a logger.warning naming
+   the item, run the unit suite and a devx exercise window, and record the hit count. Regeneration is
+   caller-driven rather than error-driven, so an observed-zero window is adequate here — say so
+   explicitly and say why, rather than leaving a reader to assume D-H9's fault-injection rule was
+   skipped by accident.
+
+4. Three acceptance criteria, AC-DH10-1 through AC-DH10-3, covering: the edit path is the contracted
+   way to change a completed artifact; a completed artifact yields one stable id for life (a second
+   generate returns the existing artifact, never a new one); and Retry on a FAILED artifact survives.
+
+5. A "RED Tests to Write First" section with exact values, split into three groups and clearly
+   labelled, because the ORDER is load-bearing:
+   GROUP A — must be GREEN before any deletion (the positive proof):
+     test_ai_assist_edit_sets_edited_status_and_preserves_artifact_id
+     test_ai_assist_edit_persists_via_patch_with_version_echo
+     test_completed_artifact_generate_is_idempotent   <- the load-bearing one; this is what makes
+                                                         "one vpr_id for life" true
+     test_retry_still_available_on_failed_artifact
+   GROUP B — RED before removal, GREEN after:
+     test_vpr_generate_rejects_force_flag             <- shape decided by DP-2
+     test_no_regenerate_action_offered_for_completed_artifact   (frontend)
+   GROUP C — the D-H9 handoff:
+     test_dh10_regeneration_symbols_absent            <- static scan, zero occurrences of `force` on
+                                                         VPRGenerateRequest and force_regenerate in
+                                                         src/backend/careervp/
+   Name the exact expected status codes, statuses, and symbol counts. Counts are a baseline to shrink
+   from; a shrink is a finding, not a pass.
+
+6. A Sequencing section stating: 3.6 runs BEFORE 3.4 and BEFORE 3.5, and why (below), and that
+   src/backend/careervp/handlers/vpr_submit_handler.py touches neither CoreRepository nor
+   TableRegistry — verified 2026-08-01 — so 3.6 does NOT take the Wave-3 §2 serialization lock.
+   Re-verify that yourself; if it has become false, 3.6 must serialize against 3.4.
+
+7. The margin open-question carried from 3.2-CLOSEOUT-B: whether any rate limit or quota bounds
+   POST /ai/assist. If inline editing becomes the only way to change an artifact, per-user call
+   volume rises structurally against the 91% margin target in CLAUDE.md. Record it as a named open
+   question with an owner. Do NOT build a rate limiter in this step.
+
+DO NOT: write any test file. Do not edit either twin. Do not delete any regeneration code. Do not
+author acceptance criteria that widen D-H10 beyond the clause the human committed — if the clause
+cannot be satisfied as written, that is a rule-5 stop and a §0.3 amendment, not a quiet widening.
+
+OUTPUT REQUIRED:
+- The spec path, and a plain-English summary of what it commits to.
+- DP-1's resolution with the live inventory behind it, and B-3-10 settled TRUE or FALSE in ISSUES.md.
+- DP-2's resolution with the line of api_models.py that establishes it.
+- Any surface in the Evidence table whose 2026-08-01 line number had already moved.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) the matching
+  clause in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update wave-3-status.md: add/update this step's row with a plain-English status, the commit,
+  today's date, and anything the NEXT step must resolve first (or write "none").
+```
+
+---
+
+### 3.6-RED — write the tests, watch them fail
+
+```
+You are running step 3.6-RED of Wave 3 in the CareerVP redesign. You are writing failing tests only.
+Repo root: /Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before doing anything else: open
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md. If step 3.6-SPEC left anything
+open or unresolved — in particular if DP-1 stopped on a missing inline edit path — deal with that
+FIRST. Then confirm THIS step's own prerequisites are actually met right now, using a real command
+(not memory, not this file) — if they are not, STOP and say so in plain English.
+
+BEFORE WRITING ANY TEST (rule 14): confirm, with a real command, that
+docs/db-redesign/code/code-analysis/project/specs/D-H10-artifact-editing-model-spec.md exists, that
+it has a "RED Tests to Write First" section naming AC-DH10-1, AC-DH10-2 and AC-DH10-3, and that each
+cited test names exact assertion values (no "or", no undefined placeholders). If any of that is not
+true, STOP — author or fix the spec section first; do not write tests against a spec that does not
+say what it is testing. You may NOT pin the spec yourself: rule 14 forbids a RED session from
+settling its own spec, which is why 3.6-SPEC is a separate step.
+
+WRITE the tests named in the spec's Group A, Group B and Group C, and nothing else. Do not add a
+test the spec did not describe. If running the suite reveals coverage the spec never anticipated,
+rule 5 applies: say so explicitly, name what discovered the need, and do NOT silently fold it in.
+
+RULE 13 IS THE POINT OF THIS SESSION: a test that has not been observed to fail is not a test. For
+every test you write, run it and quote the real failure output. Then state, per test, which of these
+it is:
+  - GROUP A, expected to PASS immediately — these assert that the AI Assist replacement already
+    works. A Group A test that FAILS is a finding of the first order: it means the replacement for
+    regeneration does not function, and D-H10 cannot proceed. STOP and flag it.
+  - GROUP B and C, expected to FAIL — these assert the removal that has not happened yet. A Group B
+    or C test that PASSES means either the symbol is already gone or your assertion is not reaching
+    the code. Investigate and say which.
+Label every test in your report with its group and its observed result. Do not blur the two.
+
+DO NOT: change any implementation file. Do not delete any regeneration code — that is 3.6-GREEN. Do
+not edit either twin. Do not edit src/backend/tests/unit/test_dh4_p01_canonical_artifact.py. Do not
+edit the D-H10 spec.
+
+OUTPUT REQUIRED:
+- Every test file and pytest node id you created.
+- The quoted failure output for each Group B and C test, and the quoted passing output for each
+  Group A test.
+- An explicit statement: did every Group A test pass? If not, STOP — say which failed and what that
+  means for the decision.
+- Confirmation that zero implementation files were modified, with the command that shows it.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) the matching
+  clause in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update wave-3-status.md: add/update this step's row with a plain-English status, the commit,
+  today's date, and anything the NEXT step must resolve first (or write "none").
+```
+
+---
+
+### 3.6-GREEN — remove regeneration
+
+> **Rule 18 shape.** Fable gets the goal and the constraints up front in one turn, not step-by-step
+> choreography. The rules and gates below are verbatim and non-negotiable; the sequencing inside
+> them is Fable's to choose.
+
+```
+You are running step 3.6-GREEN of Wave 3 in the CareerVP redesign. Repo root:
+/Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before doing anything else: open
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md. If step 3.6-RED left anything
+open or unresolved, deal with that FIRST. Then confirm THIS step's own prerequisites are actually met
+right now, using a real command (not memory, not this file) — if they are not, STOP and say so in
+plain English. Specifically: every Group A test from 3.6-RED must be passing. If any Group A test is
+red, the replacement for regeneration does not work and NOTHING may be deleted.
+
+THE GOAL. Make every Group B and Group C test from 3.6-RED pass, by removing artifact regeneration,
+without touching a single test file. Clause D-H10, spec
+docs/db-redesign/code/code-analysis/project/specs/D-H10-artifact-editing-model-spec.md, acceptance
+criteria AC-DH10-1 through AC-DH10-3. Work from the spec's Evidence table, re-confirmed live.
+
+THE CONSTRAINTS, all verbatim and none negotiable:
+
+- RETRY STAYS. Only Regenerate on a COMPLETED artifact goes. A failed artifact must remain
+  retryable. If your change makes a FAILED artifact unrecoverable, you have overshot — stop and say
+  so rather than shipping it.
+
+- NEGATIVE PROOF BEFORE DELETION. The spec requires instrumentation and an observed-zero window
+  before the force_regenerate branch is removed. Do that first and record the hit count. An item
+  without its evidence blocks its own removal, not the step — delete what is proven and leave what
+  is not, saying which is which.
+
+- NO TEST FILE MAY BE EDITED. Not one. If a test written by 3.6-RED appears wrong, that is a rule-5
+  stop: say so in plain English and leave it red. A test weakened to pass is on scope-lock §9.3's
+  hard-reject list.
+
+- THE ERROR ENVELOPE. If DP-2 resolved toward an explicit guard, its response body uses the §3
+  item 10 shape — error, classification, error_code, field — and NOT the {error, status_code, code}
+  family. Two adversarial reviews found that family non-conformant with
+  src/backend/contract/schemas/ErrorResponse.json and the frontend's strict zod oracle. The
+  conformant in-repo example is the 403 envelope at
+  src/backend/tests/unit/test_dh4_p01_canonical_artifact.py:37-42.
+
+- FRONTEND IS IN SCOPE FOR THIS STEP, deliberately and by name — the Regenerate control and its
+  confirmation dialog. This is a named cross-boundary deliverable, not a silent scope expansion.
+  Run the frontend checks from CLAUDE.md, not only the backend ones.
+
+- LEAVE F1 ALONE. The interview-prep worker's surviving vpr_id fallback at
+  src/backend/careervp/handlers/interview_prep_handler.py:848-860 belongs to step 3.5 as a D-H9
+  retirement-register item. Removing regeneration makes it unreachable; do not also delete it here.
+  Record in your ledger row that it is now residue and 3.5 owns it.
+
+- DO NOT EDIT EITHER SCOPE-LOCK TWIN.
+
+VERIFICATION BEFORE YOU CALL IT DONE — run all of it and quote the real output:
+  cd src/backend && uv run ruff format . && uv run ruff check --fix . && uv run mypy careervp --strict
+  cd src/backend && uv run pytest tests/unit/ tests/integration/ -v --tb=short
+  cd src/frontend && npm run typecheck && npm run test:unit && npm run test:integration
+  python3 scripts/ci/check_scope_lock_integrity.py --base origin/main --head HEAD
+Then deploy to CareerVpCrudDevx and re-run the live-API suites with API_BASE set, exactly as
+3.2-CLOSEOUT-A did, and DIFF the result against the characterization baseline that step wrote under
+docs/evidence/. A behavior change that is not explained by removing regeneration is a finding.
+
+OUTPUT REQUIRED:
+- Every file changed, and confirmation that zero test files are among them.
+- The instrumentation hit count for the force_regenerate branch, and the window it was observed over.
+- The full verification output above, quoted.
+- The diff against the characterization baseline, with any unexplained change called out.
+- One plain-English paragraph a non-engineer could read: what a user can and cannot do with an
+  artifact now, compared with before.
+
+ALSO REQUIRED (standing rule for every wave prompt — see runbooks/RUNBOOK-RULES.md):
+- Compare what you actually built against (a) this prompt's own instructions and (b) the matching
+  clause in project-scope-lock.yaml. If everything matches, say so in one plain sentence.
+- If ANYTHING drifted — extra work not asked for, required work skipped, or a test/rule had to be
+  weakened — STOP. Do not fix it yourself. Write one plain-English sentence a non-engineer could
+  follow (what should have happened, what actually happened, why it matters), THEN the technical
+  detail, and flag it for human review. Do not mark the step done.
+- Update wave-3-status.md: add/update this step's row with a plain-English status, the commit,
+  today's date, and anything the NEXT step must resolve first (or write "none").
+```
+
+---
+
 ## GATE — Wave 3 close-out
 
 | | |
 |---|---|
 | **Clause** | — (whole-wave demonstration) |
-| **Depends on** | 3.1, 3.2, 3.3, 3.4, 3.5 all done |
+| **Depends on** | 3.1, 3.2, 3.2-CLOSEOUT, 3.3, 3.6, 3.4, 3.5 all done (3.2-CLOSEOUT and 3.6 added 2026-08-01) |
 | **Claude / Codex** | opus/high · gpt-5-codex/high (rule 16 — a re-runnable close-out script over data-migration work; `high` matches the wave's steps, not `max`) |
 | **Deploy target** | `CareerVpCrudDevx` |
 

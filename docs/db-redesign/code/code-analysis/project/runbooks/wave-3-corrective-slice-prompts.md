@@ -40,6 +40,13 @@ corrective work spans `D-H2` (key authority), `D-H4` (canonical artifact) and DA
 
 ## §1 — `3.CORR-SPEC`
 
+> **Run:** 4 of 11 · **Step:** `3.CORR-SPEC` · **Fixes:** F-DEVX-1 (pin the spec)
+> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable — "steps whose real blocker is a human decision"; DP-D stops and asks.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **Run 5 is a HUMAN DECISION on DP-A…DP-E and happens between this prompt and the next.**
+
 ```
 You are running step 3.CORR-SPEC of Wave 3 in the CareerVP redesign. Repo root:
 /Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
@@ -144,6 +151,14 @@ today's date, and what the next step must resolve first (or "none").
 
 ## §2 — `3.CORR-RED`
 
+> **Run:** 6 of 11 · **Step:** `3.CORR-RED` · **Fixes:** F-DEVX-1 (tests only)
+> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable — "RED steps. Never route to Fable.")
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **Rule 7 applies.** RED and GREEN are two different sessions. This one writes tests only
+> and carries an absolute prohibition on touching implementation files.
+
 ```
 You are running step 3.CORR-RED of Wave 3. Repo root as above.
 
@@ -199,6 +214,15 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
 ---
 
 ## §3 — `3.CORR-GREEN`
+
+> **Run:** 7 of 11 · **Step:** `3.CORR-GREEN` · **Fixes:** F-DEVX-1 (implementation)
+> **Claude:** **fable/xhigh** · **Codex:** gpt-5.3-codex/xhigh
+> (rule 15/16 — derived in this file's routing table. Rule 18 ROUTES to Fable: implementation against a pinned spec, long-horizon, blast radius is key authority and data shape.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **BEFORE RUNNING:** confirm the org has 30-day data retention — under ZDR every Fable request
+> returns `400 invalid_request_error`. A refusal is HTTP 200 with `stop_reason: "refusal"`,
+> not an error. **Rule 7 applies** — this is a different session from RED.
 
 ```
 You are running step 3.CORR-GREEN of Wave 3. Repo root as above.

@@ -10,7 +10,33 @@ No prod stack exists today, so nothing here is incident response — but every s
 isolation item is a **launch blocker**, and same-account prod makes step 5 materially more
 serious than it first looked.
 
-## Execution order — run these one per session, in this exact sequence
+## How to actually run these
+
+**These are eleven separate sessions, not one prompt.** Each `## Step` below contains exactly one
+fenced ` ``` ` block. That block is a whole prompt for a whole session.
+
+For each run, in order:
+
+1. Find the run's row in the table below and note its **Claude** and **Codex** values.
+2. Open a **fresh session** and set that model and effort **before** pasting anything. The model is
+   a session setting; it cannot be changed by text inside the prompt.
+3. Copy the fenced block — **only** the fenced block, not the `>` header above it — and paste it as
+   the first message.
+4. Let it finish. It will update `wave-3-status.md` as its last act.
+5. Read that ledger row before starting the next run. If it recorded an open problem, resolve that
+   first — every prompt's `STANDING CHECK` will stop on it anyway.
+
+**Never run two steps in one session.** Beyond the model differing, rule 7 requires RED and GREEN to
+be separate sessions, and a session that has already written implementation cannot credibly write
+tests that fail first.
+
+The `>` header above each block carries the run number, model pair, and rule-15/16 provenance. It is
+metadata for you, not instructions for the agent — that is why it sits outside the fence.
+
+**Run 5 is not a prompt.** It is a human decision on DP-A…DP-E, and run 6 cannot start without it.
+**Run 8 is not a prompt either** — it is a human-gated destructive operation.
+
+## Execution order
 
 Model/effort is derived from **rule 18** (Claude tier) and **rule 16** (Codex tier), not chosen
 freely. Copy the pair verbatim into each prompt header per rule 15.
@@ -59,6 +85,15 @@ acceptance criteria, exact values, scope boundaries, full paths, the drift block
 update — all verbatim. Drop step-by-step implementation choreography. State goal, constraints and
 acceptance criteria in one turn, then let it run; expect minutes per request.
 
+**Codex slug — a deliberate divergence, flagged not hidden.** Every existing Wave-3 row reads
+`gpt-5-codex`; these rows read `gpt-5.3-codex`. Rule 16's model table makes `gpt-5.3-codex` the
+*"default for serious agentic coding"* and reserves `gpt-5-codex` for when the environment exposes
+nothing newer — while also noting `gpt-5-codex` is *"this project's current pin"*. New rows take the
+default; the older rows are **not** being retroactively renamed, because rule 16 says a change to an
+already-authored pinned model goes through rule 8 rather than a find-and-replace. **If your
+environment does not expose `gpt-5.3-codex`, drop these rows to `gpt-5-codex` at the same effort** —
+that is the rule-16 fallback and needs no further approval.
+
 **Codex tiers** follow rule 16's rubric — `medium` for a focused change across a few files,
 `high` when it crosses module boundaries or can break production behavior, `xhigh` reserved for
 data-model change. `3.FIX-SECURITY` is arguably `xhigh` on rule 16's *"auth/tenancy-sensitive"*
@@ -70,6 +105,12 @@ Steps 1–3 are small and unambiguous. Run 7 is the only substantial one.
 ---
 
 ## Step 1 — `3.FIX-DEPLOY`
+
+> **Run:** 1 of 11 · **Step:** `3.FIX-DEPLOY` · **Fixes:** F-DEVX-7
+> **Claude:** opus/medium · **Codex:** gpt-5.3-codex/medium
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable: synth census plus a human-decision raise.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
 
 ```
 You are running step 3.FIX-DEPLOY of Wave 3. Repo root:
@@ -132,6 +173,12 @@ what the next step must resolve first (or "none").
 
 ## Step 2 — `3.FIX-HARNESS`
 
+> **Run:** 2 of 11 · **Step:** `3.FIX-HARNESS` · **Fixes:** F-DEVX-2, F-DEVX-3, F-DEVX-4
+> **Claude:** opus/medium · **Codex:** gpt-5.3-codex/medium
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable: test repair and recon, low blast radius.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+
 ```
 You are running step 3.FIX-HARNESS of Wave 3. Repo root as above.
 
@@ -191,6 +238,12 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
 ---
 
 ## Step 3 — `3.FIX-SECURITY`
+
+> **Run:** 3 of 11 · **Step:** `3.FIX-SECURITY` · **Fixes:** F-DEVX-8 (IDOR), bearer-token logging
+> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable outright — "anything security-focused… the P-04/P-05 IDOR work".)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
 
 ```
 You are running step 3.FIX-SECURITY of Wave 3. Repo root as above.
@@ -292,6 +345,12 @@ close the step — orphaned records are inert once nothing reads `pk`/`sk`.
 
 ## Step 5 — `3.FIX-ISOLATION`
 
+> **Run:** 9 of 11 · **Step:** `3.FIX-ISOLATION` · **Fixes:** Codex §11 cross-environment subscription lookup
+> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable — "any auth or secrets slice"; also an ownership decision.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+
 ```
 You are running step 3.FIX-ISOLATION of Wave 3. Repo root as above.
 
@@ -342,6 +401,12 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row.
 ---
 
 ## Step 6b — `3.FIX-VERIFY` (run 10) — the closing gate
+
+> **Run:** 10 of 11 · **Step:** `3.FIX-VERIFY` · **Fixes:** nothing — it is a gate
+> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable — "GATE steps" are named.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
 
 ```
 You are running step 3.FIX-VERIFY of Wave 3. Repo root:
