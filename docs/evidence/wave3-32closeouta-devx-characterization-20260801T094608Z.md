@@ -283,6 +283,68 @@ With a CV giving no explicit employer, `POST /users/me/cv` returned **500**:
 emit `None`. Model output is not defensively handled, so a thin CV is a 500 rather than a 4xx
 or a degraded parse.
 
+### 5.8 `F-DEVX-8` — **SECURITY, launch blocker: `POST /users/me/cv` trusts a caller-supplied `user_id` (cross-tenant write / IDOR)**
+
+**Added 2026-08-01, after the Codex validation round. Found by pushing on a Codex correction, and
+missed by both the original characterization and the Codex review.**
+
+Codex correctly observed that `cv_upload_handler._normalize_request_payload` supports two request
+shapes and that the original handoff overstated `{cv_content, file_name}` as the only one. That
+correction is factually right and its conclusion is wrong in the way that matters: **the second
+shape is an authentication bypass.**
+
+```python
+# cv_upload_handler.py:266-284
+if {'cv_content', 'file_name'}.issubset(body):        # OpenAPI shape
+    user_id = _extract_user_id()                      # ← from the authorizer. correct.
+    ...
+    return {'user_id': user_id, ...}
+return body                                           # ← LEGACY shape: body returned UNCHANGED
+```
+
+On the legacy path `user_id` is whatever the caller put in the JSON body. Nothing reconciles it
+with the token, and `request.user_id` then flows straight into storage:
+
+```python
+cv_upload_handler.py:129   s3_key = f'{request.user_id}/{uuid.uuid4()}.{request.file_type}'
+cv_upload_handler.py:155   user_id=request.user_id
+```
+
+**Reproduced live on devx, 2026-08-01.** Authenticated as
+`54683458-d001-7083-33b8-8d185d5d3a34`, posting a body carrying a different `user_id`:
+
+```
+POST /users/me/cv   Authorization: Bearer <valid id_token for 54683458-…>
+{"user_id": "00000000-dead-beef-0000-000000000001", "text_content": "<a valid CV>"}
+
+→ HTTP 201
+   stored user_id = 00000000-dead-beef-0000-000000000001
+   cv_id          = 4d877e8e-0db8-428f-a98f-09c70cb08e52
+```
+
+Confirmed persisted: `careervp-cvs-table-devx` holds 1 row under
+`userId = 00000000-dead-beef-0000-000000000001`, written by a caller who is not that user.
+
+**Impact.** Any authenticated user can write a CV into another user's account and, per the
+`s3_key` construction, into that user's S3 prefix — given the victim's Cognito `sub`. Subs are not
+secret: `GET /users/me` returns the caller's own, and observed accounts carry emails of the literal
+form `<sub>@example.com`. Downstream artifacts generated from a planted CV would be poisoned. This
+is a write primitive, so it is a data-integrity and tenancy breach, not merely an information leak.
+
+**The probe used a UUID belonging to no real account** (`00000000-dead-beef-…`), deliberately, so
+the test proved the *absence of validation* without touching a real user. **That synthetic row is
+still in `careervp-cvs-table-devx` and should be deleted during cleanup.**
+
+**Fix direction (not implemented here):** derive `user_id` from the authorizer on **every** path,
+never from the body. The minimal change is to move the `_extract_user_id()` call out of the
+OpenAPI branch and have it override any body-supplied value unconditionally; `CVParseRequest`
+should not accept `user_id` from a client at all on this route. Add a regression test asserting
+that a body `user_id` differing from the token is either ignored or rejected — never honoured.
+**Audit every other handler for the same body-supplied-identity pattern before closing.**
+
+**Owner: not asserted.** It is a security defect on a live route, and it is not in 3.2-CLOSEOUT-A's
+scope to fix.
+
 ### 5.7 `F-DEVX-7` — `make deploy-devx` cannot deploy devx
 
 **This is the defect that blocked step 5 of this prompt on the first two attempts.** Scope-lock
