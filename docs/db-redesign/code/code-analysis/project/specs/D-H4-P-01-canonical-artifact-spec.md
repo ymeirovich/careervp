@@ -87,13 +87,21 @@ human-approved before landing; neither pinned RED test was modified.
   (v3.0.0) and the fixture now sends `application_id`. The rejected alternative was
   branching on Pydantic `model_fields_set`, which would preserve the fallback behind a
   present-versus-absent check and reintroduce compatibility machinery under a new name.
-- **The §0.3 proposal inventoried ONE affected test; the real count is eight.** The
-  other seven were found only by running the full suite while landing A1. All seven are
-  the same class — fixtures that omitted `application_id` and silently relied on the
-  `vpr_id` application-key fallback — so they fall inside the same approved
-  reconciliation rather than needing their own. Recorded in full here so no reader
-  concludes a single fixture moved, and so the incompleteness of the proposal's
-  inventory is itself on the record:
+- **The §0.3 proposal inventoried ONE affected test; the real count is eight.** Of the
+  other seven, **six** were found only by running the full suite while landing A1, and
+  those six are all the same class — fixtures that omitted `application_id` and silently
+  relied on the `vpr_id` application-key fallback — so they fall inside the same approved
+  reconciliation rather than needing their own. **The seventh is different on both counts:**
+  it is B1's CV-tailoring fixture
+  (`tests/integration/test_downstream_dependency_202.py::test_cv_tailoring_no_vpr_returns_202_not_500`,
+  the first bullet of this inventory). It was surfaced by the B1 amendment, not by running
+  the suite, and its defect is an omitted `vpr_id` under AC-DH4-2 rather than an omitted
+  `application_id` under AC-P01-1. **The total of eight is correct and unchanged.**
+  (Corrected 2026-08-01 by 3.2-CLOSEOUT-A. The prior wording said all seven were
+  suite-found and same-class; six were. Adversarial-review round 1's condition C3 attacked
+  the *count* of eight — round 2 refuted that; the count was never wrong, this one sentence
+  about the seven was.) Recorded in full here so no reader concludes a single fixture
+  moved, and so the incompleteness of the proposal's inventory is itself on the record:
   - `tests/unit/test_async_submit_handlers.py::test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_error` (1)
   - `tests/integration/test_interview_prep_roundtrip.py` — five tests fed by the shared
     `_valid_request_body()` helper: `test_submit_returns_202_with_request_id`,
@@ -107,6 +115,34 @@ human-approved before landing; neither pinned RED test was modified.
   `test_interview_prep_submit_handler_returns_structured_validation_errors` needs no
   change: its payload already fails Pydantic parsing on `gap_response_ids`, which is
   raised before the new handler-level identity guard is reached.
+- **Two further live-API fixtures, added 2026-08-01 by 3.2-CLOSEOUT-A — and the reason
+  they were missed is structural, not an oversight of care:**
+  - `tests/integration/test_full_pipeline_integration.py::test_full_pipeline_integration`
+  - `tests/e2e/test_e2e_happy_path_full_job_application.py::test_e2e_happy_path_full_job_application`
+
+  Both POST `/interview-prep/generate` with a body carrying `vpr_id` and
+  `gap_response_ids` but **no application identity**, which is exactly the shape v3.0.0
+  now refuses with HTTP 400 before dependency resolution. They are the same class as the
+  six suite-found fixtures and fall inside the same approved A1 reconciliation.
+  **Why the full-suite sweep could not see them:** both construct their HTTP client via
+  `IntegrationApiClient.from_env()` / `E2EClient.from_env()`, which call
+  `pytest.skip(...)` when `API_BASE` is unset
+  (`tests/integration/integration_helpers.py:63-65`, `tests/e2e/e2e_helpers.py:63-65`).
+  With no `API_BASE` exported — the state in every 3.2 session — they skip before the
+  request body is ever built, so a green local suite reported them as passing-by-skipping
+  while the fixture was in fact broken. A skipped suite is not a passing suite, and this
+  is the concrete cost of that confusion.
+  **Reconciliation: the same option A1** — each body now additionally sends
+  `'application_id': job_id`, the value already bound at the call site
+  (`test_full_pipeline_integration.py:75`, `test_e2e_happy_path_full_job_application.py:39`)
+  and already sent by the immediately preceding `/cover-letter/generate` call in both
+  files. Nothing else in either file changed: no assertion relaxed, no expected status
+  altered.
+  **This does NOT change the count of eight above.** Eight is, and remains, the number of
+  affected tests the local suite could surface. These two were invisible to that
+  instrument by construction; counting them, ten fixtures were affected in total. The
+  eight-count is not the error round 1's C3 claimed it was — the instrument's blind spot is
+  a separate finding, and it is recorded here rather than folded into that number.
 
 ## Acceptance Criteria
 

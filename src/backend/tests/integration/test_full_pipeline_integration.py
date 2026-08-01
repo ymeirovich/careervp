@@ -136,7 +136,7 @@ def test_full_pipeline_integration() -> None:
         token,
         '/interview-prep/generate',
         '/interview-prep',
-        {'vpr_id': vpr_request_id, 'gap_response_ids': gap_response_ids},
+        {'application_id': job_id, 'vpr_id': vpr_request_id, 'gap_response_ids': gap_response_ids},
     )
     interview_questions = interview_payload.get('questions')
     assert isinstance(interview_questions, list)

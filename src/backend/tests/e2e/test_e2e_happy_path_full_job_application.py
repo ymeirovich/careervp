@@ -131,7 +131,7 @@ def test_e2e_happy_path_full_job_application() -> None:
         'POST',
         '/interview-prep/generate',
         token=token,
-        json_body={'vpr_id': vpr_id, 'gap_response_ids': gap_ids},
+        json_body={'application_id': job_id, 'vpr_id': vpr_id, 'gap_response_ids': gap_ids},
         expected_status={200, 202},
     )
     if ip.status == 202:
