@@ -124,7 +124,7 @@ DEVX_STACK_NAME ?= CareerVpCrudDevx
 
 deploy-devx: build
 	npx cdk acknowledge 34892
-	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" --context "p26_rehome_features=true"
 
 # P-28: automation is CreateChangeSet-only. `create-changeset` synthesizes and creates a
 # CFN change set WITHOUT executing it (`--no-execute`); a human-gated job runs
