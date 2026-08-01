@@ -10,6 +10,25 @@ file has uncommitted user edits.
 
 ---
 
+## Execution order
+
+These three prompts are runs 4, 6, and 7 of
+`wave-3-remediation-run-order.md`. Run 5 is the human decision on DP-A…DP-E and must happen between
+`3.CORR-SPEC` and `3.CORR-RED`.
+
+| Run | Step id | Fixes | Claude | Codex |
+|---:|---|---|---|---|
+| 4 | `3.CORR-SPEC` | F-DEVX-1 (pin) | `opus/high` | `gpt-5-codex/high` |
+| 5 | **human decision** | DP-A…DP-E, esp. DP-D | — | — |
+| 6 | `3.CORR-RED` | F-DEVX-1 (tests) | `opus/high` | `gpt-5-codex/high` |
+| 7 | `3.CORR-GREEN` | F-DEVX-1 (implementation) | **`fable/xhigh`** | `gpt-5-codex/xhigh` |
+
+Codex uses `gpt-5-codex` here because the Wave-3 D-H4/P-01 spec frontmatter pins that slug.
+Reasoning follows rule 16: `high` for spec/test work that spans canonical artifact authority, and
+`xhigh` for the GREEN implementation because it changes key authority and data shape.
+
+---
+
 ## §0 — Why a new step and not a reopened D-H4
 
 `D-H4`'s verification mode is `contract+integration`. `3.2-GREEN` discharged the **contract** half
@@ -41,7 +60,7 @@ corrective work spans `D-H2` (key authority), `D-H4` (canonical artifact) and DA
 ## §1 — `3.CORR-SPEC`
 
 > **Run:** 4 of 11 · **Step:** `3.CORR-SPEC` · **Fixes:** F-DEVX-1 (pin the spec)
-> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
 > (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable — "steps whose real blocker is a human decision"; DP-D stops and asks.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
@@ -152,7 +171,7 @@ today's date, and what the next step must resolve first (or "none").
 ## §2 — `3.CORR-RED`
 
 > **Run:** 6 of 11 · **Step:** `3.CORR-RED` · **Fixes:** F-DEVX-1 (tests only)
-> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
 > (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable — "RED steps. Never route to Fable.")
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
@@ -216,7 +235,7 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
 ## §3 — `3.CORR-GREEN`
 
 > **Run:** 7 of 11 · **Step:** `3.CORR-GREEN` · **Fixes:** F-DEVX-1 (implementation)
-> **Claude:** **fable/xhigh** · **Codex:** gpt-5.3-codex/xhigh
+> **Claude:** **fable/xhigh** · **Codex:** gpt-5-codex/xhigh
 > (rule 15/16 — derived in this file's routing table. Rule 18 ROUTES to Fable: implementation against a pinned spec, long-horizon, blast radius is key authority and data shape.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.

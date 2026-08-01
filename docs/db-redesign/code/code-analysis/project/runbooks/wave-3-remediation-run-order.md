@@ -43,18 +43,18 @@ freely. Copy the pair verbatim into each prompt header per rule 15.
 
 | Run | Step id | Prompt lives in | Fixes | Claude | Codex |
 |---:|---|---|---|---|---|
-| 1 | `3.FIX-DEPLOY` | this file, Step 1 | F-DEVX-7 | `opus/medium` | `gpt-5.3-codex/medium` |
-| 2 | `3.FIX-HARNESS` | this file, Step 2 | F-DEVX-2, -3, -4 | `opus/medium` | `gpt-5.3-codex/medium` |
-| 3 | `3.FIX-SECURITY` | this file, Step 3 | F-DEVX-8, token log | `opus/high` | `gpt-5.3-codex/high` |
-| 4 | `3.CORR-SPEC` | corrective-slice file §1 | F-DEVX-1 (pin) | `opus/high` | `gpt-5.3-codex/high` |
+| 1 | `3.FIX-DEPLOY` | this file, Step 1 | F-DEVX-7 | `opus/medium` | `gpt-5-codex/medium` |
+| 2 | `3.FIX-HARNESS` | this file, Step 2 | F-DEVX-2, -3, -4 | `opus/medium` | `gpt-5-codex/high` |
+| 3 | `3.FIX-SECURITY` | this file, Step 3 | F-DEVX-8, token log | `opus/high` | `gpt-5-codex/xhigh` |
+| 4 | `3.CORR-SPEC` | corrective-slice file §1 | F-DEVX-1 (pin) | `opus/high` | `gpt-5-codex/high` |
 | 5 | **human decision** | — | DP-A…DP-E, esp. DP-D | — | — |
-| 6 | `3.CORR-RED` | corrective-slice file §2 | F-DEVX-1 (tests) | `opus/high` | `gpt-5.3-codex/high` |
-| 7 | `3.CORR-GREEN` | corrective-slice file §3 | F-DEVX-1 (impl) | **`fable/xhigh`** | `gpt-5.3-codex/xhigh` |
+| 6 | `3.CORR-RED` | corrective-slice file §2 | F-DEVX-1 (tests) | `opus/high` | `gpt-5-codex/high` |
+| 7 | `3.CORR-GREEN` | corrective-slice file §3 | F-DEVX-1 (impl) | **`fable/xhigh`** | `gpt-5-codex/xhigh` |
 | 8 | `3.FIX-LEGACY-PURGE` | this file, Step 4b | the 89 legacy VPRs | **human-gated** | — |
-| 9 | `3.FIX-ISOLATION` | this file, Step 5 | Codex §11 | `opus/high` | `gpt-5.3-codex/high` |
-| 10 | `3.FIX-VERIFY` | this file, Step 6b | closing gate | `opus/high` | `gpt-5.3-codex/high` |
-| — | `3.FIX-GAPASYNC` | decision-gated, Step 7 | F-DEVX-5 | `opus/high` → impl may be `fable/high` | `gpt-5.3-codex/high` |
-| — | `3.FIX-NULLPOLICY` | decision-gated, Step 7 | F-DEVX-6 | `opus/medium` | `gpt-5.3-codex/medium` |
+| 9 | `3.FIX-ISOLATION` | this file, Step 5 | Codex §11 | `opus/high` | `gpt-5-codex/xhigh` |
+| 10 | `3.FIX-VERIFY` | this file, Step 6b | closing gate | `opus/high` | `gpt-5-codex/high` |
+| — | `3.FIX-GAPASYNC` | decision-gated, Step 7 | F-DEVX-5 | `opus/high` → impl may be `fable/high` | `gpt-5-codex/high` |
+| — | `3.FIX-NULLPOLICY` | decision-gated, Step 7 | F-DEVX-6 | `opus/medium` | `gpt-5-codex/medium` |
 | 11 | resume Wave 3 | `wave-3-prompts.md` | — | as already recorded | as already recorded |
 
 ### Why these tiers — the routing is rule-driven, not taste
@@ -85,29 +85,32 @@ acceptance criteria, exact values, scope boundaries, full paths, the drift block
 update — all verbatim. Drop step-by-step implementation choreography. State goal, constraints and
 acceptance criteria in one turn, then let it run; expect minutes per request.
 
-**Codex slug — a deliberate divergence, flagged not hidden.** Every existing Wave-3 row reads
-`gpt-5-codex`; these rows read `gpt-5.3-codex`. Rule 16's model table makes `gpt-5.3-codex` the
-*"default for serious agentic coding"* and reserves `gpt-5-codex` for when the environment exposes
-nothing newer — while also noting `gpt-5-codex` is *"this project's current pin"*. New rows take the
-default; the older rows are **not** being retroactively renamed, because rule 16 says a change to an
-already-authored pinned model goes through rule 8 rather than a find-and-replace. **If your
-environment does not expose `gpt-5.3-codex`, drop these rows to `gpt-5-codex` at the same effort** —
-that is the rule-16 fallback and needs no further approval.
+**Codex slug — keep Wave 3 on its recorded pin.** The existing Wave-3 prompt file resolves bare
+`codex/high` to `gpt-5-codex/high` because the Track D specs' `tooling` frontmatter pins
+`gpt-5-codex`. These remediation rows sit in the same Wave-3 execution stream, so they use that
+same model slug. Upgrading them to `gpt-5.3-codex` would be a rule-8 routing change, not a
+fill-in-time correction.
 
-**Codex tiers** follow rule 16's rubric — `medium` for a focused change across a few files,
-`high` when it crosses module boundaries or can break production behavior, `xhigh` reserved for
-data-model change. `3.FIX-SECURITY` is arguably `xhigh` on rule 16's *"auth/tenancy-sensitive"*
-line; it is set to `high` because the fix itself is small and the breadth is in the audit. Raise it
-if the handler sweep turns up many sites.
+**Codex tiers** follow rule 16's rubric. `3.FIX-DEPLOY` stays `medium`: it is a focused infra
+correction plus a synth guard. `3.FIX-HARNESS` rises to `high`: it repairs live-API helpers and a
+contract gate across multiple suites and must distinguish real 401/403/409 behavior. `3.FIX-SECURITY`
+is `xhigh`: it is auth/tenancy-sensitive, touches body-supplied identity, removes token exposure,
+requires handler sweeps, and deploys a live re-test before prod shares the account. `3.CORR-SPEC`
+and `3.CORR-RED` stay `high` because they pin and test cross-module canonical-storage behavior;
+`3.CORR-GREEN` is `xhigh` because it changes key authority and data shape. `3.FIX-ISOLATION` is
+`xhigh` because a cross-environment table fallback can misclassify paid users and becomes
+production-adjacent in the shared account. The closing gate and decision-gated follow-ups stay at
+the lowest tier that can reliably satisfy their acceptance criteria.
 
-Steps 1–3 are small and unambiguous. Run 7 is the only substantial one.
+Run 7 is the only Fable-routed implementation step. Runs 3 and 9 are not Fable-routed, but their
+Codex reasoning is deliberately `xhigh` because both sit on auth/tenancy-sensitive launch blockers.
 
 ---
 
 ## Step 1 — `3.FIX-DEPLOY`
 
 > **Run:** 1 of 11 · **Step:** `3.FIX-DEPLOY` · **Fixes:** F-DEVX-7
-> **Claude:** opus/medium · **Codex:** gpt-5.3-codex/medium
+> **Claude:** opus/medium · **Codex:** gpt-5-codex/medium
 > (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable: synth census plus a human-decision raise.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
@@ -174,8 +177,8 @@ what the next step must resolve first (or "none").
 ## Step 2 — `3.FIX-HARNESS`
 
 > **Run:** 2 of 11 · **Step:** `3.FIX-HARNESS` · **Fixes:** F-DEVX-2, F-DEVX-3, F-DEVX-4
-> **Claude:** opus/medium · **Codex:** gpt-5.3-codex/medium
-> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable: test repair and recon, low blast radius.)
+> **Claude:** opus/medium · **Codex:** gpt-5-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable: test repair and recon, but live harness and contract-gate breadth need high reasoning.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
 
@@ -240,7 +243,7 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
 ## Step 3 — `3.FIX-SECURITY`
 
 > **Run:** 3 of 11 · **Step:** `3.FIX-SECURITY` · **Fixes:** F-DEVX-8 (IDOR), bearer-token logging
-> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> **Claude:** opus/high · **Codex:** gpt-5-codex/xhigh
 > (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable outright — "anything security-focused… the P-04/P-05 IDOR work".)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
@@ -346,7 +349,7 @@ close the step — orphaned records are inert once nothing reads `pk`/`sk`.
 ## Step 5 — `3.FIX-ISOLATION`
 
 > **Run:** 9 of 11 · **Step:** `3.FIX-ISOLATION` · **Fixes:** Codex §11 cross-environment subscription lookup
-> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> **Claude:** opus/high · **Codex:** gpt-5-codex/xhigh
 > (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable — "any auth or secrets slice"; also an ownership decision.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
@@ -403,7 +406,7 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row.
 ## Step 6b — `3.FIX-VERIFY` (run 10) — the closing gate
 
 > **Run:** 10 of 11 · **Step:** `3.FIX-VERIFY` · **Fixes:** nothing — it is a gate
-> **Claude:** opus/high · **Codex:** gpt-5.3-codex/high
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
 > (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable — "GATE steps" are named.)
 > **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
 > block below. Do not chain this with another step in the same session.
