@@ -142,11 +142,54 @@ The completed VPR lives only in `careervp-jobs-table-devx`, keyed `job_id = 416c
 actual application is `ea808c10-…`. Downstream upstream-resolution looks for a `vpr` artifact
 under the application and finds nothing → `409 upstream_required, missing:["vpr"]`.
 
-**Location:** the VPR completion path (`careervp/handlers/vpr_worker_handler.py` and the
-artifact-registration it does or does not perform) versus the upstream check in
-`careervp/logic/artifact_dependency_utils.py`. **Owner: not asserted.** This sits close to
-D-H4's canonical-artifact identity work but was not in this step's scope, and this step is
-explicitly forbidden from touching the worker path.
+**ROOT CAUSE — diagnosed 2026-08-01, no longer just a symptom.** The VPR is not lost. It is
+written to a **different physical table** than the one the readers query, because
+`DYNAMODB_TABLE_NAME` — the variable `DynamoDalHandler` uses as `self.table_name` — resolves
+to a different table per Lambda:
+
+```
+careervp-vpr-worker-lambda-devx          DYNAMODB_TABLE_NAME = careervp-users-table-devx
+careervp-interview-prep-api-lambda-devx  DYNAMODB_TABLE_NAME = careervp-artifacts-table-devx
+careervp-cover-letter-api-lambda-devx    DYNAMODB_TABLE_NAME = careervp-artifacts-table-devx
+```
+
+`save_vpr` / `get_vpr` use the **legacy `pk`/`sk` key grammar**
+(`dynamo_dal_handler.py:306`, `:332`, `:355`). Across all 11 devx tables, the **only** one keyed
+`pk`/`sk` is `careervp-users-table-devx`; the artifacts table is keyed
+`applicationId`/`artifactId`. So:
+
+```
+ WRITE  vpr-worker  --save_vpr--> users-table      {pk: <application_id>, sk: ARTIFACT#VPR#v1}
+                                  key grammar matches → SUCCEEDS (silently, in the wrong table)
+
+ READ   interview-  --get_vpr---> artifacts-table  Key('pk').eq(<application_id>)
+        prep api                  no 'pk' key on this table → ValidationException
+                                       │
+                                       └─ swallowed by `except Exception: return None`
+                                          (artifact_dependency_utils.py:41-45)
+                                               │
+                                               └─ resolver reads that as "vpr missing"
+                                                     └─ 409 upstream_required
+```
+
+**Verified directly:** for application `5ebd442d-…`, `careervp-users-table-devx` contains one
+item at `pk=5ebd442d-…, sk=ARTIFACT#VPR#v1`. The artifacts table contains none. The VPR exists;
+the reader is looking in the wrong place with a key name that table does not have.
+
+**Why it never surfaced as an error:** the `except Exception: return None` in
+`DynamoArtifactDependencyRepos.get_artifact` converts a hard schema mismatch into an ordinary
+"upstream not ready", so a mis-wired table reads exactly like a user who hasn't generated a VPR.
+
+**Why CV-tailoring appears to work:** `careervp-cvtailor-lambda-devx` has **no**
+`DYNAMODB_TABLE_NAME` at all, so it never takes this read path.
+
+**This is D-H2 / D-H4 exactly.** It is the legacy `pk`/`sk` grammar versus the canonical
+`applicationId`/`artifactId` grammar, plus one env var meaning different things in different
+Lambdas — the precise hazard 3.1-GREEN's row warned about when it recorded that
+`ARTIFACTS_TABLE_NAME` and `COMPANY_RESEARCH_TABLE_NAME` point at different physical tables and
+that "collapsing them would silently retarget reads". **The redesign's premise is confirmed by
+live evidence, and this is the first observed user-facing cost of the split key authority.**
+**Owner: D-H2/D-H4 key-authority work (`CoreRepository` / `TableRegistry`), not this step.**
 
 **Inconsistency worth a second look:** CV-tailoring (wire 12) *succeeded* against the same
 completed VPR. So cv-tailoring and cover-letter/interview-prep resolve their VPR upstream by
