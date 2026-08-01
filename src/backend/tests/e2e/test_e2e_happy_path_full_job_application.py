@@ -2,7 +2,9 @@ from __future__ import annotations
 
 try:
     from .e2e_helpers import (
+        E2E_JOB_URL,
         E2EClient,
+        artifact_result,
         assert_no_banned_words,
         create_job,
         poll_completed,
@@ -13,7 +15,9 @@ try:
     )
 except ImportError:  # pragma: no cover
     from e2e_helpers import (  # type: ignore
+        E2E_JOB_URL,
         E2EClient,
+        artifact_result,
         assert_no_banned_words,
         create_job,
         poll_completed,
@@ -40,12 +44,14 @@ def test_e2e_happy_path_full_job_application() -> None:
     jobs = client.request('GET', '/jobs', token=token, expected_status=200)
     assert isinstance(unwrap(jobs.data).get('jobs', unwrap(jobs.data).get('items', [])), list)
 
+    # Canonical CompanyResearchRequest (api_models.py:577) — keyed on `job_id`, not a
+    # bare `domain`.
     cr = client.request(
         'POST',
         '/company-research/fetch',
         token=token,
-        json_body={'domain': 'example.com'},
-        expected_status={200, 202},
+        json_body={'job_id': job_id, 'company_name': 'Example Corp', 'url': E2E_JOB_URL},
+        expected_status=202,
     )
     cr_payload = unwrap(cr.data)
     company_research_id = str(cr_payload.get('request_id') or cr_payload.get('research_id') or '')
@@ -65,12 +71,13 @@ def test_e2e_happy_path_full_job_application() -> None:
         qid = q.get('question_id') or q.get('id')
         if qid:
             responses.append({'question_id': str(qid), 'response': 'STAR response with measurable impact.'})
+    # Canonical body from src/frontend/api/methods.ts:154 — `{responses}` only; the wire answers 200.
     gap_r = client.request(
         'POST',
         f'/jobs/{job_id}/gap-responses',
         token=token,
-        json_body={'cv_id': cv_id, 'job_id': job_id, 'responses': responses},
-        expected_status={201},
+        json_body={'responses': responses},
+        expected_status=200,
     )
     gap_ids = unwrap(gap_r.data).get('gap_response_ids', unwrap(gap_r.data).get('response_ids', []))
     if not isinstance(gap_ids, list) or not gap_ids:
@@ -85,7 +92,7 @@ def test_e2e_happy_path_full_job_application() -> None:
         expected_status=202,
     )
     vpr_id = str(require(vpr.data, 'request_id', 'vpr_id', 'id'))
-    vpr_result = poll_completed(client, token, f'/vpr/{vpr_id}', timeout_seconds=120)
+    vpr_result = artifact_result(poll_completed(client, token, f'/vpr/{vpr_id}/status', timeout_seconds=180))
     assert vpr_result.get('uvp')
     diffs = vpr_result.get('differentiators', [])
     assert isinstance(diffs, list) and len(diffs) >= 3
@@ -99,11 +106,14 @@ def test_e2e_happy_path_full_job_application() -> None:
         expected_status=202,
     )
     cvt_id = str(require(cvt.data, 'request_id', 'id'))
-    cvt_result = poll_completed(client, token, f'/cv-tailoring/{cvt_id}', timeout_seconds=120)
+    cvt_result = artifact_result(poll_completed(client, token, f'/cv-tailoring/{cvt_id}/status', timeout_seconds=120))
     assert float(cvt_result.get('ats_score', 0)) >= 8.0
-    fvs = cvt_result.get('fvs_validation', {})
-    if isinstance(fvs, dict):
-        assert fvs.get('is_valid') is True
+    # `fvs_validation` is deliberately not exposed on the status response
+    # (cv_tailoring_handler.py:1114); `fact_verification_detail.passed` is the published
+    # form of the same fact.
+    fvs = cvt_result.get('fact_verification_detail', {})
+    assert isinstance(fvs, dict)
+    assert fvs.get('passed') is True
 
     cl = client.request(
         'POST',
@@ -120,9 +130,9 @@ def test_e2e_happy_path_full_job_application() -> None:
     )
     if cl.status == 202:
         cl_id = str(require(cl.data, 'request_id', 'id'))
-        cl_result = poll_completed(client, token, f'/cover-letter/{cl_id}', timeout_seconds=90)
+        cl_result = artifact_result(poll_completed(client, token, f'/cover-letter/{cl_id}/status', timeout_seconds=90))
     else:
-        cl_result = unwrap(cl.data)
+        cl_result = artifact_result(cl.data)
     cl_text = str(cl_result.get('cover_letter') or cl_result.get('text') or '')
     if cl_text:
         assert_no_banned_words(cl_text)
@@ -136,8 +146,8 @@ def test_e2e_happy_path_full_job_application() -> None:
     )
     if ip.status == 202:
         ip_id = str(require(ip.data, 'request_id', 'id'))
-        ip_result = poll_completed(client, token, f'/interview-prep/{ip_id}', timeout_seconds=90)
+        ip_result = artifact_result(poll_completed(client, token, f'/interview-prep/{ip_id}/status', timeout_seconds=90))
     else:
-        ip_result = unwrap(ip.data)
+        ip_result = artifact_result(ip.data)
     questions = ip_result.get('questions', [])
     assert isinstance(questions, list) and len(questions) >= 10

@@ -40,6 +40,41 @@ def require_field(payload: dict[str, Any], *keys: str) -> Any:
     raise AssertionError(f'Expected one of keys {keys} in payload. payload={json.dumps(payload, default=str)}')
 
 
+def artifact_result(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the generated-content body of an artifact status response.
+
+    The deployed `/{id}/status` contract nests the artifact under `result` and keeps
+    only lifecycle fields (`status`, `id`, timestamps) at the top level.
+    """
+    normalized = unwrap_payload(payload)
+    result = normalized.get('result')
+    return result if isinstance(result, dict) else normalized
+
+
+def cv_record(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the parsed-CV body of a `POST /users/me/cv` response (nested under `user_cv`)."""
+    normalized = unwrap_payload(payload)
+    nested = normalized.get('user_cv')
+    return nested if isinstance(nested, dict) else normalized
+
+
+def decode_token_claims(token: str) -> dict[str, Any]:
+    """Decode the claim set of a JWT WITHOUT verifying its signature.
+
+    Only the decoded claims are returned. The raw token is never returned, logged,
+    or embedded in an assertion message — callers must assert on claims alone.
+    """
+    segments = token.split('.')
+    if len(segments) != 3:
+        raise AssertionError('API credential is not a three-segment JWT.')
+    payload_segment = segments[1]
+    payload_segment += '=' * (-len(payload_segment) % 4)
+    claims = json.loads(base64.urlsafe_b64decode(payload_segment.encode('ascii')).decode('utf-8'))
+    if not isinstance(claims, dict):
+        raise AssertionError('JWT claim set did not decode to a JSON object.')
+    return claims
+
+
 def optional_field(payload: dict[str, Any], *keys: str) -> Any | None:
     normalized = unwrap_payload(payload)
     for key in keys:
@@ -115,24 +150,38 @@ class IntegrationApiClient:
         )
 
 
-def post_with_payload_fallback(
-    client: IntegrationApiClient,
-    path: str,
-    payloads: Sequence[dict[str, Any]],
-    *,
-    token: str | None = None,
-    expected_status: int,
-) -> HTTPResponse:
-    attempts: list[str] = []
-    for payload in payloads:
-        response = client.request('POST', path, token=token, json_body=payload, expected_status=None)
-        attempts.append(f'payload={payload} -> status={response.status}')
-        if response.status == expected_status:
-            return response
-    raise AssertionError(f'All payload attempts failed for POST {path}; expected status {expected_status}. Attempts: {"; ".join(attempts)}')
+def create_authenticated_user(client: IntegrationApiClient, *, require_fresh_registration: bool = False) -> dict[str, str]:
+    # Cognito's built-in email sender caps the SignUp verification mail at 50/day for the
+    # whole user pool. A suite that registers a fresh user per test exhausts that quota and
+    # every later register — including re-registering an existing address — answers 500.
+    # Supplying TEST_USER_EMAIL and TEST_USER_PASSWORD reuses an existing account and skips
+    # /auth/register entirely. Tests that are about registration itself pass
+    # require_fresh_registration=True and always take the register path.
+    reuse_email = os.getenv('TEST_USER_EMAIL', '').strip()
+    reuse_password = os.getenv('TEST_USER_PASSWORD', '').strip()
+    if reuse_email and reuse_password and not require_fresh_registration:
+        login = client.request(
+            'POST',
+            '/auth/login',
+            json_body={'email': reuse_email, 'password': reuse_password},
+            expected_status=200,
+        )
+        reused_token = str(require_field(login.data, 'id_token'))
+        # A reused account carries the trial counters of every previous run, and the
+        # 3-application trial is smaller than one pass of this suite; without this the
+        # account 403s `trial_exhausted` on the second run. A freshly registered user needs
+        # no reset, so this is confined to the reuse path.
+        client.request('POST', '/users/me/trial/reset', token=reused_token, json_body={}, expected_status=200)
+        return {
+            'email': reuse_email,
+            'password': reuse_password,
+            'name': 'Integration Test',
+            'register_token': '',
+            'login_token': reused_token,
+            'refresh_token': str(require_field(login.data, 'refresh_token')),
+            'cognito_access_token': str(require_field(login.data, 'access_token')),
+        }
 
-
-def create_authenticated_user(client: IntegrationApiClient) -> dict[str, str]:
     email = unique_email()
     password = 'SecureP@ss123!'
     name = 'Integration Test'
@@ -143,7 +192,7 @@ def create_authenticated_user(client: IntegrationApiClient) -> dict[str, str]:
         json_body={'email': email, 'password': password, 'name': name},
         expected_status=201,
     )
-    register_token = require_field(register_response.data, 'access_token')
+    register_token = require_field(register_response.data, 'id_token')
 
     login_response = client.request(
         'POST',
@@ -151,7 +200,16 @@ def create_authenticated_user(client: IntegrationApiClient) -> dict[str, str]:
         json_body={'email': email, 'password': password},
         expected_status=200,
     )
-    login_token = require_field(login_response.data, 'access_token')
+    # The deployed API Gateway authorizer is a COGNITO_USER_POOLS authorizer, which
+    # accepts the ID token only; the access token is rejected with 401 on every
+    # authenticated route. The frontend does the same (src/frontend/lib/auth.ts
+    # getCurrentToken -> session.getIdToken()).
+    login_token = require_field(login_response.data, 'id_token')
+    # Retained for the two Cognito/OAuth wires that do NOT go through the product
+    # authorizer: POST /auth/refresh consumes the refresh token, and POST /auth/logout
+    # decodes whichever Cognito token it is given. Never send these to a product route.
+    refresh_token = require_field(login_response.data, 'refresh_token')
+    cognito_access_token = require_field(login_response.data, 'access_token')
 
     return {
         'email': email,
@@ -159,48 +217,58 @@ def create_authenticated_user(client: IntegrationApiClient) -> dict[str, str]:
         'name': name,
         'register_token': register_token,
         'login_token': login_token,
+        'refresh_token': refresh_token,
+        'cognito_access_token': cognito_access_token,
     }
 
 
+# Named employers and dated roles are required: the parser rejects a work entry whose
+# company is absent (`WorkExperience.company` is a required str), which 500s the upload.
+INTEGRATION_CV_TEXT = (
+    'Jane Doe\n'
+    'Senior Backend Engineer\n'
+    'Email: jane.doe@example.com | Phone: +1-555-0100 | Tel Aviv, Israel\n\n'
+    'PROFESSIONAL SUMMARY\n'
+    'Backend engineer with eight years building Python services on AWS.\n\n'
+    'WORK EXPERIENCE\n'
+    'Senior Backend Engineer, Integration Labs Ltd, Tel Aviv, Israel (2021 - Present)\n'
+    '- Built Python APIs on AWS Lambda serving 40M requests per month.\n'
+    '- Designed DynamoDB single-table data models and cut read cost by 38 percent.\n\n'
+    'Backend Engineer, Northwind Software Ltd, Haifa, Israel (2018 - 2021)\n'
+    '- Delivered CI pipelines on GitHub Actions, cutting release time from 40 to 9 minutes.\n\n'
+    'EDUCATION\n'
+    'BSc Computer Science, Technion - Israel Institute of Technology, 2018\n\n'
+    'SKILLS\n'
+    'Python, AWS Lambda, DynamoDB, API Gateway, Terraform, pytest\n'
+)
+
+# `POST /jobs` requires `url` and live-fetches it for reachability, so the fixture URL
+# has to resolve. A deep path under example.com does not.
+INTEGRATION_JOB_URL = 'https://example.com/'
+
+
 def upload_cv_and_get_id(client: IntegrationApiClient, token: str) -> str:
-    cv_text = 'Jane Doe\nSenior Backend Engineer\nBuilt Python APIs, AWS Lambda workloads, DynamoDB data models, and CI pipelines.'
-    cv_file_content = base64.b64encode(cv_text.encode('utf-8')).decode('utf-8')
-    payloads = [
-        {'text_content': cv_text},
-        {'file_content': cv_file_content, 'file_type': 'txt'},
-    ]
-    response = post_with_payload_fallback(
-        client,
-        '/users/me/cv',
-        payloads,
-        token=token,
-        expected_status=201,
-    )
-    return str(require_field(response.data, 'cv_id', 'id'))
+    # Canonical shape, identical to what src/frontend/app/cv-center/page.tsx posts:
+    # base64 file content under `cv_content`, plus `file_name` and `file_type`.
+    payload = {
+        'cv_content': base64.b64encode(INTEGRATION_CV_TEXT.encode('utf-8')).decode('utf-8'),
+        'file_name': 'integration-jane-doe-cv.txt',
+        'file_type': 'txt',
+    }
+    response = client.request('POST', '/users/me/cv', token=token, json_body=payload, expected_status=201)
+    return str(require_field(cv_record(response.data), 'cv_id', 'id'))
 
 
 def create_job_and_get_id(client: IntegrationApiClient, token: str) -> str:
-    payloads = [
-        {
-            'title': 'Senior Backend Engineer',
-            'company': 'Integration Labs',
-            'job_description': 'Build secure backend APIs, queues, and CI guardrails.',
-            'url': 'https://example.com/jobs/backend-1',
-        },
-        {
-            'position': 'Senior Backend Engineer',
-            'company': 'Integration Labs',
-            'description': 'Build secure backend APIs, queues, and CI guardrails.',
-            'url': 'https://example.com/jobs/backend-1',
-        },
-    ]
-    response = post_with_payload_fallback(
-        client,
-        '/jobs',
-        payloads,
-        token=token,
-        expected_status=201,
-    )
+    # Canonical CreateJobInput from src/frontend/lib/types.ts:53 — `company_name` and
+    # `description`, not the `company`/`job_description` aliases job_handler still maps.
+    payload = {
+        'title': 'Senior Backend Engineer',
+        'company_name': 'Integration Labs',
+        'description': 'Build secure backend APIs, queues, and CI guardrails.',
+        'url': INTEGRATION_JOB_URL,
+    }
+    response = client.request('POST', '/jobs', token=token, json_body=payload, expected_status=201)
     return str(require_field(response.data, 'job_id', 'id'))
 
 
@@ -244,16 +312,14 @@ def submit_gap_responses(
     if not response_items:
         raise AssertionError('No question ids were returned for gap response submission.')
 
-    payloads = [
-        {'cv_id': cv_id, 'job_id': job_id, 'responses': response_items},
-        {'cv_id': cv_id, 'job_id': job_id, 'answers': response_items},
-    ]
-    response = post_with_payload_fallback(
-        client,
+    # Canonical body from src/frontend/api/methods.ts:154 — `{responses}` only; the
+    # deployed GapResponseRequest carries no cv_id/job_id fields, and the wire answers 200.
+    response = client.request(
+        'POST',
         f'/jobs/{job_id}/gap-responses',
-        payloads,
         token=token,
-        expected_status=201,
+        json_body={'responses': response_items},
+        expected_status=200,
     )
 
     ids_value = optional_field(response.data, 'gap_response_ids', 'response_ids', 'ids')
@@ -323,6 +389,11 @@ def poll_until_terminal(
     timeout_seconds: int,
     poll_interval_seconds: int = 5,
 ) -> HTTPResponse:
+    # Bare `GET /{artifact}/{id}` is not a routed method on the deployed API; it returns
+    # the API Gateway DEFAULT_4XX response (403), which reads like an auth failure. The
+    # only artifact read route is `/{id}/status`, so refuse to poll anything else.
+    if not path.endswith('/status'):
+        raise AssertionError(f'Artifact polling must target /{{id}}/status; got {path}')
     deadline = time.time() + timeout_seconds
     last_payload: dict[str, Any] = {}
     while time.time() < deadline:

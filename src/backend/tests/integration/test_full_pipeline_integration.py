@@ -4,7 +4,9 @@ from typing import Any
 
 try:
     from .integration_helpers import (
+        INTEGRATION_JOB_URL,
         IntegrationApiClient,
+        artifact_result,
         create_authenticated_user,
         create_job_and_get_id,
         generate_gap_questions,
@@ -17,8 +19,10 @@ try:
         upload_cv_and_get_id,
     )
 except ImportError:  # pragma: no cover
-    from integration_helpers import (
+    from integration_helpers import (  # type: ignore
+        INTEGRATION_JOB_URL,
         IntegrationApiClient,
+        artifact_result,
         create_authenticated_user,
         create_job_and_get_id,
         generate_gap_questions,
@@ -56,14 +60,14 @@ def _post_generate_and_resolve(
     request_id = str(require_field(payload, 'request_id', 'id'))
     terminal = poll_until_terminal(
         client,
-        f'{status_path_prefix}/{request_id}',
+        f'{status_path_prefix}/{request_id}/status',
         token=token,
         timeout_seconds=180,
         poll_interval_seconds=5,
     )
     terminal_payload = unwrap_payload(terminal.data)
     assert str(terminal_payload.get('status', '')).lower() == 'completed'
-    return terminal_payload
+    return artifact_result(terminal_payload)
 
 
 def test_full_pipeline_integration() -> None:
@@ -74,12 +78,14 @@ def test_full_pipeline_integration() -> None:
     cv_id = upload_cv_and_get_id(client, token)
     job_id = create_job_and_get_id(client, token)
 
+    # Canonical CompanyResearchRequest (api_models.py:577) — keyed on `job_id`, not a
+    # bare `domain`; the wire is async and answers 202.
     company_research_response = client.request(
         'POST',
         '/company-research/fetch',
         token=token,
-        json_body={'domain': 'example.com'},
-        expected_status=200,
+        json_body={'job_id': job_id, 'company_name': 'Integration Labs', 'url': INTEGRATION_JOB_URL},
+        expected_status=202,
     )
     company_research_payload = unwrap_payload(company_research_response.data)
     assert company_research_payload
@@ -94,25 +100,27 @@ def test_full_pipeline_integration() -> None:
     _, vpr_request_id = submit_vpr_generate(client, token, cv_id, job_id, gap_response_ids)
     vpr_terminal = poll_until_terminal(
         client,
-        f'/vpr/{vpr_request_id}',
+        f'/vpr/{vpr_request_id}/status',
         token=token,
         timeout_seconds=180,
         poll_interval_seconds=5,
     )
-    vpr_payload = unwrap_payload(vpr_terminal.data)
-    assert str(vpr_payload.get('status', '')).lower() == 'completed'
+    vpr_status_payload = unwrap_payload(vpr_terminal.data)
+    assert str(vpr_status_payload.get('status', '')).lower() == 'completed'
+    vpr_payload = artifact_result(vpr_status_payload)
     assert vpr_payload.get('uvp')
 
     _, tailoring_request_id = submit_cv_tailoring_generate(client, token, cv_id, job_id, vpr_request_id)
     tailoring_terminal = poll_until_terminal(
         client,
-        f'/cv-tailoring/{tailoring_request_id}',
+        f'/cv-tailoring/{tailoring_request_id}/status',
         token=token,
         timeout_seconds=180,
         poll_interval_seconds=5,
     )
-    tailoring_payload = unwrap_payload(tailoring_terminal.data)
-    assert str(tailoring_payload.get('status', '')).lower() == 'completed'
+    tailoring_status_payload = unwrap_payload(tailoring_terminal.data)
+    assert str(tailoring_status_payload.get('status', '')).lower() == 'completed'
+    tailoring_payload = artifact_result(tailoring_status_payload)
     assert float(tailoring_payload.get('ats_score', 0)) >= 8.0
 
     cover_letter_payload = _post_generate_and_resolve(
@@ -125,7 +133,7 @@ def test_full_pipeline_integration() -> None:
             'job_id': job_id,
             'vpr_id': vpr_request_id,
             'gap_response_ids': gap_response_ids,
-            'company_research_id': company_research_payload.get('research_id'),
+            'company_research_id': company_research_payload.get('request_id') or company_research_payload.get('research_id'),
         },
     )
     cover_letter_text = _extract_text(cover_letter_payload, 'cover_letter', 'content', 'text')

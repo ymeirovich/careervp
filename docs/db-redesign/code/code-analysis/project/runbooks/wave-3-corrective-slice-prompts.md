@@ -1,9 +1,14 @@
-# Wave 3 — corrective slice prompts (F-DEVX-1 canonical VPR persistence)
+# Wave 3 — corrective slice prompts
+
+**Two independent slices live in this file.** Slice 1 (§0–§3) is **F-DEVX-1, canonical VPR
+persistence**. Slice 2 (§4) is **`I-09`, user-identity provisioning** — added 2026-08-01 by human
+direction. They share nothing but a file: different tables, different handlers, different
+acceptance signals. Do not let one block the other.
 
 **Authored 2026-08-01.** Fold into `wave-3-prompts.md` when convenient — kept separate because that
 file has uncommitted user edits.
 
-**Step ids:** `3.CORR-SPEC` → `3.CORR-RED` → `3.CORR-GREEN`.
+**Step ids:** `3.CORR-SPEC` → `3.CORR-RED` → `3.CORR-GREEN` (slice 1) · `3.CORR-IDENTITY` (slice 2).
 
 **Governance decision recorded here (see §0):** this is a **new step**, not a reopening of D-H4/3.2.
 `3.2-GREEN` stays GREEN. The **clause** `D-H4` stays open until `3.CORR-GREEN` lands.
@@ -22,10 +27,53 @@ These three prompts are runs 4, 6, and 7 of
 | 5 | **human decision** | DP-A…DP-E, esp. DP-D | — | — |
 | 6 | `3.CORR-RED` | F-DEVX-1 (tests) | `opus/high` | `gpt-5-codex/high` |
 | 7 | `3.CORR-GREEN` | F-DEVX-1 (implementation) | **`fable/xhigh`** | `gpt-5-codex/xhigh` |
+| — | `3.CORR-IDENTITY` | `I-09` (identity provisioning) | `opus/high` | `gpt-5-codex/high` |
+
+`3.CORR-IDENTITY` carries no run number yet: it is independent of runs 4–7 and of their decision
+points, so a human slots it wherever it fits. **`wave-3-remediation-run-order.md`'s master table
+does not yet carry a row for it** — that is the one edit still outstanding, and it is a rule-8
+routing change rather than a fill-in-time correction.
 
 Codex uses `gpt-5-codex` here because the Wave-3 D-H4/P-01 spec frontmatter pins that slug.
 Reasoning follows rule 16: `high` for spec/test work that spans canonical artifact authority, and
 `xhigh` for the GREEN implementation because it changes key authority and data shape.
+
+---
+
+## Human decision recorded — 2026-08-01, direction of the fix
+
+**Read this before `3.CORR-SPEC` starts.** A human was shown the failure and the three candidate
+remedies on 2026-08-01 (see
+`docs/evidence/wave3-3fixharness-failures-explained-20260801T161402Z.md`, "Failure 1 and 2 →
+Options") and selected **Option A**.
+
+**Chosen — Option A: fix the write path.** When a VPR completes, the canonical artifact record is
+written under the application, the way company research already writes itself to the same table.
+This is the direction `3.CORR-SPEC` → `RED` → `GREEN` was already drafted for; the decision
+**confirms** that plan rather than changing it.
+
+**Ruled out by the same decision — Option B: make cover letter and interview prep read the jobs
+record instead**, the way CV tailoring does today. It would have turned both suites green for a
+fraction of the effort and is now **off the table**: it spreads the split-brain instead of removing
+it, and `D-H4` exists precisely to make the canonical artifact authoritative. Do not reintroduce it
+as a "smaller fix" if `3.CORR-GREEN` proves expensive — escalate instead.
+
+**NOT decided by this, and still a hard stop: `DP-D`.** Option C in the material shown to the human
+was a **backfill for existing accounts**, described as "needed alongside A". It was presented as a
+*separate* option and **was not selected**. `DP-D` — what happens to the 89 legacy-grammar VPRs
+(83 in dev, 2 in staging) — therefore remains **open and unanswered**, and `3.CORR-SPEC`'s
+instruction to STOP and ask stands unchanged. **Do not read "Option A was chosen" as authorization
+to delete, migrate, or backfill anything.** DP-A, DP-B, DP-C and DP-E are likewise untouched by
+this decision.
+
+**What this buys the slice.** The harness that would have proved the fix is now working. As of
+`3.FIX-HARNESS` (2026-08-01) the live-API suites authenticate correctly and run green through VPR
+generation and CV tailoring, failing at exactly `POST /cover-letter/generate` with
+`409 {"status":"upstream_required","missing":["vpr"]}`. When the canonical write lands, those two
+suites are the acceptance signal, and interview prep becomes reachable through the public API for
+the first time. Fresh reproduction, independent of the 3.2-CLOSEOUT-A observation: application
+`71cc1d43-…` completed VPR `7b7e4f4f-…` and `careervp-artifacts-table-devx` holds only
+`ARTIFACT#COMPANY_RESEARCH#71cc1d43-…` — no `ARTIFACT#VPR#v1` row.
 
 ---
 
@@ -289,4 +337,104 @@ defect, flagged not fixed.
 
 ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row. If D-H4 can be
 claimed, say so explicitly so a human can close the clause.
+```
+
+---
+
+## §4 — `3.CORR-IDENTITY` (slice 2 — `I-09`, independent of F-DEVX-1)
+
+> **Run:** not yet numbered · **Step:** `3.CORR-IDENTITY` · **Fixes:** `I-09`
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16. Rule 18 excludes Fable: this is a small single-domain fix, not multi-file
+> implementation against a pinned spec, and it turns on one open question rather than on breadth.
+> Rule 16 puts Codex at `high` — the P-24 question below is identity/tenancy-adjacent, and getting
+> it wrong writes false identity into an index that owner-resolution reads.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **INDEPENDENT OF SLICE 1.** It does not wait on `3.CORR-SPEC`, DP-A…DP-E, or `3.CORR-GREEN`,
+> and nothing in slice 1 waits on it. It touches the **users** table; slice 1 touches the
+> **artifacts** table.
+
+```
+You are running step 3.CORR-IDENTITY of Wave 3. Repo root as above.
+
+STANDING CHECK: read wave-3-status.md. Read I-09 in ISSUES.md in full — it carries the
+chosen remedy, the stopping condition and the open question below. Read
+docs/evidence/wave3-3fixharness-failures-explained-20260801T161402Z.md, "Failure 3".
+
+PROBLEM. Every user's profile records an identity they never supplied. POST /auth/register
+creates the Cognito account and a trial record but NEVER writes the profile row. The profile
+is created lazily on the first read of /users/me by user_repository.ensure_user
+(src/backend/careervp/dal/user_repository.py:85), which does not have the registered identity
+to hand and fabricates it: email = f'{user_id}@example.com', name = ''. It is written to
+storage, not computed for display, so it is what every later read returns. Confirmed live on
+careervp-users-table-devx. This was invisible until 3.FIX-HARNESS fixed authentication; the
+failing assertion is test_e2e_happy_path_full_job_application:37 and it was left at full
+strength on purpose.
+
+REMEDY ALREADY CHOSEN BY A HUMAN — do not re-litigate it. Fill the profile from the Cognito
+claims the gateway already supplies. The deployed authorizer is a COGNITO_USER_POOLS
+authorizer, so requestContext.authorizer.claims carries a verified email and name on every
+authenticated request. Two alternatives were considered and rejected: writing the profile at
+registration (leaves the fabrication live as a fallback and needs a backfill), and erroring
+when the profile is missing (a wrong answer becomes an outage). Chosen because it is the
+smallest change AND it self-heals: existing broken profiles correct themselves on next read,
+with no backfill and no migration.
+
+SETTLE THIS FIRST, AND STOP IF IT IS NOT YOURS TO SETTLE. The users table carries an
+email-index, and the P-24 identity resolver uses it for link-by-verified-email owner lookup
+(src/backend/careervp/dal/identity_map_repository.py:98, class UsersDirectory;
+infra/careervp/api_construct.py:2472). Today NO profile carries a real address, so that
+lookup can never find a user by the address they signed up with. That path is DORMANT on
+devx — the live authorizer is the standard Cognito one, not the P-24 resolver — which bounds
+the blast radius now. Determine, and write down: (a) whether writing real emails into
+email-index changes P-24 owner-resolution behaviour for accounts that already exist; (b)
+whether any account could now resolve to an owner it did not resolve to before; (c) whether
+the ~57 existing fabricated addresses must be corrected actively or self-healing on read is
+sufficient. If (b) is anything other than a confident no, STOP and ask a human — this is
+tenancy behaviour, and rule 5 is not satisfied by an inference.
+
+DO, IN THIS ORDER:
+1. REPRODUCE IT YOURSELF before changing anything. Register a user, read /users/me, and
+   show the stored row. Do not take the above on trust. NOTE: the devx Cognito pool is on
+   a 50/day signup-email cap (I-07) — if registration 500s with LimitExceededException,
+   use the TEST_USER_EMAIL / TEST_USER_PASSWORD reuse path 3.FIX-HARNESS added rather than
+   burning the quota, and say which path you used.
+2. Answer the P-24 question above, in writing, before touching code.
+3. RED FIRST (rule 14). Add tests that fail for the stated reason: a profile provisioned
+   from claims carries the registered email and name; a profile provisioned WITHOUT usable
+   claims does not fabricate an address; an existing fabricated row is corrected on next
+   read. Prove they fail before the fix exists, and quote the failure.
+4. Implement. Seed ensure_user from the verified claims rather than from the user id.
+   auth_utils.extract_user_id already walks both claim shapes
+   (requestContext.authorizer.jwt.claims and requestContext.authorizer.claims) — reuse that
+   traversal rather than writing a third one.
+5. REMOVE THE FABRICATION. Once claims are the source, user_repository.py:85 must stop
+   inventing an address. An absent identity is an absent identity; do not substitute a
+   plausible-looking one. This was explicitly recorded as the follow-on to the chosen
+   remedy, and it is in scope for this step.
+6. Re-run the live-API suites against devx and quote the real output.
+
+EXPECTED OUTCOME. test_e2e_happy_path_full_job_application gets PAST line 37. It will then
+fail further along at POST /cover-letter/generate with 409 upstream_required, missing:
+["vpr"] — that is F-DEVX-1, it belongs to slice 1, and it is NOT yours. Do not chase it. If
+slice 1 has already landed when you run, that suite should go green end to end; say which
+state you observed.
+
+DO NOT: weaken or delete any assertion; edit either scope-lock twin; edit
+test_dh4_p01_canonical_artifact.py; touch the artifacts table, the VPR worker or anything
+else in slice 1; fix F-DEVX-1, -5, -6 or -8; change the Cognito construct or anything under
+infra/ (the signup-email cap is I-07 and belongs to 3.4's lock); add a backfill or migration
+script — self-healing on read is the chosen mechanism and a backfill was NOT authorized.
+
+OUTPUT REQUIRED: the reproduction quoted; the written P-24 answer with its reasoning; the
+RED failure quoted before the fix and the same tests passing after; the live suite output
+before and after, quoted, with what now passes, what still fails and why, and what skips;
+proof that no file under infra/ or src/frontend/ changed and that slice 1's surface was not
+touched (git status --porcelain over infra/ src/frontend/ and the artifacts-table modules
+empty); ruff and strict mypy clean; the full backend unit suite unchanged.
+
+ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
+3.CORR-SPEC. State explicitly whether I-09 can now be closed in ISSUES.md, and if not,
+exactly what is missing.
 ```

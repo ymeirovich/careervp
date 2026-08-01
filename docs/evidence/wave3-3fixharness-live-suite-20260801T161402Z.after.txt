@@ -1,0 +1,282 @@
+..s.....FFs....ssssssssssF..                                             [100%]
+=================================== FAILURES ===================================
+___________________ test_e2e_happy_path_full_job_application ___________________
+
+    def test_e2e_happy_path_full_job_application() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+    
+        me = client.request('GET', '/users/me', token=token, expected_status=200)
+>       assert unwrap(me.data).get('email') == user['email']
+E       AssertionError: assert '8428d4e8-d07...b@example.com' == 'harness-d289...@careervp.com'
+E         
+E         - harness-d2892d12d4@careervp.com
+E         + 8428d4e8-d071-7088-a9c3-9e630806436b@example.com
+
+tests/e2e/test_e2e_happy_path_full_job_application.py:37: AssertionError
+____________________________ test_e2e_quality_gates ____________________________
+
+    def test_e2e_quality_gates() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+        cv_id = upload_cv(client, token)
+        job_id = create_job(client, token)
+    
+        # VPR's upstream dependency check refuses with 409 `upstream_required` unless company
+        # research exists for the application, so the chain has to start here.
+        client.request(
+            'POST',
+            '/company-research/fetch',
+            token=token,
+            json_body={'job_id': job_id, 'company_name': 'Example Corp', 'url': E2E_JOB_URL},
+            expected_status=202,
+        )
+    
+        gap_q = client.request(
+            'POST',
+            '/gap-analysis/questions',
+            token=token,
+            json_body={'cv_id': cv_id, 'job_id': job_id},
+            expected_status=200,
+        )
+        questions = gap_q.data.get('data', gap_q.data).get('questions', [])
+        responses = []
+        for q in questions:
+            qid = q.get('question_id') or q.get('id')
+            if qid:
+                responses.append({'question_id': str(qid), 'response': 'Quality gate STAR response with outcomes.'})
+        # Canonical body from src/frontend/api/methods.ts:154 — `{responses}` only; the wire answers 200.
+        gap_r = client.request(
+            'POST',
+            f'/jobs/{job_id}/gap-responses',
+            token=token,
+            json_body={'responses': responses},
+            expected_status=200,
+        )
+        gap_ids = gap_r.data.get('data', gap_r.data).get('gap_response_ids', [])
+        if not isinstance(gap_ids, list) or not gap_ids:
+            gap_ids = [item['question_id'] for item in responses if item.get('question_id')]
+    
+        vpr = client.request(
+            'POST',
+            '/vpr/generate',
+            token=token,
+            json_body={'cv_id': cv_id, 'job_id': job_id, 'gap_response_ids': gap_ids},
+            expected_status=202,
+        )
+        vpr_id = str(require(vpr.data, 'request_id', 'id', 'vpr_id'))
+        vpr_result = artifact_result(poll_completed(client, token, f'/vpr/{vpr_id}/status', timeout_seconds=180))
+        vpr_text = str(vpr_result.get('strategic_narrative') or vpr_result.get('uvp') or '')
+        if vpr_text:
+            assert_no_banned_words(vpr_text)
+    
+        cvt = client.request(
+            'POST',
+            '/cv-tailoring/generate',
+            token=token,
+            json_body={'cv_id': cv_id, 'job_id': job_id, 'vpr_id': vpr_id},
+            expected_status=202,
+        )
+        cvt_id = str(require(cvt.data, 'request_id', 'id'))
+        cvt_result = artifact_result(poll_completed(client, token, f'/cv-tailoring/{cvt_id}/status', timeout_seconds=120))
+        assert float(cvt_result.get('ats_score', 0)) >= 8.0
+    
+>       cl = client.request(
+            'POST',
+            '/cover-letter/generate',
+            token=token,
+            json_body={
+                'cv_id': cv_id,
+                'job_id': job_id,
+                'vpr_id': vpr_id,
+                'gap_response_ids': gap_ids,
+                'company_research_id': 'placeholder-research-id',
+            },
+            expected_status={200, 202, 422},
+        )
+
+tests/e2e/test_e2e_quality_gates.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10d875350>, method = 'POST'
+path = '/cover-letter/generate'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: POST /cover-letter/generate returned 409; expected [200, 202, 422]; body={"status": "upstream_required", "generating": [], "missing": ["vpr"], "chain_execution_arn": null, "requested_artifact": "cover_letter"}
+
+tests/e2e/e2e_helpers.py:130: AssertionError
+________________________ test_full_pipeline_integration ________________________
+
+    def test_full_pipeline_integration() -> None:
+        client = IntegrationApiClient.from_env()
+        user = create_authenticated_user(client)
+        token = user['login_token']
+    
+        cv_id = upload_cv_and_get_id(client, token)
+        job_id = create_job_and_get_id(client, token)
+    
+        # Canonical CompanyResearchRequest (api_models.py:577) — keyed on `job_id`, not a
+        # bare `domain`; the wire is async and answers 202.
+        company_research_response = client.request(
+            'POST',
+            '/company-research/fetch',
+            token=token,
+            json_body={'job_id': job_id, 'company_name': 'Integration Labs', 'url': INTEGRATION_JOB_URL},
+            expected_status=202,
+        )
+        company_research_payload = unwrap_payload(company_research_response.data)
+        assert company_research_payload
+    
+        _, questions = generate_gap_questions(client, token, cv_id, job_id)
+        assert len(questions) == 10
+    
+        gap_response_submit, gap_response_ids = submit_gap_responses(client, token, cv_id, job_id, questions)
+        assert gap_response_submit.status == 200
+        assert len(gap_response_ids) > 0
+    
+        _, vpr_request_id = submit_vpr_generate(client, token, cv_id, job_id, gap_response_ids)
+        vpr_terminal = poll_until_terminal(
+            client,
+            f'/vpr/{vpr_request_id}/status',
+            token=token,
+            timeout_seconds=180,
+            poll_interval_seconds=5,
+        )
+        vpr_status_payload = unwrap_payload(vpr_terminal.data)
+        assert str(vpr_status_payload.get('status', '')).lower() == 'completed'
+        vpr_payload = artifact_result(vpr_status_payload)
+        assert vpr_payload.get('uvp')
+    
+        _, tailoring_request_id = submit_cv_tailoring_generate(client, token, cv_id, job_id, vpr_request_id)
+        tailoring_terminal = poll_until_terminal(
+            client,
+            f'/cv-tailoring/{tailoring_request_id}/status',
+            token=token,
+            timeout_seconds=180,
+            poll_interval_seconds=5,
+        )
+        tailoring_status_payload = unwrap_payload(tailoring_terminal.data)
+        assert str(tailoring_status_payload.get('status', '')).lower() == 'completed'
+        tailoring_payload = artifact_result(tailoring_status_payload)
+        assert float(tailoring_payload.get('ats_score', 0)) >= 8.0
+    
+>       cover_letter_payload = _post_generate_and_resolve(
+            client,
+            token,
+            '/cover-letter/generate',
+            '/cover-letter',
+            {
+                'cv_id': cv_id,
+                'job_id': job_id,
+                'vpr_id': vpr_request_id,
+                'gap_response_ids': gap_response_ids,
+                'company_research_id': company_research_payload.get('request_id') or company_research_payload.get('research_id'),
+            },
+        )
+
+tests/integration/test_full_pipeline_integration.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/test_full_pipeline_integration.py:55: in _post_generate_and_resolve
+    response = client.request('POST', path, token=token, json_body=body, expected_status={200, 201, 202})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <tests.integration.integration_helpers.IntegrationApiClient object at 0x1149c3770>
+method = 'POST', path = '/cover-letter/generate'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> HTTPResponse:
+        request_headers = {'Content-Type': 'application/json'}
+        if headers:
+            request_headers.update(headers)
+        if token:
+            request_headers['Authorization'] = f'Bearer {token}'
+    
+        response = requests.request(
+            method=method.upper(),
+            url=f'{self.base_url}{path}',
+            json=json_body,
+            params=params,
+            headers=request_headers,
+            timeout=self.timeout_seconds,
+        )
+    
+        try:
+            data = response.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+    
+        if expected_status is not None:
+            if isinstance(expected_status, int):
+                expected = {expected_status}
+            else:
+                expected = set(expected_status)
+            if response.status_code not in expected:
+>               raise AssertionError(f'{method.upper()} {path} returned {response.status_code}, expected {sorted(expected)}. body={response.text}')
+E               AssertionError: POST /cover-letter/generate returned 409, expected [200, 201, 202]. body={"status": "upstream_required", "generating": [], "missing": ["vpr"], "chain_execution_arn": null, "requested_artifact": "cover_letter"}
+
+tests/integration/integration_helpers.py:143: AssertionError
+=============================== warnings summary ===============================
+tests/e2e/test_vpr_generation_flow.py:52
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_generation_flow.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.e2e - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.e2e
+
+tests/e2e/test_vpr_generation_flow.py:53
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_generation_flow.py:53: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/e2e/test_vpr_regeneration_flow.py:56
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_regeneration_flow.py:56: PytestUnknownMarkWarning: Unknown pytest.mark.e2e - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.e2e
+
+tests/e2e/test_vpr_regeneration_flow.py:57
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_regeneration_flow.py:57: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_e2e_happy_path_full_job_application.py::test_e2e_happy_path_full_job_application
+FAILED tests/e2e/test_e2e_quality_gates.py::test_e2e_quality_gates - Assertio...
+FAILED tests/integration/test_full_pipeline_integration.py::test_full_pipeline_integration
+3 failed, 13 passed, 12 skipped, 4 warnings in 405.17s (0:06:45)

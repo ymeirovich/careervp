@@ -193,6 +193,189 @@ endpoints remain required before any production promotion or paid launch.
 
 ---
 
+## I-07 — Cognito's built-in email sender caps registration at 50/day, and in non-prod every one of those emails is wasted
+
+- **Found:** 2026-08-01, step `3.FIX-HARNESS` (running the live-API suites against `CareerVpCrudDevx`).
+- **Severity:** medium — blocks the operator, not the user. It stops the live-API suites from
+  running more than about five times a day, on any branch, for the whole pool.
+- **Status:** OPEN, deferred. Mitigated in test code only.
+
+**What is true.** The `devx` user pool (`us-east-1_bAZ6jb6HP`) runs on
+`EmailSendingAccount: COGNITO_DEFAULT`, which caps SignUp verification mail at **50 per day
+pool-wide**, and it is created with `auto_verify=AutoVerifiedAttrs(email=True)`
+(`infra/careervp/cognito_construct.py:61`), so Cognito sends one on every `sign_up`. The pool has
+**no Lambda triggers at all** (`LambdaConfig: {}` as deployed).
+
+**Why the email is wasted.** In every non-prod environment,
+`src/backend/careervp/logic/auth_service.py:216-227` calls `admin_confirm_sign_up` immediately
+after `sign_up`. The account is confirmed programmatically about a second later, so the code that
+was just mailed is never read by anyone. **Non-prod spends its entire daily email budget on mail
+that has no recipient and no purpose.**
+
+**How this was discovered.** The live-API suites register a fresh user per test — roughly eight
+per run. Mid-session on 2026-08-01, `POST /auth/register` began returning 500 for **every**
+address, new or existing:
+
+```
+Registration failed: An error occurred (LimitExceededException) when calling the SignUp
+operation: Exceeded daily email limit for the operation or the account.
+```
+
+Re-registering an existing address fails the same way, because `sign_up` hits the mail cap before
+Cognito reaches its user-exists check — so there is no fallback path once the quota is gone.
+
+**Disposition.** Not fixed now, deliberately. The fix is a **PreSignUp Lambda trigger** that sets
+`autoConfirmUser` and `autoVerifyEmail` in non-prod, which makes Cognito send **zero** SignUp mail
+and lets `auth_service` drop its `admin_confirm_sign_up` call. That is a new Lambda plus a change
+to `cognito_construct.py`, and `infra/` is **3.4's lock** — `3.FIX-HARNESS` was a test-code-only
+step and correctly did not annex it.
+
+**Mitigated meanwhile, in test code only.** Setting `TEST_USER_EMAIL` and `TEST_USER_PASSWORD`
+makes both live-API helpers reuse an existing account and skip `/auth/register` entirely.
+`test_auth_flow_integration` opts out via `require_fresh_registration=True`, because registration
+is what it tests. The reuse path also calls `POST /users/me/trial/reset` once per authentication,
+because a reused account carries its trial counters and the 3-application trial is smaller than
+one pass of the suite.
+
+**Secondary, same root cause:** the pool held **57 users** on 2026-08-01 and grows by roughly
+eight per suite run, with no cleanup. Not the cap, but the same accumulation, and it will need a
+sweep regardless of how the cap is fixed.
+
+**Trigger — promote to a clause when any of these is true:**
+- the live-API suites are put on a schedule or a CI job (any automated cadence exhausts 50/day
+  almost immediately), **or**
+- `I-08` is picked up — the PreSignUp trigger should land with the SES work, not after it, **or**
+- any environment other than `devx` starts registering users at test volume.
+
+**Stopping condition.** If neither the trigger nor SES has shipped by the Wave-3 GATE, the reuse
+path becomes the **default** for both live-API suites rather than opt-in — fresh registration
+survives only in `test_auth_flow_integration`. That cuts registrations from ~8 per run to 1 and
+takes the suites from ~5 runs/day to ~50, without touching `infra/`. Observable: the GATE date
+passes with `cognito_construct.py` unchanged.
+
+---
+
+## I-08 — Production needs SES: the pool's email path cannot carry a real launch
+
+- **Found:** 2026-08-01, step `3.FIX-HARNESS`, while diagnosing `I-07`.
+- **Severity:** high at launch, none before it — the same configuration that merely annoys an
+  operator in `devx` silently caps real user registration in production.
+- **Status:** OPEN, deferred. **Not** a `3.FIX-HARNESS` change and not a Wave-3 change.
+
+**What is true.** `EmailSendingAccount: COGNITO_DEFAULT` is a development-only setting. Amazon
+documents it as unsuitable for production and caps it at 50 messages/day per pool. It carries
+every user-facing mail the product depends on: signup verification, and — because the pool is
+created with `account_recovery=AccountRecovery.EMAIL_ONLY`
+(`infra/careervp/cognito_construct.py:62`) — **all** password recovery. At production volume the
+51st user of the day cannot register, and no user can reset a password.
+
+**Why it needs planning now rather than at launch.** Per the remediation run-order's standing
+context, **production will live in the same AWS account** as dev/devx/staging. SES identity
+verification and the move out of the SES sandbox are account-level, lead-time work, not a switch:
+
+1. Verify a sending domain (DKIM records in DNS) — not instant, and not self-service inside CDK.
+2. Request **SES production access**. Until granted, the account is in the sandbox and can send
+   **only to verified addresses** — which would break test registration at `@careervp.com`
+   addresses in exactly the way `I-07` describes, from a different cause.
+3. Point the pool at it: `EmailSendingAccount: DEVELOPER` with `SourceArn` / `From`, plus the IAM
+   permission for Cognito to send as that identity.
+4. Decide the bounce/complaint handling, because SES suspends senders that ignore it.
+
+**Disposition.** Parked deliberately. Wave 3 is a database redesign; standing up a production
+email identity inside it would be scope smuggling of exactly the kind the contract exists to
+prevent. It is also not blocking: `devx` is fixable without SES via `I-07`'s PreSignUp trigger,
+which removes non-prod's dependence on outbound mail altogether.
+
+**Trigger — promote to a clause when any of these is true:**
+- a production or public-beta launch date is set, **or**
+- `staging` is promoted to serve real users (staging inherits the same construct and the same
+  50/day cap), **or**
+- password recovery is exercised by anyone outside the team — the first real reset request is the
+  point at which `COGNITO_DEFAULT` becomes a user-visible outage, **or**
+- the pool's daily mail is observed above ~25/day sustained in any environment that is not `devx`.
+
+**Stopping condition.** If a launch date is set and the SES work has not started, launch proceeds
+with **self-service registration and password reset disabled** — invite-only accounts created by
+an administrator, resets by administrator action. Worse product, bounded and honest, and it does
+not put a 50/day cap between a paying user and their own account. This is a pre-authorised
+fallback, not permission to skip the work: SES remains required before self-service signup is
+opened to the public.
+
+---
+
+## I-09 — `GET /users/me` returns an invented `@example.com` address and a blank name for every user
+
+- **Found:** 2026-08-01, step `3.FIX-HARNESS` (the assertion was unreachable until the live-API
+  suites could authenticate, so this had been latent behind the 401s).
+- **Severity:** high — it is user-visible on the account page, and it is written to storage rather
+  than computed for display, so it is what every later read returns.
+- **Status:** OPEN. **Remedy chosen** (see below). **Step written 2026-08-01:**
+  `3.CORR-IDENTITY`, in `runbooks/wave-3-corrective-slice-prompts.md` §4 — carried there as a
+  second, independent slice, not folded into F-DEVX-1. It has no run number in
+  `wave-3-remediation-run-order.md` yet.
+
+**What is true.** `POST /auth/register` creates the Cognito account and writes a trial record. It
+**never writes the user profile row.** The profile is instead created lazily on the first read of
+`/users/me`, by `user_repository.ensure_user`
+(`src/backend/careervp/dal/user_repository.py:85`), which does not have the registered identity to
+hand and therefore fabricates it:
+
+```
+email = f'{user_id}@example.com'
+name  = ''
+```
+
+Confirmed directly against `careervp-users-table-devx`: a user registered as
+`harness-…@careervp.com` has the stored profile
+`email = 8428d4e8-d071-7088-a9c3-9e630806436b@example.com`, `name = 'Gate User'` (the name only
+because a later `PUT /users/me` supplied one). The live-API suite failure is
+`test_e2e_happy_path_full_job_application:37`.
+
+**Remedy chosen — 2026-08-01, human decision. Option A: fill the profile from the login claims.**
+The deployed API uses a `COGNITO_USER_POOLS` authorizer, so `requestContext.authorizer.claims`
+already carries the verified `email` and `name` on every authenticated request. Seeding
+`ensure_user` from those claims instead of fabricating a value is the smallest change **and it
+self-heals**: the ~57 existing broken profiles correct themselves on their next read, with no
+backfill and no migration.
+
+Two alternatives were shown and **not** selected: writing the profile during registration (works,
+but leaves the fabrication code live as a fallback and needs a separate backfill), and simply
+erroring when the profile is missing (converts a wrong answer into an outage without producing a
+right one). The third of these remains worth doing **alongside** Option A — once the claims path
+exists, the fabricated-address fallback should be removed rather than left as dead code — but that
+is a follow-on, not part of the chosen remedy.
+
+**Open question the implementing step must answer first.** The users table carries an
+`email-index`, and the P-24 identity resolver uses it for link-by-verified-email owner lookup
+(`src/backend/careervp/dal/identity_map_repository.py:98`;
+`infra/careervp/api_construct.py:2472`). Today **no** profile carries a real address, so that
+lookup could never find a user by the address they signed up with. That path is **dormant on
+`devx`** — the live authorizer is the standard Cognito one, not the P-24 resolver — which bounds
+the blast radius now, but the debt is latent for whenever P-24 goes live. Whoever picks this up
+must confirm with someone who knows the P-24 design whether this makes the issue a correctness
+bug rather than a cosmetic one, because that decides its priority relative to Wave-3 work.
+
+**Why it is not fixed already.** `3.FIX-HARNESS`, which found it, was a **test-code-only** step
+under an explicit instruction not to touch product code; it left the failing assertion at full
+strength rather than weakening it. The fix touches
+`src/backend/careervp/dal/user_repository.py` and the `/users/me` handler, and belongs to a step
+that owns product code.
+
+**Trigger — promote to a clause when any of these is true:**
+- the P-24 resolver is activated on any environment that serves real users, **or**
+- any user-facing surface other than the account page reads the profile email — notification,
+  billing receipt, or export header would each turn this into an outbound error, **or**
+- Wave 3's GATE is reached with it still unowned (it should not cross a wave boundary unassigned).
+
+**Stopping condition.** If it is still unowned when the Wave-3 GATE is reached, the minimum that
+ships instead is the **fallback removal alone**: `ensure_user` stops fabricating an address and
+returns a profile with an explicitly empty email, so no false identity is written to storage or to
+the `email-index`. That is strictly less useful than Option A and leaves the account page
+incomplete, but it stops the system asserting an identity that does not exist. Observable: the
+GATE date passes with `user_repository.py:85` unchanged.
+
+---
+
 # Wave-2 bets
 
 Per `RUNBOOK-RULES.md` rule 9. Each is a belief Wave 2 rests on that could be false, with the check
