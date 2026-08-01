@@ -10,17 +10,62 @@ No prod stack exists today, so nothing here is incident response — but every s
 isolation item is a **launch blocker**, and same-account prod makes step 5 materially more
 serious than it first looked.
 
-| # | Step id | Fixes | Size | Blocks |
-|---|---|---|---|---|
-| 1 | `3.FIX-DEPLOY` | F-DEVX-7 | XS | everything — no devx deploy without it |
-| 2 | `3.FIX-HARNESS` | F-DEVX-2, F-DEVX-3, F-DEVX-4 | S | all live verification |
-| 3 | `3.FIX-SECURITY` | F-DEVX-8, token logging | S | launch |
-| 4 | `3.CORR-SPEC/RED/GREEN` | F-DEVX-1 | M/L | D-H4 clause, 3.6 |
-| 5 | `3.FIX-ISOLATION` | Codex §11 | S | launch |
-| 6 | `3.FIX-GAPASYNC`, `3.FIX-NULLPOLICY` | F-DEVX-5, F-DEVX-6 | L / S–M | nothing |
-| 7 | resume Wave 3 | — | — | — |
+## Execution order — run these one per session, in this exact sequence
 
-Steps 1–3 are small and unambiguous. Step 4 is the only substantial one.
+Model/effort is derived from **rule 18** (Claude tier) and **rule 16** (Codex tier), not chosen
+freely. Copy the pair verbatim into each prompt header per rule 15.
+
+| Run | Step id | Prompt lives in | Fixes | Claude | Codex |
+|---:|---|---|---|---|---|
+| 1 | `3.FIX-DEPLOY` | this file, Step 1 | F-DEVX-7 | `opus/medium` | `gpt-5.3-codex/medium` |
+| 2 | `3.FIX-HARNESS` | this file, Step 2 | F-DEVX-2, -3, -4 | `opus/medium` | `gpt-5.3-codex/medium` |
+| 3 | `3.FIX-SECURITY` | this file, Step 3 | F-DEVX-8, token log | `opus/high` | `gpt-5.3-codex/high` |
+| 4 | `3.CORR-SPEC` | corrective-slice file §1 | F-DEVX-1 (pin) | `opus/high` | `gpt-5.3-codex/high` |
+| 5 | **human decision** | — | DP-A…DP-E, esp. DP-D | — | — |
+| 6 | `3.CORR-RED` | corrective-slice file §2 | F-DEVX-1 (tests) | `opus/high` | `gpt-5.3-codex/high` |
+| 7 | `3.CORR-GREEN` | corrective-slice file §3 | F-DEVX-1 (impl) | **`fable/xhigh`** | `gpt-5.3-codex/xhigh` |
+| 8 | `3.FIX-LEGACY-PURGE` | this file, Step 4b | the 89 legacy VPRs | **human-gated** | — |
+| 9 | `3.FIX-ISOLATION` | this file, Step 5 | Codex §11 | `opus/high` | `gpt-5.3-codex/high` |
+| 10 | `3.FIX-VERIFY` | this file, Step 6b | closing gate | `opus/high` | `gpt-5.3-codex/high` |
+| — | `3.FIX-GAPASYNC` | decision-gated, Step 7 | F-DEVX-5 | `opus/high` → impl may be `fable/high` | `gpt-5.3-codex/high` |
+| — | `3.FIX-NULLPOLICY` | decision-gated, Step 7 | F-DEVX-6 | `opus/medium` | `gpt-5.3-codex/medium` |
+| 11 | resume Wave 3 | `wave-3-prompts.md` | — | as already recorded | as already recorded |
+
+### Why these tiers — the routing is rule-driven, not taste
+
+**Only run 7 goes to Fable.** Rule 18 routes to Fable when all three hold: implementation against
+an already-pinned spec, long-horizon and multi-file, and a blast radius that justifies 2× cost.
+`3.CORR-GREEN` is the textbook case — rule 18's own example of justifying blast radius is
+*"key authority, data shape, irreversible deletion"*, which is precisely this step.
+
+**Rule 18 forbids Fable everywhere else here, and the exclusions are explicit:**
+- `3.CORR-RED` — *"RED steps. Never route to Fable."* Rule 14 already removed the judgment.
+- `3.FIX-SECURITY` — *"Anything security-focused… the P-04/P-05 IDOR work."* Fable's cyber
+  classifiers can decline outright, and its bug-finding gains **exclude** security analysis.
+- `3.FIX-ISOLATION` — same clause: *"any auth or secrets slice."*
+- `3.CORR-SPEC` — *"Steps whose real blocker is a human decision."* DP-D stops and asks.
+- `3.FIX-DEPLOY`, `3.FIX-HARNESS` — census/recon and test repair; rule 18 calls paying 2× for
+  mechanical completeness *"the exact waste rule 16 forbids."*
+- `3.FIX-VERIFY` — *"GATE steps."*
+
+**Two hard gates before writing `fable` into run 7** (rule 18): confirm the org has **30-day data
+retention** — under ZDR every Fable request returns `400 invalid_request_error` regardless of
+payload — and treat a **refusal as a normal outcome**, HTTP 200 with `stop_reason: "refusal"`, not
+an error. If run 7 fails instantly with a 400 and the payload looks fine, check retention before
+debugging anything else.
+
+**Prompt shape for run 7** (rule 18): keep the standing check, rule-14 verification, rule-5 stops,
+acceptance criteria, exact values, scope boundaries, full paths, the drift block and the ledger
+update — all verbatim. Drop step-by-step implementation choreography. State goal, constraints and
+acceptance criteria in one turn, then let it run; expect minutes per request.
+
+**Codex tiers** follow rule 16's rubric — `medium` for a focused change across a few files,
+`high` when it crosses module boundaries or can break production behavior, `xhigh` reserved for
+data-model change. `3.FIX-SECURITY` is arguably `xhigh` on rule 16's *"auth/tenancy-sensitive"*
+line; it is set to `high` because the fix itself is small and the breadth is in the audit. Raise it
+if the handler sweep turns up many sites.
+
+Steps 1–3 are small and unambiguous. Run 7 is the only substantial one.
 
 ---
 
@@ -213,6 +258,38 @@ Its `STANDING CHECK` requires steps 1 and 2 to be done first.
 
 ---
 
+## Step 4b — `3.FIX-LEGACY-PURGE` (run 8) — **human-gated, destructive**
+
+This is **Codex's Step 7** and it had no execution step until now. It is not an agent task.
+
+**Preconditions, all required:** `3.CORR-GREEN` has landed and a fresh journey writes a canonical
+VPR; `DP-D` was answered **in writing** by a human; a successor evidence file exists.
+
+**What exists.** Legacy `pk`/`sk` VPRs written by the old worker path, none of which any canonical
+reader can see:
+
+| Environment | Legacy VPRs in the users table | Canonical VPRs |
+|---|---:|---:|
+| devx | 4 | 0 |
+| dev | **83** | 0 |
+| staging | 2 | 0 |
+
+**Why this is not automatic.** Scope-lock v2.7.0 says stored data is disposable and forbids
+migration, backfill and dual-read — so the *code* must not learn to read these. That is not the
+same as authorization to delete 83 records that may be somebody's working state. **Deletion is a
+human action on a human decision.** An agent may prepare and verify; it may not delete.
+
+**Sequence:** confirm the canonical path works in devx first → purge devx (4) → re-run a fresh
+journey → only then consider dev and staging, each separately authorized. Do not purge all three in
+one pass. Record counts before and after. If `DP-D` chose *leave orphaned*, record that instead and
+close the step — orphaned records are inert once nothing reads `pk`/`sk`.
+
+**Also purge here:** the IDOR probe record planted during characterization —
+`careervp-cvs-table-devx`, `userId 00000000-dead-beef-0000-000000000001`,
+`cvId 4d877e8e-0db8-428f-a98f-09c70cb08e52` — if `3.FIX-SECURITY` did not already remove it.
+
+---
+
 ## Step 5 — `3.FIX-ISOLATION`
 
 ```
@@ -264,7 +341,67 @@ ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row.
 
 ---
 
-## Step 6 — decision-gated, non-blocking
+## Step 6b — `3.FIX-VERIFY` (run 10) — the closing gate
+
+```
+You are running step 3.FIX-VERIFY of Wave 3. Repo root:
+/Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+This is a GATE. You read evidence and check it against a contract. You fix NOTHING. If
+something fails, you record it and stop; you do not repair it.
+
+STANDING CHECK: read wave-3-status.md and confirm runs 1-9 are recorded as done.
+
+DO: re-run the full live characterization against CareerVpCrudDevx, resolving the API base
+live from the stack's RawApiInvokeUrl output, and check each line below. Quote real output
+for every one. Mark each PASS / FAIL / DEFERRED.
+
+  1.  A fresh journey writes a canonical VPR artifact and NO legacy users-table VPR.
+  2.  The hub's vpr artifact id resolves to that exact canonical record.
+  3.  Cover-letter submit returns 202 for the owned VPR, and its worker receives real
+      VPR content -- not an id-only stub.
+  4.  Interview-prep submit returns 202, same content check.
+  5.  CV-tailoring resolves through the same canonical authority.
+  6.  Wrong-owner access is still forbidden, with the pinned envelope.
+  7.  A DynamoDB schema failure surfaces explicitly and never as 409/missing.
+  8.  POST /users/me/cv ignores or rejects a body-supplied user_id; verify against the
+      STORED record's owner, not just the response.
+  9.  No handler logs an authorization token or a whole API Gateway event.
+  10. No environment addresses another environment's tables.
+  11. The live-API helpers use the id_token and current /{id}/status routes.
+  12. The devx synth matches the deployed P-26 nested topology.
+  13. The interview-prep contract still refuses missing identity with the exact
+      AC-P01-1 envelope -- confirm 3.CORR did not regress 3.2-GREEN's work.
+  14. Ruff, mypy --strict, the full backend suite, coverage with the core-branch ratchet
+      held, oracle + route parity, infra suite, both naming validators, and
+      check_scope_lock_integrity.py --base origin/main --head HEAD.
+
+EXPECTED DEFERRALS -- these are NOT failures of this gate, and must be recorded as open
+with their owners rather than silently passed:
+  - F-DEVX-5 (gap-analysis on the 29s API Gateway ceiling) -- awaiting a contract decision.
+  - F-DEVX-6 (extractor nulls -> HTTP 500) -- awaiting a policy decision.
+
+DO: diff wire-by-wire against
+docs/evidence/wave3-32closeouta-devx-characterization-20260801T094608Z.md and call out
+every change, expected or not. Write a dated successor evidence file.
+
+DO: state plainly whether D-H4's contract+integration and P-01's e2e+characterization can
+NOW be claimed. If yes, say so explicitly so a human can close the clauses. If no, name
+exactly what is missing.
+
+DO NOT: fix anything; edit either scope-lock twin; edit
+test_dh4_p01_canonical_artifact.py; mark a deferred item closed.
+
+OUTPUT REQUIRED: the 14-line checklist with PASS/FAIL/DEFERRED and quoted evidence; the
+baseline diff; the clause-closure statement; the evidence file path.
+
+ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row.
+```
+
+---
+
+## Step 7 — decision-gated, non-blocking
 
 Both need a **human product decision before a prompt can be written**. Neither blocks
 anything else. Write the prompt once the decision is recorded in a spec or amendment.
@@ -304,7 +441,7 @@ and inventing a placeholder violates the repository's fact-verification rules.
 
 ---
 
-## Step 7 — resume Wave 3
+## Step 8 — resume Wave 3
 
 Order: `3.2-CLOSEOUT-B` → `3.6-SPEC/RED/GREEN` → `3.4` → `3.5`.
 
