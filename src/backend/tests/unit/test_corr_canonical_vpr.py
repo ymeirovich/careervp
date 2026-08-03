@@ -397,6 +397,33 @@ def test_repository_never_falls_back_to_legacy_users_table(aws_tables: dict[str,
 
 
 @pytest.mark.unit
+def test_vpr_resolves_when_caller_supplies_no_artifact_id(aws_tables: dict[str, Any], canonical_vpr: VPR) -> None:
+    """AC-CORR-18: the cover-letter SQS worker never supplies a VPR artifact id.
+
+    ``_generate_and_persist_from_sqs`` calls ``_generate_cover_letter_result`` without
+    ``vpr_artifact_id``, so ``_resolve_cover_letter_context`` passes the APPLICATION id
+    as the artifact id. That only ever resolved because the removed legacy fallback
+    looked VPRs up by application_id and ignored the artifact id. The resolution must
+    now find the canonical artifact by owner + application instead.
+    """
+    from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+    from careervp.handlers.cover_letter_handler import _resolve_vpr_payload
+
+    _seed_canonical_vpr(aws_tables['artifacts'], canonical_vpr)
+
+    payload = _resolve_vpr_payload(
+        dal=DynamoDalHandler(ARTIFACTS_TABLE),
+        application_id=APP_ID,
+        artifact_id=APP_ID,  # the application id standing in for a missing artifact id
+        user_id=USER_ID,
+    )
+
+    dumped = payload.model_dump(mode='json')
+    assert dumped.get('executive_summary'), 'AC-CORR-18: resolved VPR carried no real content'
+    assert dumped.get('artifact_id') == JOB_ID, 'AC-CORR-18: resolution did not find the canonical artifact id'
+
+
+@pytest.mark.unit
 def test_wrong_owner_receives_forbidden(aws_tables: dict[str, Any], canonical_vpr: VPR) -> None:
     """AC-CORR-10: cross-tenant reads are denied, not reported as missing."""
     _seed_canonical_vpr(aws_tables['artifacts'], canonical_vpr, user_id=USER_ID)

@@ -329,18 +329,26 @@ def _resolve_vpr_payload(
     artifact_id: str,
     user_id: str,
 ) -> Any:
-    jobs_repository = JobsRepository()
-    vpr_result = CoreRepository(dal=dal, vpr_jobs_repository=jobs_repository).get_vpr_by_artifact_id(
+    repository = CoreRepository(dal=dal, vpr_jobs_repository=JobsRepository())
+    vpr_result = repository.get_vpr_by_artifact_id(
         application_id=application_id,
         artifact_id=artifact_id,
         user_id=user_id,
     )
+
+    # Callers do not always know the VPR's artifact id. The SQS worker path supplies
+    # none at all, so `_resolve_cover_letter_context` passes the application id in its
+    # place. Resolve the real id from owner + application rather than failing (F-DEVX-1:
+    # this used to be masked by a legacy lookup keyed on application_id).
     if vpr_result.success and vpr_result.data is None:
-        vpr_result = CoreRepository(dal=dal).get_vpr_by_artifact_id(
-            application_id=application_id,
-            artifact_id=artifact_id,
-            user_id=user_id,
-        )
+        resolved_id = repository.resolve_artifact_id(application_id, 'vpr', user_id=user_id)
+        if resolved_id.success and resolved_id.data and resolved_id.data != artifact_id:
+            vpr_result = repository.get_vpr_by_artifact_id(
+                application_id=application_id,
+                artifact_id=str(resolved_id.data),
+                user_id=user_id,
+            )
+
     if not vpr_result.success or vpr_result.data is None:
         raise ValueError(f'Required VPR not found for cover letter application: {application_id}')
 
