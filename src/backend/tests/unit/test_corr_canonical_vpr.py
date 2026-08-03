@@ -424,6 +424,38 @@ def test_vpr_resolves_when_caller_supplies_no_artifact_id(aws_tables: dict[str, 
 
 
 @pytest.mark.unit
+def test_materialized_vpr_payload_is_json_serializable(aws_tables: dict[str, Any], canonical_vpr: VPR) -> None:
+    """AC-CORR-19: DynamoDB returns numbers as Decimal; prompts are built with json.dumps.
+
+    The legacy path returned a validated pydantic model, which coerced Decimal away.
+    Reading the canonical item returns raw DynamoDB types, so the repository must
+    normalise them or every generator fails with
+    "Object of type Decimal is not JSON serializable".
+    """
+    import json
+    from decimal import Decimal
+
+    _seed_canonical_vpr(aws_tables['artifacts'], canonical_vpr)
+
+    repository = CoreRepository(vpr_jobs_repository=JobsRepository(table_name=JOBS_TABLE))
+    result = repository.get_vpr_by_artifact_id(application_id=APP_ID, artifact_id=JOB_ID, user_id=USER_ID)
+    assert result.success and isinstance(result.data, dict)
+
+    def _find_decimal(node: Any, path: str = 'vpr') -> str | None:
+        if isinstance(node, Decimal):
+            return path
+        if isinstance(node, dict):
+            return next((found for k, v in node.items() if (found := _find_decimal(v, f'{path}.{k}'))), None)
+        if isinstance(node, list):
+            return next((found for i, v in enumerate(node) if (found := _find_decimal(v, f'{path}[{i}]'))), None)
+        return None
+
+    leftover = _find_decimal(result.data)
+    assert leftover is None, f'AC-CORR-19: Decimal survived materialization at {leftover}'
+    json.dumps(result.data)  # the generators do exactly this to build the prompt
+
+
+@pytest.mark.unit
 def test_wrong_owner_receives_forbidden(aws_tables: dict[str, Any], canonical_vpr: VPR) -> None:
     """AC-CORR-10: cross-tenant reads are denied, not reported as missing."""
     _seed_canonical_vpr(aws_tables['artifacts'], canonical_vpr, user_id=USER_ID)

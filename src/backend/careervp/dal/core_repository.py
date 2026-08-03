@@ -13,6 +13,7 @@ Wave-3 consumers: D-H4 (3.2), D-M2/D-M5 (3.4), and the D-H9 demolition gate
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Protocol
 
 from botocore.exceptions import ClientError
@@ -26,6 +27,18 @@ from careervp.dal.table_registry import (
     canonical_item_key,
 )
 from careervp.models.result import Result, ResultCode
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively replace DynamoDB ``Decimal`` values with int/float."""
+    if isinstance(value, Decimal):
+        as_int = int(value)
+        return as_int if value == as_int else float(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def _error_text(result: Result[Any]) -> str | None:
@@ -230,8 +243,13 @@ class CoreRepository:
 
     @staticmethod
     def _materialize_vpr(item: dict[str, Any]) -> dict[str, Any]:
-        """Flatten a canonical artifact into the VPR payload consumers read."""
-        payload = item.get('vpr')
+        """Flatten a canonical artifact into the VPR payload consumers read.
+
+        DynamoDB hands back every number as ``Decimal``, and the generators build their
+        prompts with ``json.dumps``, which cannot serialize it. The legacy path hid this
+        by returning a validated pydantic model, so normalise here instead.
+        """
+        payload = _json_safe(item.get('vpr'))
         resolved: dict[str, Any] = dict(payload) if isinstance(payload, dict) else {}
         resolved['artifact_id'] = canonical_artifact_id(item) or str(item.get('artifact_id') or '')
         resolved.setdefault('application_id', str(item.get('applicationId') or ''))
