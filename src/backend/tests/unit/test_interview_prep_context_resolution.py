@@ -91,15 +91,34 @@ def _make_dal(
     else:
         dal.get_vpr.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
 
+    # F-DEVX-1: the VPR is read from the canonical artifacts table, so a resolvable
+    # VPR must be seeded as a canonical artifact item, not as a legacy DAL read.
+    canonical_vpr_item = None
+    if vpr_success and vpr is not None:
+        payload = vpr.model_dump() if hasattr(vpr, 'model_dump') else dict(vpr)
+        canonical_vpr_item = {
+            'applicationId': 'vpr-001',
+            'artifactId': 'vpr-001',
+            'artifact_id': 'vpr-001',
+            'artifactType': 'vpr',
+            'user_id': 'user-1',
+            'status': 'completed',
+            'version': 1,
+            'created_at': '2026-08-01T09:00:00+00:00',
+            'updated_at': '2026-08-01T09:00:00+00:00',
+            'vpr': payload,
+        }
+
     # Gap responses
     if gap_success and gap_responses is not None:
         dal.get_gap_responses.return_value = Result(success=True, data=gap_responses, code=ResultCode.SUCCESS)
     else:
         dal.get_gap_responses.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
 
-    # Default table query returns empty
+    # Default table query returns empty; get_item serves the canonical VPR artifact.
     mock_table = MagicMock()
-    mock_table.query.return_value = {'Items': []}
+    mock_table.query.return_value = {'Items': [canonical_vpr_item] if canonical_vpr_item else []}
+    mock_table.get_item.return_value = {'Item': canonical_vpr_item} if canonical_vpr_item else {}
     dal._get_db_handler.return_value = mock_table
 
     return dal
@@ -273,8 +292,15 @@ def test_context_prefers_gap_responses_table_for_gap_lookup(monkeypatch: Any) ->
     fallback_dal.get_gap_responses.assert_not_called()
 
 
-def test_context_prefers_vpr_jobs_table_payload(monkeypatch: Any) -> None:
-    """When VPR_JOBS_TABLE_NAME is configured and job exists, resolver should use jobs payload."""
+def test_context_uses_canonical_artifact_not_jobs_table_payload(monkeypatch: Any) -> None:
+    """F-DEVX-1: the canonical artifact is the VPR authority; a jobs record is not.
+
+    Reconciled from ``test_context_prefers_vpr_jobs_table_payload``, which asserted the
+    opposite. Preferring the jobs record is the defect that let an id-only stub — or, as
+    here, a stale inline payload — reach the generator as VPR content. Deployed jobs
+    carry ``result_key`` and no inline ``result`` at all, so that preference could only
+    ever produce empty or wrong AI context.
+    """
     from careervp.handlers import interview_prep_handler as module
 
     monkeypatch.setenv('VPR_JOBS_TABLE_NAME', 'test-vpr-jobs-table')
@@ -285,20 +311,17 @@ def test_context_prefers_vpr_jobs_table_payload(monkeypatch: Any) -> None:
         'application_id': 'job-123',
         'status': 'COMPLETED',
         'result': {
-            'uvp': 'Strong platform engineer',
-            'differentiators': [{'text': 'Distributed systems depth'}],
+            'uvp': 'STALE jobs-table payload that must not be used',
+            'differentiators': [{'text': 'Stale differentiator'}],
             'language': 'he',
         },
     }
 
-    fallback_dal = _make_dal(vpr=None, vpr_success=False)
-    fallback_dal.get_vpr.side_effect = RuntimeError('fallback artifacts table should not be used for VPR when jobs payload exists')
+    canonical_dal = _make_dal(vpr=_mock_vpr(differentiators=['Distributed systems depth']))
 
     with patch.object(module, 'JobsRepository', return_value=jobs_repo):
-        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request(vpr_id='vpr-001', language='en'))
+        ctx = module._resolve_interview_prep_context(canonical_dal, 'user-1', _api_request(vpr_id='vpr-001', language='en'))
 
-    assert ctx['vpr_data'].get('uvp') == 'Strong platform engineer'
+    assert ctx['vpr_data'].get('uvp') != 'STALE jobs-table payload that must not be used'
     assert ctx['vpr_differentiators'] == ['Distributed systems depth']
-    assert ctx['language'] == 'he'
-    jobs_repo.get_job.assert_called_once_with('vpr-001')
-    fallback_dal.get_vpr.assert_not_called()
+    assert ctx['vpr_data'].get('executive_summary') == 'Strong candidate.'

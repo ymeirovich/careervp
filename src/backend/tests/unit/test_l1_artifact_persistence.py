@@ -220,13 +220,22 @@ def test_interview_prep_persisted_item_contains_prefix_and_ttl() -> None:
         dal.get_cv.return_value = _user_cv()
         dal._get_db_handler.return_value = table
         dal.table_name = 'table'
-        # VPR mock must carry user_id so the ownership check in _resolve_interview_prep_context passes.
-        mock_vpr = MagicMock()
-        mock_vpr.user_id = 'user-123'
-        mock_vpr_result = MagicMock()
-        mock_vpr_result.success = True
-        mock_vpr_result.data = mock_vpr
-        dal.get_vpr.return_value = mock_vpr_result
+        # F-DEVX-1: the VPR is read as a canonical artifact from the artifacts table,
+        # so seed one owned by this user rather than mocking the legacy dal.get_vpr.
+        table.get_item.return_value = {
+            'Item': {
+                'applicationId': 'vpr-123',
+                'artifactId': 'vpr-123',
+                'artifact_id': 'vpr-123',
+                'artifactType': 'vpr',
+                'user_id': 'user-123',
+                'status': 'completed',
+                'version': 1,
+                'created_at': '2026-08-01T09:00:00+00:00',
+                'updated_at': '2026-08-01T09:00:00+00:00',
+                'vpr': {'application_id': 'vpr-123', 'user_id': 'user-123', 'executive_summary': 'Strong candidate.'},
+            }
+        }
         mock_get_dal.return_value = dal
 
         with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -356,10 +365,14 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(
-    reason='Pending spec-03: vpr_generator._generate_output builds VPR with old flat fields (executive_summary as str, evidence_matrix, etc.)'
-)
-def test_vpr_generation_persists_via_save_vpr() -> None:
+def test_vpr_generation_does_not_persist_via_save_vpr() -> None:
+    """F-DEVX-1: generation is pure; the caller owns the canonical write.
+
+    Reconciled from ``test_vpr_generation_persists_via_save_vpr``, whose xfail marker
+    ("Pending spec-03 … old flat fields") had gone stale — the test was XPASSing. The
+    behaviour it asserted is now deliberately gone: persisting inside generation is what
+    made it impossible for the canonical artifact write to be the completion boundary.
+    """
     with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls:
         mock_llm = MagicMock()
         mock_llm.invoke.side_effect = [
@@ -384,7 +397,7 @@ def test_vpr_generation_persists_via_save_vpr() -> None:
         result = generate_vpr(_sample_vpr_request(), _user_cv(), dal)
 
     assert result.success is True
-    dal.save_vpr.assert_called_once()
+    dal.save_vpr.assert_not_called()
 
 
 @pytest.mark.unit

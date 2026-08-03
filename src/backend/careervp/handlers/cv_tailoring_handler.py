@@ -23,6 +23,7 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
+from careervp.logic.artifact_dependency_resolver import ArtifactUnavailableError
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.cv_tailoring_ats import compute_ats_result
 from careervp.logic.cv_tailoring_pipeline import run_cv_tailoring_pipeline
@@ -346,12 +347,21 @@ def _handle_openapi_async_generate(  # noqa: C901
 
     table_name = table_registry.resolve_legacy_artifacts_table_name()
     dal = DynamoDalHandler(table_name)
-    dependency_resolution = resolve_handler_dependencies(
-        artifact_type='cv_tailored',
-        application_id=job_id,
-        user_id=user_id,
-        dal=dal,
-    )
+    try:
+        dependency_resolution = resolve_handler_dependencies(
+            artifact_type='cv_tailored',
+            application_id=job_id,
+            user_id=user_id,
+            dal=dal,
+        )
+    except ArtifactUnavailableError as exc:
+        # The upstream read failed; it is NOT known to be missing (F-DEVX-1).
+        logger.error('Upstream artifact unavailable', artifact_type=exc.artifact_type, failure_code=exc.code)
+        return _response(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            {'success': False, 'code': exc.code, 'message': 'Upstream artifact is temporarily unavailable'},
+            headers,
+        )
     if dependency_resolution.status != 'ready':
         if dependency_resolution.status == 'dependency_generating':
             mark_requested_artifact_pending(application_id=job_id, user_id=user_id, artifact_type='cv_tailored')

@@ -422,8 +422,14 @@ class VPRSixStagePipeline:
             self._model_name = str(model)
 
 
-def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) -> Result[VPRResponse]:
-    """Generate VPR through the 6-stage pipeline and persist the output."""
+def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler | None = None) -> Result[VPRResponse]:
+    """Generate a VPR through the 6-stage pipeline.
+
+    Generation does NOT persist. The caller owns persistence so that writing the
+    canonical artifact can be the completion boundary for the job and the hub
+    (F-DEVX-1); ``dal`` is retained only for call-site compatibility.
+    """
+    _ = dal
     start_time = time.perf_counter()
 
     with bind_llm_usage_context(application_id=request.application_id, user_id=request.user_id):
@@ -438,14 +444,6 @@ def generate_vpr(request: VPRRequest, user_cv: UserCV, dal: DynamoDalHandler) ->
         )
 
     final_data = pipeline_result.data
-    save_result = dal.save_vpr(final_data.vpr)
-    if not save_result.success:
-        return Result(
-            success=False,
-            error=save_result.error or 'Failed to persist VPR',
-            code=save_result.code,
-        )
-
     generation_time_ms = int((time.perf_counter() - start_time) * 1000)
 
     response = VPRResponse(

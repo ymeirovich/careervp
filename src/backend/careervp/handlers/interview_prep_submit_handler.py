@@ -33,6 +33,7 @@ from careervp.handlers.artifact_dependency_utils import (
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import ArtifactUnavailableError
 from careervp.logic.utils.constants import INTERVIEW_PREP_JOBS_QUEUE_NAME
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.result import ResultCode
@@ -99,7 +100,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     tracer.put_annotation(key='endpoint', value=endpoint)
     logger.info(
         'Interview prep submit request received',
-        api_gateway_event=event,
         endpoint=endpoint,
         request_id=_get_request_id(event, context),
     )
@@ -114,9 +114,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     try:
         request_data = _parse_body(event)
-        logger.info('Interview prep submit parsed request body', request_body=request_data)
         api_request = InterviewPrepRequest.model_validate(request_data)
-        logger.info('Interview prep submit validated request body', validated_payload=api_request.model_dump(mode='json'))
+        logger.info('Interview prep submit request validated', request_field_names=sorted(request_data))
     except ValidationError as exc:
         logger.warning('Invalid request body', error=str(exc))
         metrics.add_metric(name='ValidationError', unit='Count', value=1)
@@ -137,20 +136,15 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         return resolved
     table_name, application_id = resolved
 
-    dependency_resolution = resolve_handler_dependencies(
-        artifact_type='interview_prep',
+    not_ready = _resolve_upstream_or_error(
+        table_name=table_name,
         application_id=application_id,
         user_id=authenticated_user_id,
-        dal=DynamoDalHandler(table_name),
+        event=event,
+        context=context,
     )
-    if dependency_resolution.status != 'ready':
-        if dependency_resolution.status == 'dependency_generating':
-            mark_requested_artifact_pending(application_id=application_id, user_id=authenticated_user_id, artifact_type='interview_prep')
-        return {
-            'statusCode': dependency_resolution.http_status,
-            'headers': _json_headers(),
-            'body': json.dumps(dependency_response_body(dependency_resolution, requested_artifact='interview_prep')),
-        }
+    if not_ready is not None:
+        return not_ready
 
     job_id = str(uuid.uuid4())
     artifact_id = table_registry.interview_prep_artifact_id(job_id)
@@ -174,7 +168,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'created_at': created_at,
             'updated_at': created_at,
         }
-        logger.info('Interview prep submit writing DynamoDB artifact', table_name=table_name, dynamodb_item=artifact_item)
+        logger.info('Interview prep submit writing DynamoDB artifact', table_name=table_name, job_id=job_id)
         table.put_item(
             Item=artifact_item,
         )
@@ -198,9 +192,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         }
         logger.info(
             'Interview prep submit sending SQS message',
-            queue_url=queue_url,
-            sqs_message_body=sqs_payload,
-            sqs_message_attributes=sqs_attributes,
+            job_id=job_id,
         )
         sqs.send_message(
             QueueUrl=queue_url,
@@ -233,7 +225,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         'status': 'processing',
         'estimated_time_seconds': 60,
     }
-    logger.info('Interview prep submit response payload', response_status_code=int(HTTPStatus.ACCEPTED), response_body=response_body)
+    logger.info('Interview prep submit response prepared', response_status_code=int(HTTPStatus.ACCEPTED), job_id=job_id)
 
     return {
         'statusCode': int(HTTPStatus.ACCEPTED),
@@ -262,6 +254,48 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError('Request body must be a JSON object.')
     return parsed
+
+
+def _resolve_upstream_or_error(
+    *,
+    table_name: str,
+    application_id: str,
+    user_id: str,
+    event: dict[str, Any],
+    context: LambdaContext,
+) -> dict[str, Any] | None:
+    """Return ``None`` when upstream is ready, else the response to send.
+
+    Kept out of ``lambda_handler`` because that function is at the C901 ceiling.
+    """
+    try:
+        resolution = resolve_handler_dependencies(
+            artifact_type='interview_prep',
+            application_id=application_id,
+            user_id=user_id,
+            dal=DynamoDalHandler(table_name),
+        )
+    except ArtifactUnavailableError as exc:
+        # The upstream read failed; it is NOT known to be missing. Answering 409
+        # upstream_required here is the F-DEVX-1 defect.
+        logger.error('Upstream artifact unavailable', artifact_type=exc.artifact_type, failure_code=exc.code)
+        metrics.add_metric(name='UpstreamArtifactUnavailable', unit='Count', value=1)
+        return _build_error_response(
+            'Upstream artifact is temporarily unavailable',
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            code=exc.code,
+            request_id=_get_request_id(event, context),
+        )
+
+    if resolution.status == 'ready':
+        return None
+    if resolution.status == 'dependency_generating':
+        mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='interview_prep')
+    return {
+        'statusCode': resolution.http_status,
+        'headers': _json_headers(),
+        'body': json.dumps(dependency_response_body(resolution, requested_artifact='interview_prep')),
+    }
 
 
 def _resolve_submit_preconditions(

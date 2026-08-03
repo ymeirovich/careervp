@@ -308,10 +308,8 @@ class DynamoDalHandler(DalHandler):
                 **vpr.model_dump(mode='json'),
             }
             table.put_item(Item=item)
-        except (ClientError, ValidationError):
-            error_msg = 'failed to save VPR'
-            logger.exception(error_msg, application_id=vpr.application_id)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(operation='save_vpr', exc=exc, key_names=['pk', 'sk'])
 
         logger.info('VPR saved successfully', application_id=vpr.application_id)
         return Result(success=True, data=None, code=ResultCode.SUCCESS)
@@ -338,10 +336,8 @@ class DynamoDalHandler(DalHandler):
             if vpr.metadata is None:
                 logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError):
-            error_msg = 'failed to get VPR'
-            logger.exception(error_msg, application_id=application_id, version=version)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(operation='get_vpr', exc=exc, key_names=['pk', 'sk'])
 
     @tracer.capture_method(capture_response=False)
     def get_latest_vpr(self, application_id: str) -> Result[VPR | None]:
@@ -380,10 +376,10 @@ class DynamoDalHandler(DalHandler):
             if vpr.metadata is None:
                 logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError, InvalidVersionError):
-            error_msg = 'failed to get latest VPR'
-            logger.exception(error_msg, application_id=application_id)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError, InvalidVersionError) as exc:
+            # D-H3: a key-schema mismatch must classify as TABLE_SCHEMA_MISMATCH so it
+            # can never be read downstream as a missing upstream artifact (F-DEVX-1).
+            return self._dal_failure_result(operation='get_latest_vpr', exc=exc, key_names=['pk', 'sk'])
 
     @tracer.capture_method(capture_response=False)
     def list_vprs(self, user_id: str) -> Result[list[VPR]]:

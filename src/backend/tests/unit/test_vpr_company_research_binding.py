@@ -210,6 +210,12 @@ def test_worker_loads_cr_when_message_lacks_context(monkeypatch: pytest.MonkeyPa
     vpr.model_dump_json.return_value = '{"ok": true}'
     vpr_response = MagicMock(vpr=vpr, token_usage=None)
 
+    # F-DEVX-1: the worker writes the canonical VPR artifact before completion. This
+    # test is about Company Research binding, so stub the repository.
+    core_repository = MagicMock()
+    core_repository.next_vpr_version.return_value = 3
+    core_repository.save_vpr_artifact.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
+    monkeypatch.setattr(vpr_worker_handler, 'CoreRepository', MagicMock(return_value=core_repository))
     monkeypatch.setattr(vpr_worker_handler, 'DynamoDalHandler', MagicMock(return_value=cv_dal))
     monkeypatch.setattr(vpr_worker_handler, 'load_confident_company_research_artifact', MagicMock(return_value=loaded), raising=False)
     monkeypatch.setattr(vpr_worker_handler, 'generate_vpr', MagicMock(return_value=Result(success=True, data=vpr_response, code=ResultCode.SUCCESS)))

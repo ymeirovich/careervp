@@ -34,6 +34,10 @@ COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
 COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
 USER_PARTITION_PREFIX = 'USER#'
 
+# The exact artifactType value a canonical VPR must carry so the artifacts
+# table's type-index(applicationId, artifactType) projects it.
+VPR_ARTIFACT_TYPE = 'vpr'
+
 
 def user_partition_key(user_id: str) -> str:
     return f'{USER_PARTITION_PREFIX}{user_id}'

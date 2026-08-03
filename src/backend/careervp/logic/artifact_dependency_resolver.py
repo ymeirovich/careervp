@@ -12,6 +12,22 @@ ArtifactType = Literal['gap_analysis', 'company_research', 'vpr', 'cv_tailored',
 ResolutionStatus = Literal['ready', 'dependency_generating', 'upstream_required']
 
 
+class ArtifactUnavailableError(Exception):
+    """An upstream artifact could not be read for infrastructure reasons.
+
+    This is deliberately NOT a resolution outcome. "I could not look" and "it is not
+    there" are different answers, and collapsing the first into the second is the
+    F-DEVX-1 defect: a key-schema mismatch surfaced as ``upstream_required``/409.
+    Handlers translate this into HTTP 503.
+    """
+
+    def __init__(self, artifact_type: str, code: str, message: str | None = None) -> None:
+        self.artifact_type = artifact_type
+        self.code = code
+        self.message = message or f'{artifact_type} artifact is temporarily unavailable'
+        super().__init__(self.message)
+
+
 class ArtifactDependencyRepos(Protocol):
     """Repository surface required by the pure resolver."""
 

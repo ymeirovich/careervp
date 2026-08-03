@@ -305,14 +305,29 @@ class TestInterviewPrepNoTemplate:
 class TestInterviewPrepHandlerFlow:
     """Validates handler behavior required by L0.2."""
 
-    def _mock_vpr_result(self) -> MagicMock:
-        """Return a VPR DAL result with user_id set to pass ownership check."""
-        vpr = MagicMock()
-        vpr.user_id = USER_ID
-        result = MagicMock()
-        result.success = True
-        result.data = vpr
-        return result
+    def _seed_canonical_vpr(self, mock_dal: MagicMock) -> None:
+        """Seed an owned canonical VPR artifact on a mocked DAL.
+
+        F-DEVX-1: the VPR is read from the canonical artifacts table keyed
+        applicationId/artifactId, so mocking the legacy ``dal.get_vpr`` no longer
+        makes a VPR resolvable.
+        """
+        canonical_vpr = {
+            'applicationId': 'vpr-001',
+            'artifactId': 'vpr-001',
+            'artifact_id': 'vpr-001',
+            'artifactType': 'vpr',
+            'user_id': USER_ID,
+            'status': 'completed',
+            'version': 1,
+            'created_at': '2026-08-01T09:00:00+00:00',
+            'updated_at': '2026-08-01T09:00:00+00:00',
+            'vpr': {'application_id': 'vpr-001', 'user_id': USER_ID, 'executive_summary': 'Strong candidate.'},
+        }
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {'Item': canonical_vpr}
+        mock_table.query.return_value = {'Items': [canonical_vpr]}
+        mock_dal._get_db_handler.return_value = mock_table
 
     def test_returns_artifact_id_in_handler_response(self) -> None:
         from careervp.handlers.interview_prep_handler import lambda_handler
@@ -320,7 +335,7 @@ class TestInterviewPrepHandlerFlow:
         with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
-            mock_dal.get_vpr.return_value = self._mock_vpr_result()
+            self._seed_canonical_vpr(mock_dal)
             mock_get_dal.return_value = mock_dal
 
             with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -344,7 +359,7 @@ class TestInterviewPrepHandlerFlow:
         with patch('careervp.handlers.interview_prep_handler._get_dal') as mock_get_dal:
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv()
-            mock_dal.get_vpr.return_value = self._mock_vpr_result()
+            self._seed_canonical_vpr(mock_dal)
             mock_get_dal.return_value = mock_dal
 
             with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -368,7 +383,7 @@ class TestInterviewPrepHandlerFlow:
         ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = None
-            mock_dal.get_vpr.return_value = self._mock_vpr_result()
+            self._seed_canonical_vpr(mock_dal)
             mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
             mock_gen.return_value = _mock_llm_result()
@@ -387,7 +402,7 @@ class TestInterviewPrepHandlerFlow:
         ):
             mock_dal = MagicMock()
             mock_dal.get_cv.return_value = _user_cv(user_id=OTHER_USER_ID)
-            mock_dal.get_vpr.return_value = self._mock_vpr_result()
+            self._seed_canonical_vpr(mock_dal)
             mock_dal.get_gap_responses.return_value = MagicMock(success=True, data=None)
             mock_get_dal.return_value = mock_dal
             mock_gen.return_value = _mock_llm_result()

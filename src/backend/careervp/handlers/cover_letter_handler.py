@@ -28,6 +28,7 @@ from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.artifact_dependency_resolver import (
+    ArtifactUnavailableError,
     DependencyResolution,
     vpr_access_denied_envelope,
 )
@@ -906,12 +907,27 @@ def _resolve_cover_letter_dependency_response(
     dal: DynamoDalHandler,
 ) -> tuple[DependencyResolution, dict[str, Any] | None]:
     application_id = api_request.application_id or api_request.job_id
-    dependency_resolution = resolve_handler_dependencies(
-        artifact_type='cover_letter',
-        application_id=application_id,
-        user_id=user_id,
-        dal=dal,
-    )
+    try:
+        dependency_resolution = resolve_handler_dependencies(
+            artifact_type='cover_letter',
+            application_id=application_id,
+            user_id=user_id,
+            dal=dal,
+        )
+    except ArtifactUnavailableError as exc:
+        # The upstream read failed; it is NOT known to be missing (F-DEVX-1).
+        logger.error('Upstream artifact unavailable', artifact_type=exc.artifact_type, failure_code=exc.code)
+        return (
+            DependencyResolution(
+                status='upstream_required',
+                requested_artifact='cover_letter',
+                http_status=int(HTTPStatus.SERVICE_UNAVAILABLE),
+            ),
+            _build_response(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {'error': 'Upstream artifact is temporarily unavailable', 'code': exc.code},
+            ),
+        )
     if dependency_resolution.status == 'ready':
         return dependency_resolution, None
     if dependency_resolution.status == 'dependency_generating':
