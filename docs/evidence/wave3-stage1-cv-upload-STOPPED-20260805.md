@@ -3,9 +3,129 @@
 - **Date:** 2026-08-05
 - **Branch:** `db-redesign` (Stage 0 committed at `2d55bc5`; Stage 1 step 1 in the working tree)
 - **Environment:** AWS 788159322332 / us-east-1 / **devx** only. `dev` and `staging` untouched.
-- **Status:** **STOPPED per the brief** — "STOP AND REPORT if (a), (c), (f) or (g) fails."
-  Gate (a) fails for an environmental reason. Steps 4–6 (the irreversible half) were
-  **not** started.
+- **Status:** Stopped at gate (a), reported, then **UNBLOCKED at explicit human
+  direction** — see §0. Gates (a), (c), (e), (f) now pass. Steps 4–6 (the
+  irreversible half) are still **not** started, and gates (b), (d), (g), (h), (i)
+  remain open.
+
+---
+
+## 0. RESOLUTION — the blocker was removed by human decision (added after §1)
+
+§1 below is the record of the block as originally found and reported. The human
+was asked to choose between three remedies and selected
+**"override + 64 KB, devx only"**. Nothing in §1 has been edited; this section
+records what changed.
+
+### Proof of the rule, before changing anything
+
+The WAF construct already configures logging to `aws-waf-logs-careervp-core-waf-devx`,
+so the identification was upgraded from inference-by-elimination to a named fact:
+
+```json
+{"action":"BLOCK","terminatingRuleId":"Product-AWSManagedRulesCommonRuleSet",
+ "terminatingRule":{"ruleId":"SizeRestrictions_BODY","action":"BLOCK"},
+ "httpRequest":{"uri":"/prod/users/me/cv"}}
+```
+
+### The change ([`waf_construct.py`](../../infra/careervp/waf_construct.py))
+
+Two properties, deliberately paired:
+
+1. `RuleActionOverrides`: `SizeRestrictions_BODY` → **Count**, so body size no
+   longer terminates evaluation.
+2. `AssociationConfig.RequestBody.API_GATEWAY.DefaultSizeInspectionLimit` →
+   **`KB_64`**, so the content rules (`CrossSiteScripting_BODY`,
+   `GenericRFI_BODY`, `GenericLFI_BODY`, `EC2MetaDataSSRF_BODY`) inspect a
+   realistic upload instead of its first 8 KB.
+
+(1) without (2) would let large bodies through *under-inspected*, which is a
+posture regression. With both, inspection coverage is **wider than before this
+change** — today anything over 8 KB was refused rather than examined.
+
+### dev and staging are provably untouched
+
+`WafToApiGatewayConstruct` is instantiated **once** (`api_construct.py:348`) and
+shared by every environment, so the change is gated on
+`naming.environment in _LARGE_BODY_ENVIRONMENTS` (`{"devx"}`). Synthesised
+CloudFormation for all three:
+
+```
+devx     AssociationConfig={"RequestBody":{"API_GATEWAY":{"DefaultSizeInspectionLimit":"KB_64"}}}
+         RuleActionOverrides=[{"ActionToUse":{"Count":{}},"Name":"SizeRestrictions_BODY"}]
+dev      AssociationConfig=null   RuleActionOverrides=null
+staging  AssociationConfig=null   RuleActionOverrides=null
+```
+
+Confirmed live after deploy #3 (`UPDATE_COMPLETE`, 861.91s): devx carries both
+properties; `careervp-core-waf-dev` still reports `null` / `null`.
+
+### Gate (a) — **PASS**
+
+```
+POST /users/me/cv   body 53,602 bytes (the 40,108-byte docx, base64)
+<<<HTTP 201 in 17.202057s>>>
+cv_id : b5258a0c-b31c-4776-bf8c-944182f394b7
+status: parsed
+```
+
+The object is in S3 at its real size — **the first genuine binary CV this system
+has ever accepted**:
+
+```
+8418e4a8-…/c8f7a50c-e217-4192-8328-33b35db6b9fc.docx   40108 bytes
+```
+
+### Gate (c) — **PASS**, no F-DEVX-6
+
+3 work-experience entries parsed from the real docx, **zero empty companies**:
+
+```
+company='AllCloud'                    role='Director of AWS Training'   duration='May 2021 – July 2025'      achievements=7
+company='AllCloud'                    role='AI & Data-Driven Strategy'  duration='July 2024 – July 2025'     achievements=3
+company='Israel Ministry of Finance'  role='AWS Solutions Architect'    duration='2009 – Present (16 years)' achievements=3
+```
+
+### Gate (e) — **PASS**
+
+```json
+{"status":"201","httpMethod":"POST","path":"/prod/users/me/cv",
+ "responseLatency":"16884","requestId":"489ad3a2-52d0-46e3-ad86-dc06f9a4748a",
+ "authorizerError":"-","integrationStatus":"201"}
+```
+
+### Gate (f) — **PASS** (re-run with the real CV)
+
+```
+GET /users/me/cv -> HTTP 200,  2 CVs
+  cvId=6077ad2e-…  full_name='Jane Doe'
+  cvId=b5258a0c-…  full_name='YITZCHAK MEIROVICH'
+```
+
+### NEW FINDING — cv-parser runs near the 29 s ceiling on real files
+
+`responseLatency: 16884 ms` for the 40 KB docx, against API Gateway's **29 s**
+hard ceiling and cv-parser's 60 s Lambda timeout — about **12 s of headroom**.
+
+This corroborates P2.4 (measured p99 17,397 ms) but is materially more urgent
+now: until today the WAF ceiling meant no file over ~6 KB could reach the
+parser, so that latency had only ever been produced by tiny text payloads. Real
+CVs are the normal case now. A longer CV, a slower LLM response, or a cold start
+puts `POST /users/me/cv` over 29 s, and N17 applies — the client gets a 504 while
+the Lambda keeps running and **may still complete its DynamoDB write**.
+
+`/users/me/cv` is now the second-closest endpoint to the ceiling after gap
+analysis, and it is the first step of the journey. Flagged, not fixed.
+
+### Worker: 72/72 → **75/75**
+
+The real docx upload triggered the S3 notification, and the worker failed again
+with the same `KeyError: 'httpMethod'`. Lifetime metrics are now **75
+invocations / 75 errors**. Fresh live confirmation that the §4 DELETE decision
+is correct: it has still never succeeded, including on the first real CV.
+
+DLQ remains at **22** (retries for the new event were still in flight at time of
+writing; it will become 23). Still undrained, per 1.5.
 
 ---
 
