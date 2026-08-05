@@ -37,7 +37,7 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.company_research import ConfidentCompanyResearch, load_confident_company_research_artifact
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
 from careervp.models.api_models import VPRGenerateRequest
@@ -213,6 +213,7 @@ def _backfill_application_artifact(application_id: str, user_id: str, job_id: st
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
     """
     Handle POST /vpr/generate requests for async VPR generation.

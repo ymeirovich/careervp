@@ -26,7 +26,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 
 
 def _json_headers() -> dict[str, str]:
@@ -482,6 +482,7 @@ def _try_stop_chain_for_job(job: dict[str, Any], user_id: str) -> None:
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """
     Handle VPR status/list requests.

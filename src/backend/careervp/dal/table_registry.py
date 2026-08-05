@@ -92,6 +92,12 @@ def canonical_key_condition(application_id: str, artifact_id_prefix: str) -> Con
     return Key('applicationId').eq(application_id) & Key('artifactId').begins_with(artifact_id_prefix)
 
 
+# Raw-string twin of :func:`canonical_key_condition`, for the ``table.query``
+# call sites that pass a literal expression plus ExpressionAttributeValues
+# rather than a boto3 ConditionBase. Callers bind ``:uid`` and ``:prefix``.
+CANONICAL_PREFIX_KEY_CONDITION_EXPRESSION = 'applicationId = :uid AND begins_with(artifactId, :prefix)'
+
+
 def canonical_application_condition(application_id: str) -> ConditionBase:
     """Canonical application partition condition for opaque artifact lookup."""
     return Key('applicationId').eq(application_id)

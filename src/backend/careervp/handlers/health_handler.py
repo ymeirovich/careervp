@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import Any
 
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
+from careervp.handlers.utils.observability import log_response_status
 
 API_VERSION = '1.0.0'
 
@@ -27,6 +28,7 @@ def health_check() -> dict[str, Any]:
     }
 
 
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Handle GET /health requests without authentication."""
     _ = context

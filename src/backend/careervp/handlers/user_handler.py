@@ -27,7 +27,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.trial_service import TrialService
 from careervp.models.api_models import UpdateUserRequest
@@ -349,6 +349,7 @@ def reset_user_trial() -> Response[str]:
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for user management API routes."""
     set_request_origin(event)

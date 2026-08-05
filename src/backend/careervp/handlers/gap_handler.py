@@ -17,7 +17,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
@@ -78,6 +78,7 @@ def _get_responses_dal() -> DynamoDalHandler:
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     global _current_request_origin
     _headers = event.get('headers') or {}

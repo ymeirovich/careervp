@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from careervp.dal import table_registry
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.cancellation import CancelStatus, cancel_artifact
 from careervp.logic.company_research_store import read_cr_artifact, write_cr_processing
 from careervp.models.company import CompanyResearchRequest
@@ -37,6 +37,7 @@ _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Route company research requests based on HTTP method/path."""
     _ = context

@@ -28,7 +28,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.llm_cache import LLMResponseCache
 from careervp.logic.llm_client import (
     DEFAULT_MODEL,
@@ -89,6 +89,7 @@ def _get_dal() -> DynamoDalHandler:
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle POST /ai/assist requests."""
     _ = context

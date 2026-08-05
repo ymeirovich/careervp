@@ -21,7 +21,7 @@ from docx.document import Document as DocxDocument
 
 from careervp.dal import table_registry
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger
+from careervp.handlers.utils.observability import log_response_status, logger
 
 INTERVIEW_PREP_SORT_KEY_PREFIX = table_registry.INTERVIEW_PREP_SORT_KEY_PREFIX
 VALID_MODULE_TYPES = frozenset({'vpr', 'cover_letter', 'interview_prep', 'cv_tailored'})
@@ -32,6 +32,7 @@ class ArtifactNotFoundError(Exception):
     pass
 
 
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Route export requests."""
     _ = context

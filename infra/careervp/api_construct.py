@@ -462,10 +462,14 @@ class ApiConstruct(Construct):
                 logging_level=aws_apigateway.MethodLoggingLevel.OFF,
             )
         else:
+            # ONE_DAY expired every access-log event before anyone could read it:
+            # the 2026-08-04 audit could not split 401s from 409s and concluded
+            # access logging was off, when in fact it was on and already purged.
+            # A week is the shortest window that survives an overnight triage.
             access_log_group = logs.LogGroup(
                 self,
                 "ApiGatewayAccessLogGroup",
-                retention=logs.RetentionDays.ONE_DAY,
+                retention=logs.RetentionDays.ONE_WEEK,
                 removal_policy=RemovalPolicy.DESTROY,
                 encryption_key=self.logs_kms_key,
             )
@@ -489,7 +493,12 @@ class ApiConstruct(Construct):
                             "requestTime": "$context.requestTime",
                             "httpMethod": "$context.httpMethod",
                             "resourcePath": "$context.resourcePath",
+                            # resourcePath is the route template; path is what the
+                            # caller actually asked for. Telling a 401 from a 409
+                            # needs both, plus how long the integration took.
+                            "path": "$context.path",
                             "status": "$context.status",
+                            "responseLatency": "$context.responseLatency",
                             "protocol": "$context.protocol",
                             "responseLength": "$context.responseLength",
                             "integrationStatus": "$context.integration.status",

@@ -13,7 +13,7 @@ from typing import Any
 import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr
 from pydantic import ValidationError
 
 from careervp.dal import table_registry
@@ -22,7 +22,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.artifact_dependency_resolver import vpr_access_denied_envelope
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
@@ -70,6 +70,7 @@ def _normalize_interview_prep_artifact_id(interview_prep_id: str) -> str:
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle interview prep API requests and SQS worker events."""
     _ = context
@@ -403,7 +404,7 @@ def _update_artifact_status(  # noqa: C901
 
     artifact_id = _normalize_interview_prep_artifact_id(job_id)
     update_kwargs: dict[str, Any] = {
-        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'Key': table_registry.canonical_item_key(user_id, artifact_id),
         'UpdateExpression': update_expr,
         'ExpressionAttributeNames': attr_names,
         'ExpressionAttributeValues': attr_values,
@@ -598,7 +599,7 @@ def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
     response = table.query(
-        KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+        KeyConditionExpression=table_registry.canonical_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
         Limit=50,
     )
     items = response.get('Items', []) if isinstance(response, dict) else []
@@ -934,7 +935,7 @@ def _resolve_interview_prep_context(  # noqa: C901
             table = dal._get_db_handler(dal.table_name)
             company_prefix = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
             resp = table.query(
-                KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(company_prefix),
+                KeyConditionExpression=table_registry.canonical_key_condition(user_id, company_prefix),
                 FilterExpression=Attr('artifactId').contains(job_id),
                 Limit=1,
             )
@@ -1089,7 +1090,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     )
     for artifact_id in candidate_artifact_ids:
         try:
-            get_response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+            get_response = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         except Exception:
             get_response = {}
         item = get_response.get('Item') if isinstance(get_response, dict) else None
@@ -1108,7 +1109,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
 
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            KeyConditionExpression=table_registry.canonical_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
             FilterExpression=Attr('artifactId').contains(interview_prep_id),
             Limit=1,
         )
@@ -1253,7 +1254,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
     artifact_id = table_registry.interview_prep_artifact_id(interview_prep_id)
 
     try:
-        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        get_resp = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         item = (get_resp or {}).get('Item')
     except Exception as exc:
         logger.error('DynamoDB error during interview prep cancel', error=str(exc))
@@ -1262,7 +1263,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
     if not item:
         try:
             query_resp = table.query(
-                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                KeyConditionExpression=table_registry.CANONICAL_PREFIX_KEY_CONDITION_EXPRESSION,
                 ExpressionAttributeValues={
                     ':uid': user_id,
                     ':prefix': table_registry.interview_prep_artifact_id(interview_prep_id),
@@ -1283,7 +1284,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
     item_app_id = str(item.get('applicationId', user_id))
     item_artifact_id = str(item.get('artifactId', artifact_id))
     table.update_item(
-        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        Key=table_registry.canonical_item_key(item_app_id, item_artifact_id),
         UpdateExpression='SET #s = :status',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={':status': 'CANCELLED'},

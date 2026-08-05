@@ -26,7 +26,7 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.artifact_dependency_resolver import (
     ArtifactUnavailableError,
     DependencyResolution,
@@ -412,6 +412,7 @@ def _resolve_cover_letter_context(
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle cover letter API requests and SQS worker events."""
     _ = context
@@ -1439,7 +1440,7 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     artifact_id = table_registry.cover_letter_artifact_id(cover_letter_id)
 
     try:
-        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        get_resp = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         item = (get_resp or {}).get('Item')
     except Exception as exc:
         logger.error('DynamoDB error during cover letter cancel', error=str(exc))
@@ -1448,7 +1449,7 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     if not item:
         try:
             query_resp = table.query(
-                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                KeyConditionExpression=table_registry.CANONICAL_PREFIX_KEY_CONDITION_EXPRESSION,
                 ExpressionAttributeValues={
                     ':uid': user_id,
                     ':prefix': table_registry.cover_letter_artifact_id(cover_letter_id),
@@ -1469,7 +1470,7 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     item_app_id = str(item.get('applicationId', user_id))
     item_artifact_id = str(item.get('artifactId', artifact_id))
     table.update_item(
-        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        Key=table_registry.canonical_item_key(item_app_id, item_artifact_id),
         UpdateExpression='SET #s = :status',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={':status': 'CANCELLED'},

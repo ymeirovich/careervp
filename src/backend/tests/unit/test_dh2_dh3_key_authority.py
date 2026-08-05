@@ -188,10 +188,15 @@ _ENV_PRECEDENCE_BASELINE = {
     ),
 }
 
+# N8: the canonical key names were unguarded, so `applicationId = user_id` built
+# in a raw dict slipped past the ratchet while `pk`/`sk` did not. The partition
+# key changes from user_id to applicationId in a later wave; every site that
+# spells the canonical key inline is a site the key authority cannot repoint.
 _ARTIFACT_KEY_BUILD_PATTERN = re.compile(
     r"""(?x)
-    (?:['"](?:pk|sk)['"]\s*:)
-    |(?:Key\(\s*['"](?:pk|sk)['"]\s*\))
+    (?:['"](?:pk|sk|applicationId|artifactId)['"]\s*:)
+    |(?:Key\(\s*['"](?:pk|sk|applicationId|artifactId)['"]\s*\))
+    |(?:(?:applicationId|artifactId)\s*=\s*:)
     |(?:(?:=|:|return)\s*f?['"](?:ARTIFACT|COMPANY_RESEARCH)\#)
     """
 )

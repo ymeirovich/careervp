@@ -19,7 +19,7 @@ from typing import Any
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, tracer
 
 # Field-length caps: a telemetry sink must never let an oversized stack trace
 # flood the log group or balloon a single log line.
@@ -47,6 +47,7 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any]:
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Accept a client error report and log it; always ack so the client never retries."""
     _ = context

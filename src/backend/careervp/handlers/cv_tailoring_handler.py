@@ -23,6 +23,7 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
+from careervp.handlers.utils.observability import log_response_status
 from careervp.logic.artifact_dependency_resolver import ArtifactUnavailableError
 from careervp.logic.cv_tailoring import tailor_cv
 from careervp.logic.cv_tailoring_ats import compute_ats_result
@@ -61,6 +62,7 @@ except Exception:  # pragma: no cover - fallback for tests
     logger = logging.getLogger(__name__)
 
 
+@log_response_status
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: C901
     """Handle CV tailoring request."""
     if _is_sfn_invoke(event):

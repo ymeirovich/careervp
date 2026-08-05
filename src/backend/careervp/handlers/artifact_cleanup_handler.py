@@ -26,6 +26,7 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError
 
+from careervp.handlers.utils.env_guard import require_table_env
 from careervp.handlers.utils.observability import logger
 
 _DRY_RUN = os.environ.get('CLEANUP_DRY_RUN', 'false').lower() == 'true'
@@ -127,13 +128,16 @@ def _make_cleanup_deps() -> Any:
     from careervp.dal.dynamo_dal_handler import DynamoDalHandler
     from careervp.dal.jobs_repository import JobsRepository
 
-    apps_table = os.environ.get('APPLICATIONS_TABLE_NAME', '')
-    jobs_table = os.environ.get('DYNAMODB_TABLE_NAME', '')
+    # Both are required. Previously a blank value produced a None repository and
+    # the reaper reported success while cleaning nothing, so a missing variable
+    # looked exactly like an empty sweep.
+    apps_table = require_table_env('APPLICATIONS_TABLE_NAME', purpose='applications')
+    jobs_table = require_table_env('DYNAMODB_TABLE_NAME', purpose='jobs')
 
     return SimpleNamespace(
         s3=boto3.client('s3'),
-        jobs_repo=JobsRepository(jobs_table) if jobs_table else None,
-        app_repo=ApplicationRepository(DynamoDalHandler(apps_table)) if apps_table else None,
+        jobs_repo=JobsRepository(jobs_table),
+        app_repo=ApplicationRepository(DynamoDalHandler(apps_table)),
     )
 
 
@@ -148,12 +152,10 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     logger.info('Artifact cleanup reaper starting', dry_run=dry_run)
 
     cleaned = 0
+    # Deliberately outside the try: a MissingTableEnvError must reach Lambda and
+    # register on the Errors metric, not be folded into a returned status shape.
+    deps = _make_cleanup_deps()
     try:
-        deps = _make_cleanup_deps()
-        if deps.jobs_repo is None:
-            logger.warning('No jobs table configured — reaper skipping')
-            return {'status': 'ok', 'cleaned': 0, 'dry_run': dry_run}
-
         cancelled_jobs = _scan_cancelled_with_result(deps)
         for job in cancelled_jobs:
             job_id = str(job.get('job_id', ''))
