@@ -16,6 +16,7 @@ from typing import Any
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.vpr_generator import generate_vpr
@@ -52,7 +53,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     logger.append_keys(user_id=request.user_id, application_id=request.application_id)
     dal = DynamoDalHandler(table_name)
 
-    user_cv = dal.get_cv(request.user_id)
+    user_cv = DynamoDalHandler(table_registry.resolve_cv_table_name()).get_cv(request.user_id)
     if user_cv is None:
         logger.info('User CV not found', user_id=request.user_id)
         return _build_error_response('CV not found. Upload a CV before generating a VPR.', HTTPStatus.NOT_FOUND)

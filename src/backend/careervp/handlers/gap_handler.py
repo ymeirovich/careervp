@@ -12,6 +12,7 @@ from uuid import uuid4
 import boto3
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
@@ -561,14 +562,12 @@ def _build_user_cv_prompt_payload(user_id: str, cv_id: str, focus_areas: list[st
     flagged with _CV_ERROR_SENTINEL so the call site can detect it and return HTTP 404.
     The stub CV is NEVER used as a fallback.
     """
-    cv_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
-    users_table_name = os.environ.get('USERS_TABLE_NAME', '').strip()
-
-    # Mirror the sibling pattern in cover_letter_handler._load_user_cv:
-    # prefer CVS_TABLE_NAME, fall back to USERS_TABLE_NAME.
-    table_name = cv_table_name or users_table_name
-    if not table_name:
-        logger.warning('No CV table configured (CVS_TABLE_NAME / USERS_TABLE_NAME)', user_id=user_id, cv_id=cv_id)
+    # The CV table is the one home of parsed CVs; the USERS_TABLE_NAME fallback
+    # that used to sit here could resolve a CV read against the legacy home.
+    try:
+        table_name = table_registry.resolve_cv_table_name()
+    except RuntimeError:
+        logger.warning('No CV table configured (CVS_TABLE_NAME)', user_id=user_id, cv_id=cv_id)
         return _cv_not_found_error_envelope()
 
     try:

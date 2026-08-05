@@ -25,6 +25,7 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 
+from careervp.dal import table_registry
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
@@ -407,9 +408,10 @@ def _execute_job(  # noqa: C901
         _send_task_failure(task_token, cause=error_msg)
         return
 
-    # Fetch CV from DynamoDB
-    cv_table = os.environ.get('DYNAMODB_TABLE_NAME', 'careervp-users-dev')
-    cv_dal = DynamoDalHandler(cv_table)
+    # Fetch CV from the CV table. This used to read DYNAMODB_TABLE_NAME, which
+    # on this worker is the users table, with a hardcoded `careervp-users-dev`
+    # default that would have pointed a devx worker at a dev table.
+    cv_dal = DynamoDalHandler(table_registry.resolve_cv_table_name())
     user_cv = cv_dal.get_cv(user_id)
 
     if not user_cv:

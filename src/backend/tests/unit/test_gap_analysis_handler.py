@@ -32,6 +32,9 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('USERS_TABLE_NAME', 'test-gap-table')
+    # Gap resolves CVs through CVS_TABLE_NAME only; this fixture's table holds
+    # the seeded CV, so it is the CV table for this test.
+    monkeypatch.setenv('CVS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     yield

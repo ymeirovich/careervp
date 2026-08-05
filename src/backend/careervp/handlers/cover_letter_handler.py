@@ -1049,17 +1049,15 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
 
 
 def _load_user_cv(dal: DynamoDalHandler, user_id: str) -> UserCV | None:
-    users_table_name = os.environ.get('USERS_TABLE_NAME', '').strip()
-    cv_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
-    dal_candidates: list[DynamoDalHandler] = []
-    if users_table_name:
-        dal_candidates.append(DynamoDalHandler(users_table_name))
-    if cv_table_name:
-        dal_candidates.append(DynamoDalHandler(cv_table_name))
-    if (not cv_table_name and not users_table_name) or (cv_table_name != dal.table_name and users_table_name != dal.table_name):
-        dal_candidates.append(dal)
+    # The CV table is the one home of parsed CVs. This previously tried
+    # USERS_TABLE_NAME first and only then the CV table, so it resolved against
+    # the legacy home even when the canonical one held the record.
+    #
+    # `dal` is retained only as a last resort while the users-table copy still
+    # exists; it goes away with the dual write.
+    cv_dal_candidates: list[DynamoDalHandler] = [DynamoDalHandler(table_registry.resolve_cv_table_name()), dal]
 
-    for cv_dal in dal_candidates:
+    for cv_dal in cv_dal_candidates:
         try:
             raw_cv = cv_dal.get_cv(user_id)
         except Exception as exc:

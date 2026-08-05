@@ -82,14 +82,17 @@ class AiAssistNestedStack(NestedStack):
             environment={
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-ai-assist",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                # CV, VPR, tailored CV and gap responses are persisted in the
-                # single-table users_table (pk/sk design). The dedicated
-                # cvs/gap_responses tables are unused by the write path, so
-                # AI-assist reads those cross-artifact contexts from users_table —
+                # VPR, tailored CV and gap responses are still persisted in the
+                # single-table users_table (pk/sk design), so ARTIFACTS_TABLE_NAME
+                # stays pointed there until those artifacts are re-homed —
                 # otherwise upstream lookups resolve against empty tables and
                 # return spurious 409 "missing upstream artifact".
                 "ARTIFACTS_TABLE_NAME": users_table.table_name,
-                "CVS_TABLE_NAME": users_table.table_name,
+                # CVs, however, now have exactly one home. The comment above used
+                # to cover this line too, and it was the reason ai-assist was the
+                # only Lambda in the account whose CVS_TABLE_NAME did not name the
+                # CVs table (audit N3, CV half).
+                "CVS_TABLE_NAME": cvs_table.table_name,
                 "APPLICATIONS_TABLE_NAME": applications_table.table_name,
                 # The application row is created lazily, so early in the flow the
                 # ownership check must fall back to the JOB record (matching
@@ -180,6 +183,18 @@ class AiAssistNestedStack(NestedStack):
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[applications_table.table_arn],
+            )
+        )
+        # CVs have a single home in cvs_table. Without this grant the
+        # CVS_TABLE_NAME repoint above would resolve to AccessDenied at runtime
+        # rather than to a CV.
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem", "dynamodb:Query"],
+                resources=[
+                    cvs_table.table_arn,
+                    f"{cvs_table.table_arn}/index/*",
+                ],
             )
         )
         # Ownership fallback: when the application row is absent, validate against

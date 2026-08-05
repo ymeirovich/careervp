@@ -379,7 +379,8 @@ def _handle_openapi_async_generate(  # noqa: C901
         vpr_id = resolved_vpr_ref.artifact_id
 
     # ── 1. Fetch master CV ────────────────────────────────────────────────────
-    master_cv = dal.get_cv(user_id=user_id)
+    # `dal` above is the artifacts table; CVs live in the CV table.
+    master_cv = DynamoDalHandler(table_registry.resolve_cv_table_name()).get_cv(user_id=user_id)
     if master_cv is None:
         return _response(
             HTTPStatus.NOT_FOUND,
@@ -823,7 +824,7 @@ def _fetch_and_tailor_cv(request: TailorCVRequest) -> Result[Any]:
             code=ResultCode.MISSING_REQUIRED_FIELD,
         )
 
-    master_cv = dal.get_cv(user_id=request.user_id)
+    master_cv = DynamoDalHandler(table_registry.resolve_cv_table_name()).get_cv(user_id=request.user_id)
     if not master_cv:
         return Result(
             success=False,

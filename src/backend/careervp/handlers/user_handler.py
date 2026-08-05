@@ -126,26 +126,26 @@ def _encode_cursor(last_evaluated_key: dict[str, Any] | None) -> str | None:
 
 
 def _list_user_cvs(user_id: str, limit: int, cursor: dict[str, Any] | None) -> tuple[list[dict[str, Any]], str | None]:
-    # Use the same table as cv_upload_handler (TABLE_NAME from env)
-    table_name = os.environ.get('TABLE_NAME')
-    if not table_name:
-        logger.warning('TABLE_NAME not configured for CV list')
-        return [], None
+    """List a user's CVs from the CV table.
 
+    The key condition has to move with the table. The two homes use different
+    grammars — users-table is ``pk``/``sk``, cvs-table is ``userId``/``cvId`` —
+    so a ``pk`` condition against the cvs table raises ValidationException. This
+    used to be caught below and turned into an empty list, which would have
+    reported "you have no CVs" with a 200 instead of failing.
+    """
+    table_name = table_registry.resolve_cv_table_name()
     table = boto3.resource('dynamodb').Table(table_name)
-    # Query using pk=user_id and sk begins_with 'CV#' (same schema as DynamoDalHandler.save_cv)
     query_args: dict[str, Any] = {
-        'KeyConditionExpression': table_registry.legacy_key_condition(user_id, table_registry.CV_SORT_KEY_PREFIX),
+        'KeyConditionExpression': table_registry.cv_key_condition(user_id),
         'Limit': limit,
     }
     if cursor:
         query_args['ExclusiveStartKey'] = cursor
 
-    try:
-        response = table.query(**query_args)
-    except Exception as exc:  # pragma: no cover - defensive fallback.
-        logger.exception('Failed to list user CVs', error=str(exc), user_id=user_id)
-        return [], None
+    # Deliberately unguarded: a query failure here is a real failure and must
+    # surface as a 5xx, not as an empty CV list.
+    response = table.query(**query_args)
 
     items = response.get('Items', [])
     cvs = [item for item in items if isinstance(item, dict)]
@@ -236,11 +236,7 @@ def get_user_cv(cv_id: str) -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    table_name = os.environ.get('TABLE_NAME')
-    if not table_name:
-        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'CV storage not configured'})
-
-    dal = DynamoDalHandler(table_name=table_name)
+    dal = DynamoDalHandler(table_name=table_registry.resolve_cv_table_name())
     cv = dal.get_cv_by_id(user_id, cv_id)
     if cv is None:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'CV not found'})
@@ -256,11 +252,7 @@ def delete_user_cv(cv_id: str) -> Response[str]:
     if not user_id:
         return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Authentication required'})
 
-    table_name = os.environ.get('TABLE_NAME')
-    if not table_name:
-        return _json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'CV storage not configured'})
-
-    dal = DynamoDalHandler(table_name=table_name)
+    dal = DynamoDalHandler(table_name=table_registry.resolve_cv_table_name())
     deleted, source_file_key = dal.delete_cv(user_id, cv_id)
 
     if not deleted:

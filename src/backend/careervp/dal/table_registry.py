@@ -179,6 +179,40 @@ def resolve_company_research_table_name() -> str:
     return value
 
 
+# --- CV table resolution (sole authority) ---
+#
+# Parsed CVs had two homes: the users table (legacy pk/sk) and the cvs table
+# (canonical userId/cvId), written by cv_upload_handler in that order, with the
+# second write's failure swallowed. That drift is visible live as 31 CV ids in
+# users-table against 28 in cvs-table.
+#
+# CVS_TABLE_NAME is the one env key that names the CV table, and it is already
+# set on 26 of 31 devx Lambdas, so this needs no new table alias (scope-lock
+# §4 forbids one). Deliberately NOT a precedence chain: a fallback to
+# USERS_TABLE_NAME/TABLE_NAME is what let readers silently keep resolving to
+# the old home. A caller with no CVS_TABLE_NAME is misconfigured and must say so.
+_CV_TABLE_ENV = 'CVS_TABLE_NAME'
+
+
+def resolve_cv_table_name(*, required: bool = True) -> str:
+    """The single home of parsed CV records."""
+    value = os.environ.get(_CV_TABLE_ENV)
+    resolved = value.strip() if isinstance(value, str) else ''
+    if required and not resolved:
+        raise RuntimeError(f'CV table environment variable {_CV_TABLE_ENV} is not configured')
+    return resolved
+
+
+def cv_key_condition(user_id: str) -> ConditionBase:
+    """Canonical CV partition condition for the cvs table (userId/cvId)."""
+    return Key('userId').eq(user_id)
+
+
+def canonical_cv_key(user_id: str, cv_id: str) -> dict[str, str]:
+    """Canonical userId/cvId item key for the cvs table."""
+    return {'userId': user_id, 'cvId': cv_id}
+
+
 class TableRegistry:
     """Resolves and hands out the artifacts/core table (scope-lock D-H2)."""
 

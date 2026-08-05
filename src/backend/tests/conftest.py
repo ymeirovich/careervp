@@ -69,6 +69,10 @@ os.environ['POWERTOOLS_SERVICE_NAME'] = 'careervp-test'
 os.environ['LOG_LEVEL'] = 'DEBUG'
 os.environ['POWERTOOLS_TRACE_DISABLED'] = 'true'
 os.environ['TABLE_NAME'] = 'test-users-table'
+# Parsed CVs have one home. resolve_cv_table_name() requires this rather than
+# falling back to TABLE_NAME, so it must be set for any handler that reads a CV.
+# Matches the name the moto_cvs_table fixture creates.
+os.environ['CVS_TABLE_NAME'] = 'test-cvs-table'
 os.environ['CV_BUCKET_NAME'] = 'test-cv-bucket'
 os.environ['IDEMPOTENCY_TABLE_NAME'] = 'test-idempotency-table'
 

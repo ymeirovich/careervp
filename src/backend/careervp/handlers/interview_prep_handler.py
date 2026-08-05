@@ -813,11 +813,9 @@ def _resolve_interview_prep_context(  # noqa: C901
         'job_id': getattr(api_request, 'job_id', None),
     }
 
-    # Resolve CV facts
-    cv_candidates = _build_context_dal_candidates(
-        env_table_name='CVS_TABLE_NAME',
-        fallback_dal=dal,
-    )
+    # Resolve CV facts from the one CV home. `dal` is retained only as a last
+    # resort while the users-table copy still exists.
+    cv_candidates = [DynamoDalHandler(table_registry.resolve_cv_table_name()), dal]
     for cv_dal in cv_candidates:
         cv_table_name = _coerce_text(getattr(cv_dal, 'table_name', ''))
         logger.info('Interview prep context CV lookup attempt', user_id=user_id, table_name=cv_table_name)
