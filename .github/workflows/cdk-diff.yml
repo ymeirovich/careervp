@@ -49,7 +49,7 @@ jobs:
         run: |
           test -s infra/cdk-diff.json || echo '{}' > infra/cdk-diff.json
       - name: Comment CDK diff
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           path: infra/cdk-diff.json
           header: cdk-diff
