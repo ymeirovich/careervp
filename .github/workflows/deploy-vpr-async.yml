@@ -137,7 +137,7 @@ jobs:
         run: npx cdk synth --all
 
       - name: Upload CloudFormation templates
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cdk-templates
           path: infra/cdk.out/
@@ -318,7 +318,7 @@ jobs:
           fi
 
       - name: Upload stack outputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stack-outputs
           path: infra/cdk-outputs.json
