@@ -163,7 +163,7 @@ jobs:
         run: make dev
 
       - name: Configure AWS credentials (dev)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: company-research-${{ github.run_id }}
