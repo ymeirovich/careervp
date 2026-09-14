@@ -398,8 +398,10 @@ def _handle_vpr_cancel(
         return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)
 
     if job is None:
-        # Check S3 fallback — if present the artifact completed, treat as terminal
-        s3_fallback = _try_build_response_from_s3(vpr_id)
+        # Check S3 fallback — if present and owned by this user, the artifact
+        # completed; treat as terminal. Ownership-scoped so this can't be used
+        # to probe whether some other user's job_id has a completed VPR.
+        s3_fallback = _try_build_response_from_s3(vpr_id, user_id)
         if s3_fallback is not None:
             return _build_error_response('Cannot cancel terminal task', HTTPStatus.CONFLICT)
         return _build_error_response('Job not found', HTTPStatus.NOT_FOUND)
@@ -542,9 +544,10 @@ def _handle_status_or_list(
     job_result = jobs_repo.get_job(vpr_id)
 
     if job_result is None:
-        # DynamoDB record may have expired (24-hour TTL on pending jobs).
-        # Fall back to S3 if the completed result is still present there.
-        s3_fallback = _try_build_response_from_s3(vpr_id)
+        # DynamoDB record may be gone (expired TTL, or a transient read
+        # error) — fall back to S3, scoped to this user, if the completed
+        # result is still present there.
+        s3_fallback = _try_build_response_from_s3(vpr_id, user_id)
         if s3_fallback is not None:
             logger.info('Served VPR status from S3 fallback (DynamoDB record expired)', job_id=vpr_id)
             return s3_fallback
@@ -589,12 +592,32 @@ def _emit_status_metrics(status: str) -> None:
         metrics.add_metric(name='VPRStatusFailed', unit='Count', value=1)
 
 
-def _try_build_response_from_s3(vpr_id: str) -> dict[str, Any] | None:
-    """Return a completed-status response if results/{vpr_id}.json exists in S3."""
+def _try_build_response_from_s3(vpr_id: str, user_id: str) -> dict[str, Any] | None:
+    """Return a completed-status response if results/{vpr_id}.json exists in S3
+    AND belongs to user_id.
+
+    S0b: this fallback exists for when the DynamoDB job record is gone — either
+    because a completed job's TTL expired (they run ~1 year, not the 24h this
+    used to assume), or a transient DynamoDB error made get_job() return None
+    (jobs_repository.py swallows ClientError to None). Either way, "the DB
+    lookup failed" is not "there is no owner to check" — the S3-stored VPR
+    itself always carries its owner (careervp/models/vpr.py VPR.user_id,
+    serialized as `userId`), so it's checked here before anything is served,
+    the same way S0a scopes the export handler's read of the same object.
+    """
     result_key = f'results/{vpr_id}.json'
     try:
-        s3.head_object(Bucket=_get_results_bucket(), Key=result_key)
+        s3_obj = s3.get_object(Bucket=_get_results_bucket(), Key=result_key)
+        stored_vpr = json.loads(s3_obj['Body'].read())
     except Exception:
+        return None
+
+    if not isinstance(stored_vpr, dict):
+        return None
+
+    owner = str(stored_vpr.get('userId') or stored_vpr.get('user_id') or '')
+    if not owner or owner != user_id:
+        logger.warning('Forbidden VPR S3-fallback access attempt', requested_by=user_id, owner=owner, job_id=vpr_id)
         return None
 
     result_url = _generate_presigned_url(result_key)
