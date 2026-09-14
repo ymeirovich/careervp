@@ -211,7 +211,15 @@ def _check_create_job_access(user_id: str) -> Response[str] | None:
             quota_service.check_access(user_id)
         except QuotaError as exc:
             return _json_response(HTTPStatus.FORBIDDEN, {'error': exc.error})
+        return None
 
+    # Fallback only: quota_service wraps this exact trial_service instance
+    # (see _get_quota_service) and already enforces trial limits — with the
+    # crucial difference that it skips them entirely for an active
+    # subscriber (QuotaService.check_access, test_active_subscription_does_
+    # not_check_trial). Running this unconditionally after quota_service had
+    # already allowed access meant any customer who subscribed after using
+    # up their trial credits was permanently blocked from creating a job.
     trial_service = _get_trial_service()
     if trial_service is not None:
         try:
