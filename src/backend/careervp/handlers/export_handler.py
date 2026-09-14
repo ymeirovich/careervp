@@ -112,7 +112,7 @@ def _handle_export(event: dict[str, Any]) -> dict[str, Any]:
 
 def _read_artifact(module_type: str, job_id: str, user_id: str) -> Any:
     if module_type == 'vpr':
-        return _read_vpr(job_id)
+        return _read_vpr(job_id, user_id)
     if module_type == 'cover_letter':
         return _read_cover_letter(job_id, user_id)
     if module_type == 'interview_prep':
@@ -120,17 +120,31 @@ def _read_artifact(module_type: str, job_id: str, user_id: str) -> Any:
     return _read_cv_tailored(job_id, user_id)
 
 
-def _read_vpr(job_id: str) -> dict[str, Any]:
+def _read_vpr(job_id: str, user_id: str) -> dict[str, Any]:
     s3 = boto3.client('s3')
     bucket = os.environ['VPR_RESULTS_BUCKET_NAME']
     key = f'results/{job_id}.json'
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
-        return dict(json.loads(response['Body'].read()))
+        data = dict(json.loads(response['Body'].read()))
     except botocore.exceptions.ClientError as exc:
         if exc.response['Error']['Code'] in ('NoSuchKey', '404'):
             raise ArtifactNotFoundError(f'VPR artifact not found: {job_id}') from exc
         raise
+
+    # S0a: unlike the cover_letter/interview_prep/cv_tailored branches below —
+    # which are all scoped to the caller's own user_id at the DAL layer — this
+    # read hits S3 by job_id alone, so any authenticated user who knew or
+    # guessed a job_id could export another user's VPR. The VPR model always
+    # carries its owner (careervp/models/vpr.py VPR.user_id, serialized as
+    # `userId` via the model's camelCase alias_generator). Mismatch is
+    # reported as not-found, not forbidden, so this endpoint doesn't confirm
+    # to an attacker that a given job_id exists at all.
+    owner = str(data.get('userId') or data.get('user_id') or '')
+    if not owner or owner != user_id:
+        raise ArtifactNotFoundError(f'VPR artifact not found: {job_id}')
+
+    return data
 
 
 def _read_cover_letter(job_id: str, user_id: str) -> dict[str, Any]:
