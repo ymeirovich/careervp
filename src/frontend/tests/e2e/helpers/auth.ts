@@ -38,8 +38,15 @@ const TEST_USERS: Record<string, TestUser> = {
 
 /**
  * Navigate to /login and authenticate.
- * Waits for redirect away from /login to confirm success.
- * Throws if credentials are not configured.
+ *
+ * The app's own /login page only collects an email address ("Continue
+ * securely"); it then redirects to the Cognito Hosted UI (PKCE authorization
+ * code flow — see lib/pkce.ts) where the password is actually entered, and
+ * finally redirects back to /callback, which exchanges the code for tokens
+ * and lands the user on /dashboard. This helper drives both hops.
+ *
+ * Waits for redirect back to the app (away from the Cognito hosted domain)
+ * to confirm success. Throws if credentials are not configured.
  */
 export async function loginAs(
   page: Page,
@@ -60,19 +67,35 @@ export async function loginAs(
   await page.goto("/login");
   await page.waitForLoadState("networkidle");
 
-  // Fill credentials — uses accessible label selectors, tolerant of label text variation
+  // Hop 1: the app's own page — email only, then redirect to the hosted UI.
   await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/password/i).fill(user.password);
-
-  // Submit — tolerates "Sign in", "Log in", "Login" button text
   await page
-    .getByRole("button", { name: /sign in|log in|login/i })
+    .getByRole("button", { name: /continue|sign in|log in|login/i })
     .click();
 
-  // Confirm redirect away from the login page
-  await page.waitForURL((url) => !url.pathname.includes("/login"), {
+  // Hop 2: Cognito Hosted UI — a separate origin, so wait for navigation
+  // there before looking for its fields. The hosted widget renders its
+  // email/password/submit inputs twice (a duplicated hidden copy alongside
+  // the real one, sharing the same id — a quirk of Cognito's managed login
+  // widget, not something this app controls), so every selector below is
+  // scoped with `:visible` to avoid the strict-mode/invisible-element traps
+  // that come from matching the hidden duplicate.
+  await page.waitForURL(/\/oauth2\/authorize|\/login\?/, { timeout: 20_000 });
+  await page.waitForLoadState("networkidle");
+
+  const hostedUsername = page.locator('input[name="username"]:visible').first();
+  if (await hostedUsername.isVisible().catch(() => false)) {
+    await hostedUsername.fill(user.email);
+  }
+  await page.locator('input[name="password"]:visible').fill(user.password);
+  await page.locator('input[type="submit"]:visible').click();
+
+  // Confirm redirect all the way back to the app (via /callback) — the
+  // hosted UI origin is left behind, not just the app's /login path.
+  await page.waitForURL((url) => !url.href.includes("amazoncognito.com"), {
     timeout: 20_000,
   });
+  await page.waitForLoadState("networkidle");
 }
 
 // ---------------------------------------------------------------------------
