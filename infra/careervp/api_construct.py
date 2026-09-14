@@ -2659,6 +2659,15 @@ class ApiConstruct(Construct):
         # FE-UI-043: orphan-cleanup reaper Lambda + hourly EventBridge schedule.
         self.artifact_cleanup_func = self._add_artifact_cleanup_lambda()
         self.api_db.applications_table.grant_read_write_data(self.artifact_cleanup_func)
+        # K9: the handler also reads/updates job records (get_job, scan_by_status,
+        # update_job_status via artifact_cleanup_handler.py's JobsRepository) —
+        # this table name and grant were both missing entirely, so every
+        # invocation failed at require_table_env('DYNAMODB_TABLE_NAME', ...)
+        # before ever reaching a permission check.
+        self.artifact_cleanup_func.add_environment(
+            "DYNAMODB_TABLE_NAME", self.api_db.jobs_table.table_name
+        )
+        self.api_db.jobs_table.grant_read_write_data(self.artifact_cleanup_func)
         self.artifact_cleanup_func.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["s3:DeleteObject"],
