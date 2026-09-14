@@ -23,6 +23,15 @@
  *    grows a step. Renumbering is fine; redefining J5 to mean something easier
  *    is not.
  *
+ * J4/J5 note: the original draft of this file numbered them VPR-generates (J4)
+ * then gap-analysis-submit (J5). That order cannot happen for a real customer —
+ * the backend's artifact dependency graph (artifact_dependency_resolver.py)
+ * requires vpr's upstream `company_research`, which itself requires
+ * `gap_analysis`; requesting VPR first returns 409 upstream_required every
+ * time. Swapped so J4/J5 match the order a customer actually goes through,
+ * per rule 3 ("renumbering is fine") — each step's own assertions are
+ * unchanged, only which label attaches to which step.
+ *
  * First run
  * ---------
  * Expect this to fail early, and expect some failures to be *selector* problems
@@ -57,8 +66,8 @@ const STEP_NAMES: Record<StepId, string> = {
   J1: "sign in",
   J2: "upload base CV",
   J3: "create application",
-  J4: "VPR generates",
-  J5: "gap analysis submit",
+  J4: "gap analysis submit",
+  J5: "VPR generates",
   J6: "tailored CV",
   J7: "cover letter",
   J8: "interview prep",
@@ -203,6 +212,48 @@ async function waitForArtifact(page: Page, bodyPattern: RegExp): Promise<void> {
   await expect(page.getByText(bodyPattern).first()).toBeVisible({ timeout: GENERATION_TIMEOUT_MS });
 }
 
+/**
+ * Generate a module from the Application Hub and land on its artifact page.
+ *
+ * The hub (app/applications/[id]/page.tsx) renders one ModuleCard per module,
+ * each carrying `data-testid="module-card-{moduleId}"` and a primary CTA
+ * `data-testid="primary-cta"` whose label is state-driven: "Generate" (or
+ * "Retry") while nothing exists, empty during generation, "View" once ready
+ * (ModuleCard.tsx getPrimaryLabel). Matching by visible button text alone is
+ * ambiguous — every generatable module's card says "Generate" — and the
+ * cards' own headings (e.g. "Value Proposition Report") already contain
+ * words like "value proposition", so asserting on hub body text would pass
+ * even if generation never ran. Driving the specific card's CTA and then
+ * following it to the real artifact page is what actually proves generation
+ * happened.
+ */
+async function generateFromHub(
+  page: Page,
+  moduleId: string,
+  hubUrl: string,
+  artifactBodyPattern: RegExp,
+): Promise<void> {
+  await page.goto(hubUrl);
+  const card = page.getByTestId(`module-card-${moduleId}`);
+  await expect(card).toBeVisible({ timeout: PAGE_TIMEOUT_MS });
+
+  const cta = card.getByTestId("primary-cta");
+  const label = (await cta.textContent().catch(() => ""))?.trim().toLowerCase();
+  if (label === "generate" || label === "retry") {
+    await cta.click();
+  }
+
+  // Poll instead of a single assertion: the CTA disappears entirely while
+  // processing (getPrimaryLabel returns null), so it must be re-queried.
+  await expect(card.getByTestId("primary-cta")).toHaveText(/view/i, {
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  await card.getByTestId("primary-cta").click();
+
+  await waitForArtifact(page, artifactBodyPattern);
+  await expect(page.getByText(/failed|error/i)).toHaveCount(0);
+}
+
 // ---------------------------------------------------------------------------
 // The journey
 // ---------------------------------------------------------------------------
@@ -246,85 +297,120 @@ test.describe("THE JOURNEY", () => {
   });
 
   test("J3 create application", async ({ page }) => {
+    // Submission chains straight into gap-question generation (an LLM call)
+    // before redirecting — the same generation budget J4-J9 get, not the
+    // default page timeout.
+    test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
     await page.goto("/applications/new");
 
     await page.getByLabel(/job title|position/i).fill("Senior Backend Engineer");
     await page.getByLabel(/company/i).fill("Example Corp");
     await page.getByLabel(/job description|description/i).fill(JOB_DESCRIPTION);
+    // The form's submit button stays disabled until a job URL is present too,
+    // and the backend probes the URL for real reachability (domain_validator.py)
+    // before accepting it — a synthetic path 404s, so this must be a live page.
+    await page.getByLabel(/job url|url/i).fill("https://example.com/");
+
+    // Selecting a base CV here is what makes gap-analysis questions exist at
+    // all: handleSubmit (applications/new/page.tsx) only calls
+    // generateGapQuestions when a cvId is available, falling back silently
+    // to a bare application otherwise — the gap-analysis page itself never
+    // generates questions, it only reads ones that already exist.
+    await page.getByRole("button", { name: /change/i }).click();
+    await page.getByTestId("choose-base-cv-row-uploaded").first().getByRole("button", { name: /select/i }).click();
 
     await page.getByRole("button", { name: /create|submit|save/i }).first().click();
 
     // Landing on an application URL is the proof; a form that clears itself is not.
-    await page.waitForURL(/\/applications\/[^/]+$/, { timeout: GENERATION_TIMEOUT_MS });
-    applicationUrl = page.url();
-    expect(applicationUrl).toMatch(/\/applications\/[^/]+$/);
+    // With a base CV attached, handleSubmit redirects straight to
+    // /applications/{id}/gap-analysis instead of the bare hub (it skips
+    // straight to the next thing the customer needs to do) — accept either.
+    // `new` is excluded from the id segment: otherwise this pattern also
+    // matches the starting /applications/new page itself, and waitForURL
+    // resolves immediately without waiting for any real navigation — a false
+    // pass that never submits anything.
+    await page.waitForURL(/\/applications\/(?!new\/?$)[^/]+(\/gap-analysis)?\/?$/, {
+      timeout: GENERATION_TIMEOUT_MS,
+    });
+    applicationUrl = page.url().replace(/\/gap-analysis\/?$/, "").replace(/\/$/, "");
+    expect(applicationUrl).toMatch(/\/applications\/(?!new$)[^/]+$/);
   });
 
-  test("J4 VPR generates", async ({ page }) => {
-    test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
-    await page.goto(applicationUrl);
-
-    const trigger = page.getByRole("button", { name: /generate.*vpr|value proposition|start analysis/i }).first();
-    if (await trigger.isVisible().catch(() => false)) await trigger.click();
-
-    // Assert on content, not on a spinner disappearing: a failed generation
-    // also stops spinning.
-    await waitForArtifact(page, /value proposition|vpr|match score|fit/i);
-    await expect(page.getByText(/failed|error/i)).toHaveCount(0);
-  });
-
-  test("J5 gap analysis submit", async ({ page }) => {
-    test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
+  test("J4 gap analysis submit", async ({ page }) => {
+    // Generous beyond GENERATION_TIMEOUT_MS: question generation runs
+    // synchronously inside the create-application request and routinely
+    // outlasts the API Gateway integration timeout (a 504 while the Lambda
+    // keeps running and persists its result afterward, confirmed by network
+    // trace — the same job's questions are there minutes later). Once that
+    // happens this page has no way to recover: `fetchQuestions` runs once on
+    // mount, the empty-state branch it lands in has no retry affordance (only
+    // the separate network-error branch gets a Retry button), so the only
+    // real option is reloading until the background generation lands.
+    const GAP_QUESTIONS_TIMEOUT_MS = 2 * GENERATION_TIMEOUT_MS;
+    test.setTimeout(GAP_QUESTIONS_TIMEOUT_MS + 60_000);
     await page.goto(`${applicationUrl}/gap-analysis`);
 
-    const questions = page.getByRole("textbox");
-    await expect(questions.first()).toBeVisible({ timeout: GENERATION_TIMEOUT_MS });
+    const questionCards = page.getByTestId("questions-list").locator("> div");
+    const retryButton = page.getByTestId("retry-button");
+    await expect(async () => {
+      if (await retryButton.isVisible().catch(() => false)) {
+        await retryButton.click();
+      } else {
+        await page.reload();
+      }
+      await expect(questionCards.first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: GAP_QUESTIONS_TIMEOUT_MS, intervals: [10_000] });
 
-    const count = await questions.count();
+    const count = await questionCards.count();
     expect(count).toBeGreaterThan(0);
+
+    // One question can be open for editing at a time (GapQuestionCard's own
+    // guard) — the rich-text answer field is a contenteditable ProseMirror
+    // node, not a plain <textarea>. Answer → fill → Save, one card at a time.
     for (let i = 0; i < count; i += 1) {
-      await questions.nth(i).fill("I led a three-person team migrating a monolith to Lambda over eight months.");
+      await questionCards.nth(i).getByRole("button", { name: /^answer$/i }).click();
+      await questionCards.nth(i).locator('[contenteditable="true"]').fill(
+        "I led a three-person team migrating a monolith to Lambda over eight months.",
+      );
+      await questionCards.nth(i).getByRole("button", { name: /^save$/i }).click();
+      await expect(questionCards.nth(i).getByRole("button", { name: /^save$/i })).toHaveCount(0);
     }
 
-    await page.getByRole("button", { name: /submit|save|continue|finish/i }).first().click();
+    await page.getByTestId("submit-all-btn").click();
 
-    // Persistence is the claim, so reload before believing it.
-    await page.waitForLoadState("networkidle");
+    // Submitting redirects to the hub — persistence is the claim, so reload
+    // there before believing the module actually recorded completion.
+    await page.waitForURL((url) => !url.pathname.includes("/gap-analysis"), {
+      timeout: GENERATION_TIMEOUT_MS,
+    });
     await page.reload();
-    await expect(page.getByText(/submitted|complete|thank you|answers saved/i).first()).toBeVisible({ timeout: GENERATION_TIMEOUT_MS });
+    await expect(page.getByText(/complete gap analysis to unlock/i)).toHaveCount(0);
+  });
+
+  test("J5 VPR generates", async ({ page }) => {
+    test.setTimeout(2 * GENERATION_TIMEOUT_MS + 60_000);
+    // VPR's backend dependency is company_research, not gap_analysis directly
+    // (artifact_dependency_resolver.py DEPENDENCIES) — company research is not
+    // one of the customer-facing steps this journey counts, but it is a real,
+    // mandatory precondition the hub exposes as its own card, so it has to be
+    // driven here or every VPR request 409s upstream_required.
+    await generateFromHub(page, "companyResearch", applicationUrl, /research|overview|about|industry|culture/i);
+    await generateFromHub(page, "vpr", applicationUrl, /value proposition|vpr|match score|fit/i);
   });
 
   test("J6 tailored CV", async ({ page }) => {
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
-    await page.goto(`${applicationUrl}/cv-tailored`);
-
-    const trigger = page.getByRole("button", { name: /generate|tailor|create/i }).first();
-    if (await trigger.isVisible().catch(() => false)) await trigger.click();
-
-    await waitForArtifact(page, /experience|summary|skills/i);
-    await expect(page.getByText(/failed|error/i)).toHaveCount(0);
+    await generateFromHub(page, "tailoredCV", applicationUrl, /experience|summary|skills/i);
   });
 
   test("J7 cover letter", async ({ page }) => {
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
-    await page.goto(`${applicationUrl}/cover-letter`);
-
-    const trigger = page.getByRole("button", { name: /generate|create|write/i }).first();
-    if (await trigger.isVisible().catch(() => false)) await trigger.click();
-
-    await waitForArtifact(page, /dear|sincerely|regards|hiring/i);
-    await expect(page.getByText(/failed|error/i)).toHaveCount(0);
+    await generateFromHub(page, "coverLetter", applicationUrl, /dear|sincerely|regards|hiring/i);
   });
 
   test("J8 interview prep", async ({ page }) => {
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
-    await page.goto(`${applicationUrl}/interview-prep`);
-
-    const trigger = page.getByRole("button", { name: /generate|create|prepare/i }).first();
-    if (await trigger.isVisible().catch(() => false)) await trigger.click();
-
-    await waitForArtifact(page, /question|answer|tell me about|why/i);
-    await expect(page.getByText(/failed|error/i)).toHaveCount(0);
+    await generateFromHub(page, "interviewPrep", applicationUrl, /question|answer|tell me about|why/i);
   });
 
   test("J9 export", async ({ page }) => {
