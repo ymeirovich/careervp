@@ -1,0 +1,211 @@
+# Findings manifest for the Astra second-order review.
+# CONTAINS NO VERDICTS. This file is the Pass-A input.
+#
+# Every claim below is quoted or condensed from the ORIGINAL unvalidated
+# inventory (docs/handoff/2026-09-12-RECON-FINDINGS.md), not from the P1
+# session's restatement of it. Cited locations are AS CLAIMED BY THAT INVENTORY
+# and are themselves unverified — several are expected to be wrong.
+#
+# Pass A must adjudicate every id in this file. Pass A must reconcile its
+# processed ids against this manifest and explicitly account for any omission.
+
+manifest_version: 1
+repo_commit: cea0799
+branch: tools/proof-harness
+total_ids: 20
+source_inventory: docs/handoff/2026-09-12-RECON-FINDINGS.md
+
+defect_claims:
+  - id: S0a
+    severity_claimed: SEV-0
+    claim_verbatim: >-
+      GET /jobs/{jobId}/artifacts/vpr/export has no ownership check at all.
+      user_id is authenticated and then dropped for the vpr branch; _read_vpr
+      reads results/{job_id}.json from S3 with no scoping, while the other three
+      branches are correctly scoped. Any authenticated user can export any other
+      user's VPR to DOCX and receive a presigned S3 URL for it.
+    cited_locations: [export_handler.py:124-133, export_handler.py:61, api_construct.py:3165, api_construct.py:3508]
+
+  - id: S0b
+    severity_claimed: SEV-0
+    claim_verbatim: >-
+      VPR status S3 fallback sits above the ownership check. The
+      _try_build_response_from_s3(vpr_id) branch takes no user_id and returns the
+      full enriched VPR plus a presigned download URL; the owner comparison is
+      below it. Trigger: the jobs-table row TTLs out at 24h while the S3 object
+      persists indefinitely, so for any VPR older than 24 hours any authenticated
+      caller with the vprId gets the owner's content.
+    cited_locations: [vpr_status_handler.py:543-551, vpr_status_handler.py:554-558, jobs_repository.py:475]
+
+  - id: S11d
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      CV upload 500s whenever the parser extracts a GPA. save_cv dumps with
+      mode='json' which leaves Python float as float, then put_item; models/cv.py
+      declares gpa: float | None. boto3 raises TypeError, which is not in the
+      (ClientError, ValidationError) catch, so it escapes save_cv entirely. Since
+      commit 7cdc5e5 made that write fatal the whole upload now 500s. Same
+      omission in save_vpr (cost_usd: float).
+    cited_locations: [dynamo_dal_handler.py:99-105, models/cv.py:92, dynamo_dal_handler.py:889, dynamo_dal_handler.py:304-311]
+
+  - id: S25
+    severity_claimed: SEV-2
+    claim_verbatim: >-
+      The gap-analysis state machine has never advanced. gap_handler calls
+      update_state(..., user_id='') where user_id is the partition key. Empty
+      string never matches, so ConditionalCheckFailedException every time, and it
+      is swallowed by except Exception: pass. Applications stall at cv_selected
+      forever.
+    cited_locations: [gap_handler.py:874-883, application_repository.py:83-91, gap_handler.py:260-279]
+
+  - id: S1
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      True IDOR: cross-tenant VPR read. cv_tailoring_handler calls
+      dal.get_vpr(application_id=vpr_id) where vpr_id is request-body supplied,
+      and the DAL takes no user_id and performs no ownership check. The fetched
+      VPR feeds the tailoring pipeline and its job_posting fields are copied into
+      the response artifact. cover_letter_handler does this correctly.
+    cited_locations: [cv_tailoring_handler.py:418-422, dynamo_dal_handler.py:318-340, cv_tailoring_handler.py:476, cv_tailoring_handler.py:432-440, cover_letter_handler.py:356-358]
+
+  - id: S2
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      Unauthenticated identity via the SFN-invoke branch. _is_sfn_invoke is
+      evaluated first in handler, before any auth, and takes user_id verbatim
+      from the event body. Guard is `not event.get('httpMethod')`, which is also
+      true for API Gateway HTTP API v2 payloads (those use
+      requestContext.http.method).
+    cited_locations: [cv_tailoring_handler.py:301-318, cv_tailoring_handler.py:68]
+
+  - id: S6
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      Gap-analysis fabricates questions and returns HTTP 200. LLM parse failure →
+      except Exception → parsed_questions = [] → _ensure_question_count
+      manufactures 10 template questions → handler returns 200 +
+      GAP_QUESTIONS_GENERATED and persists them. Total LLM failure is
+      indistinguishable from success.
+    cited_locations: [gap_analysis.py:299-305, gap_analysis.py:308]
+
+  - id: S7
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      VPR degrades to a placebo report, billed, with no error signal. Ten sites
+      fall back to canned boilerplate on ValidationError; one supplies 'Candidate
+      demonstrates relevant background for this role...' with
+      overall_fit_score=50. Separately the generator returns success=True,
+      code=SUCCESS for a VPR that failed the quality gate twice —
+      quality_warning=True is set but vpr_handler only checks result.success, so
+      it never surfaces.
+    cited_locations: [vpr_generator.py:469-517, vpr_generator.py:607, vpr_generator.py:262-274, vpr_handler.py:64]
+
+  - id: S8
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      Cover letters silently generated without gap answers. Write path goes to
+      the gap_responses table. Read path passes the DAL from _get_dal()
+      (ARTIFACTS_TABLE_NAME) into _resolve_gap_responses, which queries
+      Key('userId') & Key('questionId') against a table keyed
+      applicationId/artifactId. Always raises; swallowed to []. interview_prep
+      reads the correct table. The two disagree.
+    cited_locations: [gap_handler.py:74-76, cover_letter_handler.py:382, cover_letter_handler.py:63-66, cover_letter_handler.py:302-312, interview_prep_handler.py:881-883]
+
+  - id: S10
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      Cancel reports success with every write swallowed. stop_execution,
+      update_chain_execution_status, and the status write are each wrapped in
+      except Exception: pass; the caller returns {'status': 'cancelled'}.
+      Generation and billing continue while the user is told it stopped.
+    cited_locations: [vpr_status_handler.py:435-448, vpr_status_handler.py:420-424]
+
+  - id: S11
+    severity_claimed: SEV-1
+    claim_verbatim: >-
+      Phantom-write cancel (upsert + TOCTOU). update_item with no
+      ConditionExpression: (a) races the worker, (b) is an upsert — if the item
+      was found via the legacy schema this writes a brand-new {applicationId,
+      artifactId, status: CANCELLED} item while the real artifact keeps running,
+      and still returns 200.
+    cited_locations: [cover_letter_handler.py:1470-1476, cv_tailoring_handler.py:906-912]
+
+  - id: S23
+    severity_claimed: SEV-2
+    claim_verbatim: >-
+      O(n x m) tokenizer on the request path. _text_tokens (regex findall + set
+      build) runs len(job_requirements) x len(evidence_pool) times; evidence_pool
+      is never truncated and the generator accumulates every achievement from
+      every role with no cap.
+    cited_locations: [vpr_generator.py:977-989, vpr_generator.py:281-286]
+
+  - id: S26
+    severity_claimed: SEV-2
+    claim_verbatim: >-
+      Prompt injection, unbounded and undelimited. company_research interpolates
+      scraped third-party web text plus a raw user company_name (bare str, no
+      max_length) with no delimiters. Output is written to DynamoDB and later
+      consumed as trusted company_context. vpr_generator passes CV text, full job
+      posting, and free-text gap_responses with no max_length on JobPosting or
+      GapResponse.answer. gap_analysis and interview_prep concatenate system and
+      user prompt into one user-role message — there is no privileged channel at
+      all. cv_tailoring imports validate_job_description but applies it on the
+      legacy path only; the OpenAPI async path never calls it.
+    cited_locations: [company_research.py:479-480, models/company.py:25, prompts/company_research_prompt.py:14-19, vpr_generator.py:614-620, models/job.py:49-68, models/job.py:79, gap_analysis.py:281-286, interview_prep.py:93, cv_tailoring_handler.py:472-477, cv_tailoring_handler.py:37, cv_tailoring_handler.py:228]
+
+  - id: K9
+    severity_claimed: SEV-3
+    claim_verbatim: >-
+      artifact_cleanup_handler requires DYNAMODB_TABLE_NAME, which its infra env
+      never sets. Raises on every invocation.
+    cited_locations: [artifact_cleanup_handler.py:135, api_construct.py:2717-2722]
+
+good_claims:
+  # From the inventory's "Confirmed-good (do not fix)" list. A false NEGATIVE
+  # here — something declared safe that is not — is more dangerous than a false
+  # positive. Attack these.
+  - id: G1
+    claim_verbatim: >-
+      auth_utils takes identity from Cognito claims only, header fallback
+      removed, fails closed. F-DEVX-8 looks genuinely closed. No body/query
+      user_id reaches a write; cv_upload_handler strips it before the spread.
+    cited_locations: [auth_utils.py:16-49, cv_upload_handler.py:283, cv_upload_handler.py:301]
+
+  - id: G4
+    claim_verbatim: >-
+      _list_cover_letter_items / _list_tailored_cv_items delegate to DAL methods
+      that do paginate correctly.
+    cited_locations: [cover_letter_handler.py, cv_tailoring_handler.py]
+
+premise_claims:
+  # These are load-bearing framings for four downstream work sessions (P2-P5).
+  # Adjudicate the PREMISE, and state whether the dependent session's scope
+  # should grow, shrink, or stand.
+  - id: PREMISE-P2
+    claim_verbatim: >-
+      ~35 findings reduce to "no single table authority + two key schemes",
+      rooted at api_db_construct.py:114 (self.db = self.users_table). Is that
+      genuinely one root cause, or several unrelated ones bundled by a narrative?
+    cited_locations: [api_db_construct.py:114, table_registry.py:75-90, table_registry.py:114-135]
+
+  - id: PREMISE-P3
+    claim_verbatim: >-
+      `except Exception: pass` is the default error idiom rather than a handful
+      of cherry-picked instances. The claim is ~40 occurrences; count them and
+      characterize honestly.
+    cited_locations: [interview_prep_handler.py]
+
+  - id: PREMISE-P4
+    claim_verbatim: >-
+      The test suite contains self-closing tests that pass without the code they
+      claim to test. Spot-check: did any pre-existing test fail when commit
+      7cdc5e5 turned a swallowed write into a fatal 500? If tests did catch it,
+      the owner's distrust of the suite is overstated and P4's scope should
+      shrink.
+    cited_locations: [commit 7cdc5e5]
+
+  - id: PREMISE-P5
+    claim_verbatim: >-
+      The knowledge table is entirely dead (zero live readers, zero live
+      writers). One grep settles it.
+    cited_locations: [knowledge_base_handler.py, knowledge_repository.py, api_db_construct.py:434]

@@ -1,4 +1,4 @@
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy create-changeset execute-changeset destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy create-changeset execute-changeset destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup preflight journey state compare review
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -17,6 +17,16 @@ COVERAGE_ARGS := --cov-config=.coveragerc --cov=careervp --cov-report=xml --cov-
 OPENAPI_DIR := ./docs/swagger
 CURRENT_OPENAPI := $(OPENAPI_DIR)/openapi.json
 LATEST_OPENAPI := openapi_latest.json
+
+# ---------------------------------------------------------------------------
+# Proof harness
+# ---------------------------------------------------------------------------
+# GIT_STAMP is what gets baked into the stack's DeployedGitSha output, so the
+# running system can always say which commit it is. The `-dirty` suffix is not
+# cosmetic: a stack deployed from an unclean tree is running code that exists in
+# no repository, and preflight treats that as a failure.
+GIT_STAMP := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell git status --porcelain 2>/dev/null | grep -q . && echo -dirty)
+HARNESS_STACK ?= CareerVpCrudDevx
 
 
 dev:
@@ -124,7 +134,7 @@ DEVX_STACK_NAME ?= CareerVpCrudDevx
 
 deploy-devx: build
 	npx cdk acknowledge 34892
-	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" --context "p26_rehome_features=true"
+	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" --context "p26_rehome_features=true" --context "git_sha=$(GIT_STAMP)"
 
 # P-28: automation is CreateChangeSet-only. `create-changeset` synthesizes and creates a
 # CFN change set WITHOUT executing it (`--no-execute`); a human-gated job runs
@@ -273,3 +283,37 @@ smoke-test:
 	else \
 		echo "AWS CLI smoke test script not found, skipping."; \
 	fi
+
+# ---------------------------------------------------------------------------
+# Proof harness targets — see docs/HARNESS.md
+# ---------------------------------------------------------------------------
+# Four commands, run in this order, answer "where am I and did I move?":
+#   make preflight   are the facts I am about to rely on true?
+#   make journey     how far does a customer get?  (N of 9)
+#   make state       show both on one page
+#   make review      classify a change set before touching dev/staging/prod
+
+preflight:
+	uv run python scripts/preflight.py --stack $(HARNESS_STACK)
+
+# BASE_URL must point at the frontend serving THIS environment. DEPLOYED_SHA is
+# read from the stack so the resulting proof records what was actually running,
+# not merely what was checked out.
+journey:
+	$(eval DEPLOYED_SHA := $(shell aws cloudformation describe-stacks \
+		--stack-name $(HARNESS_STACK) \
+		--query "Stacks[0].Outputs[?OutputKey=='DeployedGitSha'].OutputValue" \
+		--output text 2>/dev/null || echo unstamped))
+	@echo "journey → $${BASE_URL:-http://localhost:3000}  (stack runs $(DEPLOYED_SHA))"
+	cd ../frontend && DEPLOYED_SHA=$(DEPLOYED_SHA) JOURNEY_STACK=$(HARNESS_STACK) \
+		npx playwright test journey.spec.ts
+
+state:
+	uv run python scripts/state.py
+
+compare:
+	uv run python scripts/compare_evidence.py --kind $(or $(KIND),journey)
+
+# Usage: make review STACK=CareerVpCrudDev
+review:
+	uv run python scripts/review_change.py --stack $(or $(STACK),CareerVpCrudDev) --latest

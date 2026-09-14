@@ -1,0 +1,586 @@
+{
+  "timestamp": "2026-09-14T04:04:08.588838+00:00",
+  "receipt_files": [
+    {
+      "path": "docs/evidence/astra-pass-a/commands.json",
+      "bytes": 346414,
+      "sha256": "96e5cf615217be37451ce2eaa7232091c4378ee8726359afdaf74eb605928fd3"
+    },
+    {
+      "path": "docs/evidence/astra-pass-a/validation.json",
+      "bytes": 9426,
+      "sha256": "c811f9b13cb50145447f30a77828cbe7c8b7bda0e725063cb363e6e9774b4d54"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-jobs-corrected.json",
+      "bytes": 15168,
+      "sha256": "6d9155747877d23a038a766bfb9c2d2ea9372e686e63a91612b60f1dc37c8e07"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-jobs.json",
+      "bytes": 680,
+      "sha256": "116091487ba0ad494ce7407726ed8141dd0e0cf124a19ee56caddcdcb2adc889"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-ttl.json",
+      "bytes": 481,
+      "sha256": "863123e7ce8058d5bd42b1d93bfb6a397f5ff02afa60d167a8b74a03645b5090"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E006-applications.json",
+      "bytes": 5256,
+      "sha256": "9555953e3009ed66f5f78e86f56165bbf37a1a9c8be9c9ebf9e509fca53c9000"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E008-Errors.json",
+      "bytes": 2684,
+      "sha256": "62423a737d58ebcb9119065041977b7f936f1266f47635057b5ca91c317edb3a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E008-Invocations.json",
+      "bytes": 2694,
+      "sha256": "ceb4188f2551c1f68622711243c704dfc994ddabe2f75e8d282a7576e30994c1"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E009-classifier-records.json",
+      "bytes": 58579,
+      "sha256": "d3d1a0e2494127cdb8721ee52436ce138aad20aea9638f8691ed32b4ee6c5807"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E009-explicit-error-returns.json",
+      "bytes": 17753,
+      "sha256": "6acb1a34ca103f012d269e363d7cf91ca2d634bcad5a5f4d18241fcadfaacd1e"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-fatal-write-only.diff",
+      "bytes": 2202,
+      "sha256": "a6f8a765b4f2dea3a9dafda7d37a088a9a956752b92ff59f23bbe4460176d143"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-clean.json",
+      "bytes": 722,
+      "sha256": "d78e0b93ca2140648bc9733f96a7ec5235e3a9542bd8be96a53edb56d829997e"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-clean.log",
+      "bytes": 229328,
+      "sha256": "e749a52601de4803980973a131fdd3020b6ebb2d756b14b4a808182d6fc3f73c"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-controlled.json",
+      "bytes": 1017,
+      "sha256": "41b7965f57813a3d55f7f86847fd0542530afde35e06b5369e81d962848b9a55"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-controlled.log",
+      "bytes": 62236430,
+      "sha256": "7ff7debd9eba6f81161c27ca363114bfd3a670303a2996c1c81a8bc8ca0dc8dd"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-matched-after.json",
+      "bytes": 45336,
+      "sha256": "a97294b6e729a01c89feadbcf1833ea0fc20c003cd123004c207158eec6b84bb"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-matched-before.json",
+      "bytes": 26664,
+      "sha256": "ef13d1167b05f231ac5749a09e9b08be6f6f9362d60c63d32e09eb112eac2d61"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-clean.json",
+      "bytes": 728,
+      "sha256": "dee340ab8a922e2d30419b651abe753e4d3125f9dbfd1aefba610633e4f367fe"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-clean.log",
+      "bytes": 260868,
+      "sha256": "61e44b9f678537465fd0f50943b1ab73edd84420725f3b0e7153b3c942ae7917"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-controlled.json",
+      "bytes": 1021,
+      "sha256": "84dd1de346d1120a6db4528200711adadd8536bdc8dd4632adcf7db9d4d93133"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-controlled.log",
+      "bytes": 62306257,
+      "sha256": "c676870463c60ff8d7a62eea90fc9dac4baf0ed2490465ca059db014a39f360b"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-tests-fatal-write-only.json",
+      "bytes": 44931,
+      "sha256": "71caa0e7f3016b6b34ebca0388bb83c303466ccd64ba8b6b95f1888e18b844e2"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.diff",
+      "bytes": 1010,
+      "sha256": "f22f09610e72a8a52985b8892cad5fbaaabd4fcb047a494965bcbbaf8c5a6e03"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.json",
+      "bytes": 1017,
+      "sha256": "8c80054c75106960d432cee8ae38dffbd35aff133b66e10804759d8c77735b27"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.log",
+      "bytes": 62237609,
+      "sha256": "34785016f06a26ab87590cebac6ca24f9b2d3c4bccde06c6b0d901401cca0771"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both.diff",
+      "bytes": 1010,
+      "sha256": "f22f09610e72a8a52985b8892cad5fbaaabd4fcb047a494965bcbbaf8c5a6e03"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-live-mutant-control.json",
+      "bytes": 1443,
+      "sha256": "de449b5fca03b6b3bb323505128d28e3f84af436758a5342d596438b8534b9da"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.diff",
+      "bytes": 649,
+      "sha256": "01da64160c4a33012abefe1ec0576ade8db6667384c227819bd71e244acd85e0"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.json",
+      "bytes": 1017,
+      "sha256": "df189c53ff62d9944469f0b32892f6c41353175bc7cdb0c427bf931de5887047"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.log",
+      "bytes": 62236430,
+      "sha256": "a95a4b79332c776a3be86f5d1e52306abaf7e4b0aec176a71afc47692ea73e4e"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.diff",
+      "bytes": 780,
+      "sha256": "630811221db04b5f811aa0801063da16cd62ff56aa4c592c60137bbe79949f3f"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.json",
+      "bytes": 1017,
+      "sha256": "ff6ed84c709dc796e171ef6455192fc8bdcfc849ebb47750426b9f9efcfec43b"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.log",
+      "bytes": 62244527,
+      "sha256": "7275cbec4b2cadd2e378b2dc81ddfd057978179e0b9177a655ca8a1e3d8b69f2"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.diff",
+      "bytes": 752,
+      "sha256": "17de47a8670874ac7a879560db5ae70bb8d083c0f368f482180ccfce204cdad9"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.json",
+      "bytes": 1017,
+      "sha256": "3e58981bfedfc3945739a43b7294eb1d45f56d8a78df55157ff3c77d41891e3f"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.log",
+      "bytes": 62240027,
+      "sha256": "cd3a3d44c0bf673aa5979b7edc44ac48317ea05db7873b6a299a7fb543e82a04"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E015-http-apis.json",
+      "bytes": 318,
+      "sha256": "8aa088cd27dd81b1528a0b422694659b180666dde5af83971150a8794fae5797"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E015-rest-apis.json",
+      "bytes": 3862,
+      "sha256": "c8b1e1055c57fcdbaef800e4f22415fb5ed35f1049fce67e1b90a0618d10b26e"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E016-knowledge-count.json",
+      "bytes": 454,
+      "sha256": "12a8ea70a245e1e9a2344d4f62618df8fe5037cca63efa9b92653f581c37fc22"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E019-callers.json",
+      "bytes": 281,
+      "sha256": "d45a929dbc79cc803d0d84d9694d3e942c2eb480d6fe123ec40e091ec6e5be71"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E020-callers.json",
+      "bytes": 357,
+      "sha256": "a708d0810d080a67755add148ce61c7cc6b64ea141f914eda18f645ecc3fb91f"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E021-callers.json",
+      "bytes": 723,
+      "sha256": "9b83f9b3df3e8bdbc5bd96962d74d30880f89ce547c10ebd0867f80085fa6785"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E022-submit.json",
+      "bytes": 936,
+      "sha256": "b86b343d2c0159532f4e615bb717aa5e9543af0ad1b705e6a3b961d5fac36ef1"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/S2-invoke-grants.json",
+      "bytes": 13890,
+      "sha256": "c0fc31f033905f240d7cffcb87c861c5c467ae9d4b4886ca31ef0782c5437965"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/S26-length-controls.json",
+      "bytes": 2016,
+      "sha256": "076db38a6bb2a05e964fc1381c62634829b576ddb8474f772fcd59baa86830f9"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/additional-controls-command.json",
+      "bytes": 5657,
+      "sha256": "582706b95babc0a450bcc4b0cbe6b6da47436c5416649d8b0cba0ae46b761ad2"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/additional-controls.json",
+      "bytes": 2180,
+      "sha256": "95c6fa261669a85f8628e9849f2a3f921a28b7779a8b3b998e6648243a693dee"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-authorizers.json",
+      "bytes": 820,
+      "sha256": "33638433846676919761543b623f151b9729bd7d209ecc4a1fda1f6b9166ae85"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-definition.json",
+      "bytes": 1317,
+      "sha256": "8fcea7060ba3a72ed24c39f681f044d2e314dbbe67df23bb3baf45323ba9f969"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-resources.json",
+      "bytes": 18377,
+      "sha256": "6dcff193e9805e069436bc5270308cbda5c83cd633d2c4d13ec4de3666103b27"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-stages.json",
+      "bytes": 3172,
+      "sha256": "e351f295165a9bddafe7f1e9d86daca2d82f358c6e0b9f4d6576b7baa5d3a818"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/artifact-validation.json",
+      "bytes": 3645,
+      "sha256": "e361949475c1cf4e4b29b2f981bbbe2c43167b16835ba43c063afa9ba30c1b86"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/cleanup-errors-log.json",
+      "bytes": 1548,
+      "sha256": "b336272f74864570761ab4f154917ac2b02eda13429ab4780938397df9099d54"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/defect-proofs.log",
+      "bytes": 9242,
+      "sha256": "b485a9dac47714906f2fac97efc2f1cb243062d9817336b3078da594b5043f2a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-api-export-command.json",
+      "bytes": 594,
+      "sha256": "a0487cd8853e5a4582816c40295a82397e4dd56ef0dc01732fd619347376ff1c"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-api-oas.json",
+      "bytes": 196865,
+      "sha256": "e865149551a6eab9b2c3fab745e0362cf2a3bc1efe70fce0701e8fa31c3a0caf"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+      "bytes": 56627,
+      "sha256": "65d2ef587a7be46d237f32a993b7e838639629b2ddbe7c0026152eaee6e60375"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/export-aliases.json",
+      "bytes": 707,
+      "sha256": "71eeeeb2eff8f27767ef53c965621d6791691dea67cd4d35595cbc6903b04519"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/export-policy-live-devx.json",
+      "bytes": 1066,
+      "sha256": "b2ee76ed681dc151cbc006eb3457f02a2249d050acc7541726c6e0d8efb5d7d1"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls-command.json",
+      "bytes": 2498,
+      "sha256": "3942c6af0c8419a8066f5ce89fb78c4068feb36f55bfa5dcead0a84ea0d166cb"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls-corrected-command.json",
+      "bytes": 2593,
+      "sha256": "5ac430ae85abf2b13b4fb73e2dbacf8a7f55f25278901cb4065f35ef55546616"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls.json",
+      "bytes": 623,
+      "sha256": "18fb179507ef8df66aa47da3855e1e45ccf9dec6d06e6eb215bc5ca664c56bf2"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-worktree-status.json",
+      "bytes": 2256,
+      "sha256": "0a71a4048b1ed3a132f9dbcaaafd3620e1ef2ab02726c06745dd85750a83fff7"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/finding-assessments.json",
+      "bytes": 40414,
+      "sha256": "f8d84f9aaeb841a1c79c9cbe4072918ee0864048de6af0fec7f762b2daf31901"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/header-equivalent-command.json",
+      "bytes": 2415,
+      "sha256": "5803dafc09e299a46224ff576e8cce0888d835e6e8dc256fb4d3ab9bfae6630c"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-control-command.json",
+      "bytes": 1513,
+      "sha256": "6987a8b333c241946e53a8804eca5f5aec16535f37b1799c45de92e6c3bad7d4"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-matched-command.json",
+      "bytes": 1660,
+      "sha256": "820fb824991e038567ad745f5bd2141ed6ce2ff0531f1108ad8095dbfe7d2a92"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-upload-only.json",
+      "bytes": 26631,
+      "sha256": "d6020db6d7e9f2762d33840e0d9f14b69f1c82be4df70939e11e06089d999993"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-authorization-details.json",
+      "bytes": 24410481,
+      "sha256": "d83af5cc682555c9326ef514abefb617f3ec3da212917a1c8a23307b36383a43"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-local-policies.json",
+      "bytes": 5320,
+      "sha256": "fdf141c0fbea394ac50475dba33d0b0133d7f638327c82f1ff40683aeb878115"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-roles.json",
+      "bytes": 68376,
+      "sha256": "b1764b35836280faf8140e760565d4ab19e8e1373e4735a4d83548d8065079c0"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/identity.json",
+      "bytes": 443,
+      "sha256": "a212fdbb687a5946a0958ebecb5279cbdc8e91883697c9bc8e84d01ff2ab8d65"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-controls-command.json",
+      "bytes": 13635,
+      "sha256": "b1a7191cff0e66249ea52e23a8d96d62072c2eb6dc38e805c7cbd72b38494aac"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-controls.json",
+      "bytes": 13088,
+      "sha256": "39f0de0910441eca585be29e27f1950e34357c97a2d2c37d2458cb14692883ef"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-source-notes.md",
+      "bytes": 4275,
+      "sha256": "d460fa80a5b367a807c7ee00407465f180069378a03af840b2739d6900a2c491"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/inspected-files.json",
+      "bytes": 132020,
+      "sha256": "a7b3f5a1f8c433eac982421d3d94b4506c7cc9b12b20d5d5fba61f8f7156129d"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/inspected-resources.json",
+      "bytes": 45813,
+      "sha256": "94fbc4670f7c3aec5d4ef84310a0db868ba347bcf47de9688246fdf194f6a78e"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-jobs.json",
+      "bytes": 845,
+      "sha256": "002b84164c6ce6eba53d553a6348ae737fd3236430e9bbf6b76002f08c55f5c4"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-knowledge-base.json",
+      "bytes": 855,
+      "sha256": "c3fad6d3e9dbd3e39b9742ca349514ece91261a84b5ee92c221f7e02ebe209b6"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-vpr.json",
+      "bytes": 849,
+      "sha256": "f75ec85d610e95d9c0b13bc80047b42ffce190cad3bd8c9c4df1b13854db74d8"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/invoke-policy-candidates.json",
+      "bytes": 17913,
+      "sha256": "addabcffd380ea87bf055dcd8d15a47c222ae62972d3a3ba5ea48aef580e6f60"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/knowledge-callers.json",
+      "bytes": 437,
+      "sha256": "63ea0d674f7daac317efe7685a84f0c86b7463eeb634f0d7cb01ca6b9ea4878c"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/lambda-inventory.json",
+      "bytes": 20912,
+      "sha256": "865d52e68928cbff2117a62dda457d391e7e480382e53d36056a509c9c728731"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/main-leaked-network-control.json",
+      "bytes": 1608,
+      "sha256": "481aa9568eab5bf2005d757c190c6e6b35b34425a8855baa0a06efae97ef5d8f"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-jobs.json",
+      "bytes": 1058,
+      "sha256": "a055c94d07296a99b7ccaf5b280fc43336f05678e99480e38c7adc365fecd27b"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-knowledge-base.json",
+      "bytes": 1068,
+      "sha256": "1ac09811ef3568388cf429e586991ef25341cc072d77c33a2f4d880e8ff829da"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-vpr.json",
+      "bytes": 1062,
+      "sha256": "c2a403b665ecb916058dcbd4de99442b1da181d78720f541b630aff047acb9ab"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/mutation-command.json",
+      "bytes": 3340,
+      "sha256": "6eb49a65c2ca33c07a2294f4ef39ffed191727c0981f2f54e77a063249344c2a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-artifact-cleanup-lambda-devx.json",
+      "bytes": 1079,
+      "sha256": "0255179e4e30e9bb4c5035eb7c1dabd0e767cbb0cff9c7d4282ad55b3e1b372a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-export-lambda-devx.json",
+      "bytes": 534,
+      "sha256": "2a07d9d5e1bede3d96df0148dcdc8b43c8b079d7e155156293c297333e37b05b"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-vpr-status-lambda-devx.json",
+      "bytes": 538,
+      "sha256": "d8ebcb245048a228ae48b29a71d4679e3e24ea50f9c12f1a07e72b4a780e49f2"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-vpr-worker-lambda-devx.json",
+      "bytes": 538,
+      "sha256": "024301e7381bacec641ad0081c58a926060c3d7fded011e481826f81111d98a0"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/reproductions-explicit.log",
+      "bytes": 38863,
+      "sha256": "feee66e058ea95a85ca420f1ccf1ee534100512a33bc97fadee844c04ada7478"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/reproductions.log",
+      "bytes": 11459,
+      "sha256": "b4ab4f3f490ec400dfc09dc97749042ab03b9e65e5d8e1a16a5a4f6804efb8fa"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/results-lifecycle.json",
+      "bytes": 741,
+      "sha256": "5ab1d21ee4360b602ff489d90521a11eef3ebbce693b1f0db886fc352f77979b"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/results-objects.json",
+      "bytes": 2553,
+      "sha256": "c83fac620f11ffc95f3d599787f7eda8b6d973feae9de531ea415456cee8e315"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/run-metadata.json",
+      "bytes": 3555,
+      "sha256": "cdb1e4a567f63275b7e931db4a73198a8c694e0b1f0ebc385c455fcc99203105"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-applications.json",
+      "bytes": 816,
+      "sha256": "9de5aae9d3fe69ae325bcbcf76e008bbf6879d790d417c07c0058bde8142d63c"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-artifacts.json",
+      "bytes": 814,
+      "sha256": "fa48410367ac4509034e44ea448eb1b0f295c8cc93435825dba76fb6c4b0789d"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-gap-responses.json",
+      "bytes": 814,
+      "sha256": "bf5266dd30c369a78c52221f936ce5d63491b8accf2c87ef6bcf127f9c6af12f"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-jobs.json",
+      "bytes": 690,
+      "sha256": "64a7a5481cb9f890c467c82f40c510bcd5e894ca626742df5d71cde1d740b751"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-knowledge.json",
+      "bytes": 812,
+      "sha256": "50bf76d8552c56f455d1325134b89b12fddb1c20d025b104245a26bf5cfbaef0"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/stack-resources.json",
+      "bytes": 133704,
+      "sha256": "c233f13f803674c34fcf13e4356332429e64da664cc2945a99e6b206c47048dc"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/stack-stamp.json",
+      "bytes": 715,
+      "sha256": "e25af13e1584b453c225c0250f23ef0afa2b96f6547e67d2bbaaa10288de6a36"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/tailor-aliases.json",
+      "bytes": 711,
+      "sha256": "d431c09fea90a028f64fef927c9ce8d1b421ae8556062d236583a007d5949e45"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/tailor-policy.json",
+      "bytes": 536,
+      "sha256": "202a04b25097a610449e0c83725b1cb4c736d4adddd86985b226fb4269a61ab8"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/unit-baseline.log",
+      "bytes": 8242,
+      "sha256": "0bfb81f3af062b41f136690d52e57d146d053b2956435593db252d34958e147a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/vpr-status-aliases.json",
+      "bytes": 715,
+      "sha256": "0cdc4840912d870b48379c97c5759965ee54d6c60520cb9f7efcc92247a21f6a"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/vpr-status-policy-live-devx.json",
+      "bytes": 1584,
+      "sha256": "e15bf357bb0461ca8ba0446ff79246398bfe53a647acbe2af4644f1f7983eda0"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/waf-prod.json",
+      "bytes": 5573,
+      "sha256": "32fe6fe6d5b8ff0fde7e65cd428b80552504f092fe44d7f2acca1a2b7d72a723"
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/worktrees.json",
+      "bytes": 692,
+      "sha256": "6a54a73bf9e9fb7c87108b579b9860d6a18f10eacfbfd60f6cefec2480cbd943"
+    },
+    {
+      "path": "docs/evidence/p1-repro/README.md",
+      "bytes": 3280,
+      "sha256": "69e2c1b181f3589e32ba55f766f3d486a3c613c0c09f769c73cb77e8aa5a80b3"
+    },
+    {
+      "path": "docs/evidence/p1-repro/s0a_export_idor_test.py",
+      "bytes": 5871,
+      "sha256": "684013d4b3613db651cf0382f76467be628b3a6674f477f3f85ab17cd7ab2655"
+    },
+    {
+      "path": "docs/evidence/p1-repro/s0b_status_fallback_test.py",
+      "bytes": 3361,
+      "sha256": "35152f686f52297bf52cc92467687ae85c0a45ba842d53f96d2f41b66bcf2367"
+    },
+    {
+      "path": "docs/evidence/p1-repro/s11d_gpa_float_test.py",
+      "bytes": 1759,
+      "sha256": "b0e8e8893936a54d4b393c3d06145c3e14ccc1d643a044b147a61e12e0d7c608"
+    },
+    {
+      "path": "docs/evidence/p1-repro/s25_state_machine_test.py",
+      "bytes": 2469,
+      "sha256": "3b1835b3fa1392b8e1059a346bdb98fdc5a1ba4b96ebb7d38fb714342beca7cb"
+    }
+  ],
+  "reads": "Receipt JSON parsed; selected decisive evidence semantically read and rerun. File hashing is integrity inventory, not proof of semantic review of every line."
+}

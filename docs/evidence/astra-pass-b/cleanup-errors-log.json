@@ -1,0 +1,25 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "logs",
+    "filter-log-events",
+    "--log-group-name",
+    "/aws/lambda/careervp-artifact-cleanup-lambda-devx",
+    "--filter-pattern",
+    "\"MissingTableEnvError\"",
+    "--limit",
+    "3",
+    "--no-paginate",
+    "--query",
+    "events[].{timestamp:timestamp,message:message}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:09.233529+00:00",
+  "exit_code": 0,
+  "stdout": "[\n    {\n        \"timestamp\": 1789206043427,\n        \"message\": \"{\\\"timestamp\\\": \\\"2026-09-12T09:40:43Z\\\", \\\"log_level\\\": \\\"ERROR\\\", \\\"errorMessage\\\": \\\"jobs table is not configured: none of DYNAMODB_TABLE_NAME is set\\\", \\\"errorType\\\": \\\"MissingTableEnvError\\\", \\\"requestId\\\": \\\"20ff4a0f-6883-492c-b123-3a2a649ec347\\\", \\\"stackTrace\\\": [\\\"  File \\\\\\\"/var/task/careervp/handlers/artifact_cleanup_handler.py\\\\\\\", line 157, in lambda_handler\\\\n    deps = _make_cleanup_deps()\\\\n\\\", \\\"  File \\\\\\\"/var/task/careervp/handlers/artifact_cleanup_handler.py\\\\\\\", line 135, in _make_cleanup_deps\\\\n    jobs_table = require_table_env('DYNAMODB_TABLE_NAME', purpose='jobs')\\\\n\\\", \\\"  File \\\\\\\"/var/task/careervp/handlers/utils/env_guard.py\\\\\\\", line 36, in require_table_env\\\\n    raise MissingTableEnvError(f'{purpose} table is not configured: none of {\\\\\\\", \\\\\\\".join(env_keys)} is set')\\\\n\\\"]}\"\n    }\n]\n",
+  "stderr": ""
+}

@@ -1,0 +1,22 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "s3api",
+    "list-objects-v2",
+    "--bucket",
+    "careervp-devx-vpr-results-use1-747cad",
+    "--prefix",
+    "results/",
+    "--query",
+    "{Contents:Contents[].{Key:Key,LastModified:LastModified,Size:Size},IsTruncated:IsTruncated,NextContinuationToken:NextContinuationToken}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:10.107764+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Contents\": [\n        {\n            \"Key\": \"results/374788f8-7676-4b15-b9bc-6ebee9de3bb4.json\",\n            \"LastModified\": \"2026-08-03T19:23:49+00:00\",\n            \"Size\": 17982\n        },\n        {\n            \"Key\": \"results/416cdaed-dedf-46ce-8290-5b67e0b3c2fe.json\",\n            \"LastModified\": \"2026-08-01T09:44:11+00:00\",\n            \"Size\": 18631\n        },\n        {\n            \"Key\": \"results/5a220c3c-8a8f-44a1-bfbd-21686dfb2271.json\",\n            \"LastModified\": \"2026-08-01T16:09:19+00:00\",\n            \"Size\": 16852\n        },\n        {\n            \"Key\": \"results/677d2a9d-b322-486c-b5bc-7cdc8fbe4fe5.json\",\n            \"LastModified\": \"2026-08-01T15:59:37+00:00\",\n            \"Size\": 17978\n        },\n        {\n            \"Key\": \"results/7b7e4f4f-78ea-4f60-a4dc-24e36cf53b82.json\",\n            \"LastModified\": \"2026-08-01T15:32:16+00:00\",\n            \"Size\": 18451\n        },\n        {\n            \"Key\": \"results/81817fd3-7e05-4f1f-a727-e527daf4c381.json\",\n            \"LastModified\": \"2026-08-01T09:58:08+00:00\",\n            \"Size\": 18920\n        },\n        {\n            \"Key\": \"results/819af9c2-c15a-488b-9ba2-26deb46b2818.json\",\n            \"LastModified\": \"2026-08-01T16:11:59+00:00\",\n            \"Size\": 18652\n        },\n        {\n            \"Key\": \"results/a5709515-7795-4296-9258-95dbe954b734.json\",\n            \"LastModified\": \"2026-08-01T09:38:03+00:00\",\n            \"Size\": 19546\n        },\n        {\n            \"Key\": \"results/a7413e12-c65e-49f7-b7cd-1e6a18b203f0.json\",\n            \"LastModified\": \"2026-08-01T09:41:15+00:00\",\n            \"Size\": 18565\n        },\n        {\n            \"Key\": \"results/af2e40a4-54c7-4479-a3c0-4efa3fecc454.json\",\n            \"LastModified\": \"2026-08-01T16:02:08+00:00\",\n            \"Size\": 18489\n        }\n    ],\n    \"IsTruncated\": null,\n    \"NextContinuationToken\": null\n}\n",
+  "stderr": ""
+}

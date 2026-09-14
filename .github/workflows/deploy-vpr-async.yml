@@ -261,11 +261,17 @@ jobs:
               aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
               aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
               ;;
+            ROLLBACK_COMPLETE)
+              # This one state genuinely cannot be updated and delete is the only
+              # recovery — but deleting a stack is a human decision, not a CI one.
+              # Stop and say exactly what a person needs to do.
+              echo "::error::$STACK_NAME is ROLLBACK_COMPLETE. That state cannot be updated; the stack must be deleted and recreated. This workflow will NOT delete a stack. Confirm no stateful resource in it lacks DeletionPolicy=Retain, delete it manually, then re-run this workflow."
+              exit 1
+              ;;
             *FAILED*|*ROLLBACK*)
-              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
-              aws cloudformation delete-stack --stack-name "$STACK_NAME"
-              echo "Waiting for stack deletion..."
-              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+              # Previously: automation deleted the stack here, unattended.
+              echo "::error::$STACK_NAME is $STATUS. Automation will not delete or force a stack out of a failed state. Investigate the failed resource, resolve it manually, then re-run."
+              exit 1
               ;;
             *)
               echo "Stack status: $STATUS"

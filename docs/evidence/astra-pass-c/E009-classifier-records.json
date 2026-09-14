@@ -1,0 +1,1058 @@
+[
+  {
+    "file": "careervp/logic/interview_prep.py",
+    "line": 104,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(\n                success=False,\n                error=f'LLM invocation failed: {exc}',\n                code=ResultCode.LLM_API_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/logic/fvs_validator.py",
+    "line": 25,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n    logger = cast(Any, getLogger(__name__))"
+  },
+  {
+    "file": "careervp/logic/auth_service.py",
+    "line": 234,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n            raise AuthError(f'Registration failed: {str(e)}') from e"
+  },
+  {
+    "file": "careervp/logic/auth_service.py",
+    "line": 301,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n            raise AuthError(f'Login failed: {str(e)}') from e"
+  },
+  {
+    "file": "careervp/logic/auth_service.py",
+    "line": 346,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n            raise AuthError(f'Token refresh failed: {str(e)}') from e"
+  },
+  {
+    "file": "careervp/logic/auth_service.py",
+    "line": 228,
+    "kind": "bare_pass",
+    "body": "except Exception:\n                        pass"
+  },
+  {
+    "file": "careervp/logic/cv_parser.py",
+    "line": 113,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n        logger.error('PDF extraction failed', error=str(e))\n        raise ValueError(f'Failed to extract text from PDF: {e}') from e"
+  },
+  {
+    "file": "careervp/logic/cv_parser.py",
+    "line": 134,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n        logger.error('DOCX extraction failed', error=str(e))\n        raise ValueError(f'Failed to extract text from DOCX: {e}') from e"
+  },
+  {
+    "file": "careervp/logic/cv_parser.py",
+    "line": 323,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to build UserCV model', error=str(e))\n        return Result(success=False, error=f'Failed to validate extracted data: {e}', code=ResultCode.INTERNAL_ERROR)"
+  },
+  {
+    "file": "careervp/logic/reconciliation_service.py",
+    "line": 86,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                logger.error(\n                    'reconciliation_user_error',\n                    user_id=user_id,\n                    subscription_id=subscription_id,\n                    error=str(exc),\n                )\n                errors += 1"
+  },
+  {
+    "file": "careervp/logic/webhook_service.py",
+    "line": 115,
+    "kind": "any_raise",
+    "body": "except Exception:\n            # Commit-after-work: release idempotency slot so provider can retry\n            self._sub_repo.delete_payment_event(\n                event.event_id,\n                event.event_type,\n                provider_name=provider_name,\n            )\n            raise"
+  },
+  {
+    "file": "careervp/logic/cancellation.py",
+    "line": 78,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning(\n            'Failed to update chain_execution_status to STOPPED',\n            application_id=application_id,\n            error=str(exc),\n        )"
+  },
+  {
+    "file": "careervp/logic/cancellation.py",
+    "line": 146,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning(\n                'Failed to load application for chain cancel check',\n                application_id=application_id,\n                error=str(exc),\n            )\n            app = None"
+  },
+  {
+    "file": "careervp/logic/cancellation.py",
+    "line": 91,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                logger.warning(\n                    'Failed to mark artifact cancelled',\n                    artifact_type=atype,\n                    application_id=application_id,\n                    error=str(exc),\n                )"
+  },
+  {
+    "file": "careervp/logic/cover_letter.py",
+    "line": 85,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        return Result(\n            success=False,\n            error=f'LLM invocation failed: {exc}',\n            code=ResultCode.LLM_API_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/company_research.py",
+    "line": 576,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n        return None"
+  },
+  {
+    "file": "careervp/logic/llm_client.py",
+    "line": 86,
+    "kind": "any_raise",
+    "body": "except Exception as e:\n                raise ValueError(f'ANTHROPIC_API_KEY SSM parameter not found: {ssm_param}. Error: {e}') from e"
+  },
+  {
+    "file": "careervp/logic/llm_client.py",
+    "line": 215,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n                last_exc = exc\n                is_transient = self._is_transient_provider_error(exc)\n                should_retry = is_transient and attempt < attempts\n                if should_retry:\n                    delay_seconds = base_delay_seconds * (2 ** (attempt - 1))\n                    logger.warning(\n                        'Transient LLM provider error (complete); retrying attempt=%s/%s delay_seconds=%.2f',\n                        attempt,\n                        attempts,\n                        delay_seconds,\n                    )\n                    time.sleep(delay_seconds)\n                    continue\n                break"
+  },
+  {
+    "file": "careervp/logic/llm_client.py",
+    "line": 292,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - translate provider errors into configured type.\n                last_exc = exc\n                is_transient = self._is_transient_provider_error(exc)\n                should_retry = is_transient and attempt < attempts\n                if should_retry:\n                    delay_seconds = base_delay_seconds * (2 ** (attempt - 1))\n                    logger.warning(\n                        'Transient LLM provider error; retrying attempt=%s/%s delay_seconds=%.2f error_type=%s',\n                        attempt,\n                        attempts,\n                        delay_seconds,\n                        type(exc).__name__,\n                    )\n                    time.sleep(delay_seconds)\n                    continue\n                break"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_pipeline.py",
+    "line": 301,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        return Result(\n            success=False,\n            error=f'LLM call failed: {str(e)}',\n            code=ResultCode.LLM_API_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_pipeline.py",
+    "line": 344,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        # Log the raw LLM response so the actual content is visible in CloudWatch\n        logger.error(\n            'Stage2 parse failed \u2014 raw LLM response follows',\n            extra={'raw_response': response_text[:2000]},\n        )\n        return Result(\n            success=False,\n            error=f'Failed to parse Stage2Output: {str(e)}',\n            code=ResultCode.PARSE_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring.py",
+    "line": 1681,
+    "kind": "no_raise",
+    "body": "except Exception:\n        # If parsing fails, return None \u2014 response will use legacy TailoredCV\n        return None"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring.py",
+    "line": 306,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(success=False, error=str(exc), code=ResultCode.LLM_API_ERROR)"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_logic.py",
+    "line": 169,
+    "kind": "no_raise",
+    "body": "except Exception as e:  # noqa: BLE001\n            logger.warning(\n                'gap_responses fetch failed, using empty GapAnalysisResponses',\n                error=str(e),\n            )\n            return GapAnalysisResponses(responses=[])"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_logic.py",
+    "line": 189,
+    "kind": "no_raise",
+    "body": "except Exception as e:  # noqa: BLE001\n            logger.warning(\n                'company_research fetch failed, using empty CompanyContext',\n                error=str(e),\n            )\n            return CompanyContext(company_name=company_name, company_culture='', products_services=[])"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_logic.py",
+    "line": 40,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - retry on transient errors\n                last_exception = exc\n                delay = self._base_delay * (2**attempt)\n                logger.warning('LLM call failed, retrying', attempt=attempt + 1, delay=delay, error=str(exc))\n                time.sleep(delay)"
+  },
+  {
+    "file": "careervp/logic/gap_analysis.py",
+    "line": 290,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        error_msg = f'{type(exc).__name__}: {str(exc)}'\n        return Result(success=False, error=error_msg, code=ResultCode.LLM_API_ERROR)"
+  },
+  {
+    "file": "careervp/logic/gap_analysis.py",
+    "line": 301,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n        # LLM returned non-parseable content; fall back to generated questions\n        parsed_questions = []"
+  },
+  {
+    "file": "careervp/logic/company_intel_cache.py",
+    "line": 193,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        _log_cache_error('Company intel cache payload invalid', key=profile.key, error=exc)\n        return None"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 56,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to save gap response: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 74,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to get gap responses: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 105,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to save company research: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 116,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to get company research: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/core_repository.py",
+    "line": 129,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 162,
+    "kind": "bare_pass",
+    "body": "except Exception:\n            pass"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 353,
+    "kind": "no_raise",
+    "body": "except Exception:\n            # Application record absent \u2014 create a minimal stub so artifact_id persists\n            # across page reloads (jobs are created before applications in the v1 flow).\n            try:\n                now = self._now_iso()\n                self._table().put_item(\n                    Item={\n                        'userId': user_id,\n                        'applicationId': application_id,\n                        'application_id': application_id,\n                        'user_id': user_id,\n                        'artifact_statuses': {},\n                        'state': 'created',\n                        'status': 'created',\n                        'created_at': now,\n                        'updated_at': now,\n                        'entity_type': 'APPLICATION',\n                    },\n                    ConditionExpression='attribute_not_exists(userId)',\n                )\n            except Exception as exc:\n                return Result(\n                    success=False,\n                    data=None,\n                    error=f'failed to initialise application artifact identity: {exc}',\n                    code=ResultCode.DYNAMODB_ERROR,\n                )"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 395,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(\n                success=False,\n                data=None,\n                error=f'failed to persist canonical artifact_id: {exc}',\n                code=ResultCode.DYNAMODB_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 373,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                return Result(\n                    success=False,\n                    data=None,\n                    error=f'failed to initialise application artifact identity: {exc}',\n                    code=ResultCode.DYNAMODB_ERROR,\n                )"
+  },
+  {
+    "file": "careervp/dal/dynamo_dal_handler.py",
+    "line": 941,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            # Catch any other exceptions (e.g., TypeError, serialization errors)\n            logger.exception(\n                'Unexpected error saving gap questions',\n                error=str(exc),\n                exc_type=type(exc).__name__,\n            )\n            return Result(\n                success=False,\n                error=f'unexpected_error: {type(exc).__name__}: {str(exc)}',\n                code=ResultCode.DYNAMODB_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/dal/dynamo_dal_handler.py",
+    "line": 930,
+    "kind": "any_raise",
+    "body": "except Exception as serialize_exc:\n                logger.error('Item not JSON serializable', error=str(serialize_exc))\n                raise serialize_exc"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 310,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('Gap response lookup failed for cover letter context', user_id=user_id, error=str(exc))\n        return []"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 613,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n        error_details = _extract_failure_details(exc)\n        error_details['stage'] = current_stage\n        logger.error(\n            'Cover letter generation failed',\n            job_id=job_id,\n            user_id=user_id,\n            stage=current_stage,\n            error=str(exc),\n            exc_info=True,\n        )\n        _update_artifact_status(user_id=user_id, job_id=job_id, status='FAILED', error_details=error_details)\n        raise"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 715,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}\n        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None\n        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':\n            logger.info('Cover letter cancelled before write \u2014 skipping', job_id=job_id, attempted_status=status)\n            raise CancelledBeforePersist(job_id) from exc\n        if error_code == 'ValidationException':\n            fallback_kwargs: dict[str, Any] = {\n                'Key': table_registry.legacy_item_key(user_id, artifact_id),\n                'UpdateExpression': update_expr,\n                'ExpressionAttributeNames': attr_names,\n                'ExpressionAttributeValues': attr_values,\n            }\n            if condition is not None:\n                fallback_kwargs['ConditionExpression'] = condition\n            try:\n                table.update_item(**fallback_kwargs)\n            except Exception as fallback_exc:\n                fb_response = getattr(fallback_exc, 'response', {}) if hasattr(fallback_exc, 'response') else {}\n                fb_code = ((fb_response.get('Error') or {}).get('Code')) if isinstance(fb_response, dict) else None\n                if fail_if_cancelled and fb_code == 'ConditionalCheckFailedException':\n                    logger.info('Cover letter cancelled before write \u2014 skipping', job_id=job_id, attempted_status=status)\n                    raise CancelledBeforePersist(job_id) from fallback_exc\n                raise\n            return\n        logger.error('Failed to update artifact status', job_id=job_id, error=str(exc))\n        raise"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 772,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.warning(\n            'Could not update application artifact_statuses',\n            artifact_type=artifact_type,\n            error=str(e),\n        )"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 835,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.error('Failed to load user CV for cover letter', user_id=user_id, error=str(e))\n        return _build_response(\n            HTTPStatus.UNPROCESSABLE_ENTITY, {'error': 'Could not load your CV. Please upload a CV before generating a cover letter.'}\n        )"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 851,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)\n        return _build_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'Cover letter generation failed. Please try again.'})"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 879,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Cover letter persistence failed', user_id=user_id, error=str(exc), exc_info=True)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1443,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during cover letter cancel', error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1534,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to update cover letter', cover_letter_id=cover_letter_id, error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update cover letter', 'code': ResultCode.DYNAMODB_ERROR})"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 498,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n            # _generate_and_persist_from_sqs marks the artifact FAILED internally with\n            # stage context before re-raising. Re-raise here so SQS routes to DLQ.\n            logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)\n            _send_task_failure(task_token, cause=str(exc))\n            if not task_token and not is_sqs_record:\n                raise\n            batch_item_failures.append({'itemIdentifier': message_id})\n            continue"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1063,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning('Failed to load CV from candidate table', table_name=cv_dal.table_name, error=str(exc))\n            continue"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1459,
+    "kind": "no_raise",
+    "body": "except Exception:\n            item = None"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 732,
+    "kind": "any_raise",
+    "body": "except Exception as fallback_exc:\n                fb_response = getattr(fallback_exc, 'response', {}) if hasattr(fallback_exc, 'response') else {}\n                fb_code = ((fb_response.get('Error') or {}).get('Code')) if isinstance(fb_response, dict) else None\n                if fail_if_cancelled and fb_code == 'ConditionalCheckFailedException':\n                    logger.info('Cover letter cancelled before write \u2014 skipping', job_id=job_id, attempted_status=status)\n                    raise CancelledBeforePersist(job_id) from fallback_exc\n                raise"
+  },
+  {
+    "file": "careervp/handlers/company_research_handler.py",
+    "line": 261,
+    "kind": "no_raise",
+    "body": "except Exception:\n        item = None"
+  },
+  {
+    "file": "careervp/handlers/company_research_handler.py",
+    "line": 432,
+    "kind": "no_raise",
+    "body": "except Exception:\n            continue"
+  },
+  {
+    "file": "careervp/handlers/vpr_dlq_handler.py",
+    "line": 43,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.error('DLQ handler error', error=str(exc), record=record)"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 90,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 113,
+    "kind": "no_raise",
+    "body": "except Exception:\n        # Trial record already exists or table unavailable; auth success remains primary path.\n        return"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 162,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected register failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 193,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected login failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 215,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected refresh failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 242,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return _json_response(HTTPStatus.UNAUTHORIZED, {'error': 'Invalid token'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 253,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Logout failed', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Logout failed'})"
+  },
+  {
+    "file": "careervp/handlers/cr_failure_handler.py",
+    "line": 59,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - defensive: never raise from a failure handler\n        logger.error('Failed to set company_research_error', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/cr_failure_handler.py",
+    "line": 72,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - defensive: never raise from a failure handler\n        logger.error('Failed to transition application to cr_failed', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 244,
+    "kind": "any_raise",
+    "body": "except Exception as generation_exc:\n        logger.error(\n            'Interview prep worker generation raised exception',\n            job_id=job_id,\n            user_id=user_id,\n            error=str(generation_exc),\n            exc_info=True,\n        )\n        _update_artifact_status(\n            user_id=user_id,\n            job_id=job_id,\n            status='FAILED',\n            error=f'Interview prep generation exception: {generation_exc}',\n            code=ResultCode.LLM_API_ERROR,\n            failure_stage='generation',\n            failure_timestamp=datetime.now(timezone.utc).isoformat(),\n            error_details={'exception_type': type(generation_exc).__name__},\n        )\n        raise"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 305,
+    "kind": "any_raise",
+    "body": "except Exception as persist_exc:\n        logger.error(\n            '_persist_interview_prep failed in SQS worker; marking job FAILED',\n            job_id=job_id,\n            user_id=user_id,\n            error=f'{type(persist_exc).__name__}: {persist_exc}',\n            exc_info=True,\n        )\n        _update_artifact_status(\n            user_id=user_id,\n            job_id=job_id,\n            status='FAILED',\n            error=f'Persistence failed for interview prep job {job_id}',\n            code=ResultCode.DYNAMODB_ERROR,\n            failure_stage='persistence',\n            failure_timestamp=datetime.now(timezone.utc).isoformat(),\n            error_details={'exception_type': type(persist_exc).__name__, 'exception_message': str(persist_exc)},\n        )\n        raise RuntimeError(f'Persistence failed for interview prep job {job_id}: {persist_exc}') from persist_exc"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 416,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n        error_response = getattr(exc, 'response', {}) if hasattr(exc, 'response') else {}\n        error_code = ((error_response.get('Error') or {}).get('Code')) if isinstance(error_response, dict) else None\n        if fail_if_cancelled and error_code == 'ConditionalCheckFailedException':\n            logger.info('Interview prep cancelled before write \u2014 skipping', request_id=job_id, attempted_status=status)\n            raise CancelledBeforePersist(job_id) from exc\n        logger.error(\n            'Failed to update artifact status',\n            user_id=user_id,\n            request_id=job_id,\n            key_schema_mode=PRIMARY_KEY_MODE,\n            error=str(exc),\n        )\n        raise"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 460,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.warning(\n            'Could not update application artifact_statuses',\n            artifact_type=artifact_type,\n            error=str(e),\n        )"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 504,
+    "kind": "no_raise",
+    "body": "except Exception as gen_exc:\n        logger.error(\n            'Interview prep generation raised exception',\n            user_id=user_id,\n            error=f'{type(gen_exc).__name__}: {gen_exc}',\n            exc_info=True,\n        )\n        metrics.add_metric(name='InterviewPrepFailures', unit=MetricUnit.Count, value=1)\n        return _build_response(\n            HTTPStatus.SERVICE_UNAVAILABLE,\n            {'error': 'Interview prep generation failed. Please try again.', 'code': ResultCode.LLM_API_ERROR},\n        )"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 531,
+    "kind": "no_raise",
+    "body": "except Exception:\n        persist_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1114,
+    "kind": "no_raise",
+    "body": "except Exception:\n        query_response = {}"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1127,
+    "kind": "no_raise",
+    "body": "except Exception:\n        legacy_query_response = {}"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1257,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during interview prep cancel', error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1428,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to update interview prep answer', interview_prep_id=interview_prep_id, error=str(exc))\n        return False"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 155,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n            logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)\n            _send_task_failure(task_token, cause=str(exc))\n            if not task_token and not is_sqs_record:\n                raise\n            batch_item_failures.append({'itemIdentifier': message_id})\n            continue"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 824,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            metrics.add_metric(name='InterviewPrepCVResolutionError', unit=MetricUnit.Count, value=1)\n            logger.warning('CV resolution failed', user_id=user_id, table_name=cv_table_name, error=str(exc))\n            continue"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 896,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning('Gap responses resolution failed', user_id=user_id, table_name=gap_table_name, error=str(exc))\n            continue"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 944,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning('Company research resolution failed', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1092,
+    "kind": "no_raise",
+    "body": "except Exception:\n            get_response = {}"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1102,
+    "kind": "no_raise",
+    "body": "except Exception:\n            legacy_response = {}"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1273,
+    "kind": "no_raise",
+    "body": "except Exception:\n            item = None"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 190,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to save CV to DynamoDB', error=str(e))\n        response = CVParseResponse(\n            success=False,\n            error='Failed to persist parsed CV',\n        )\n        return Response(\n            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,\n            content_type=content_types.APPLICATION_JSON,\n            body=response.model_dump_json(),\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 116,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.warning('Failed to decode base64 content', error=str(e))\n            response = CVParseResponse(\n                success=False,\n                error='Invalid base64 file content',\n            )\n            return Response(\n                status_code=HTTPStatus.BAD_REQUEST.value,\n                content_type=content_types.APPLICATION_JSON,\n                body=response.model_dump_json(),\n            )"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 214,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.exception('Failed to save CV to cvs_table', cvs_table=cvs_table_name, error=str(e))\n            response = CVParseResponse(\n                success=False,\n                error='Failed to persist parsed CV',\n            )\n            return Response(\n                status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,\n                content_type=content_types.APPLICATION_JSON,\n                body=response.model_dump_json(),\n            )"
+  },
+  {
+    "file": "careervp/handlers/validators.py",
+    "line": 83,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Unexpected error during request validation', error=str(exc))\n        return Result(\n            success=False,\n            error='Unexpected validation error',\n            code=ResultCode.INTERNAL_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/handlers/validators.py",
+    "line": 203,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Unexpected error during file validation', error=str(exc))\n        return Result(\n            success=False,\n            error='Unexpected validation error',\n            code=ResultCode.INTERNAL_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/handlers/user_handler.py",
+    "line": 335,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Failed to reset trial', user_id=user_id, error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to reset trial'})"
+  },
+  {
+    "file": "careervp/handlers/user_handler.py",
+    "line": 267,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                logger.warning('Failed to delete CV source file from S3', s3_key=source_file_key, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/application_handler.py",
+    "line": 208,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return None"
+  },
+  {
+    "file": "careervp/handlers/application_handler.py",
+    "line": 238,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to retrieve application', application_id=application_id, error=str(e), error_type=type(e).__name__)\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to retrieve application', 'details': str(e)})"
+  },
+  {
+    "file": "careervp/handlers/application_handler.py",
+    "line": 193,
+    "kind": "no_raise",
+    "body": "except Exception:\n            job_record = None"
+  },
+  {
+    "file": "careervp/handlers/vpr_worker_handler.py",
+    "line": 169,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Failed to fetch gap responses from application record', error=str(exc))\n        return []"
+  },
+  {
+    "file": "careervp/handlers/vpr_worker_handler.py",
+    "line": 440,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        error_msg = f'Invalid VPR request payload: {str(e)}'\n        jobs_repo.update_job_status(\n            job_id=job_id,\n            status='FAILED',\n            error=error_msg,\n        )\n        logger.exception('Failed to build VPR request', job_id=job_id, error=str(e))\n        _send_task_failure(task_token, cause=error_msg)\n        return"
+  },
+  {
+    "file": "careervp/handlers/vpr_worker_handler.py",
+    "line": 652,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.exception(\n                'Unexpected error processing job',\n                message_id=message_id,\n                error=str(e),\n            )\n            batch_item_failures.append({'itemIdentifier': message_id})"
+  },
+  {
+    "file": "careervp/handlers/vpr_worker_handler.py",
+    "line": 559,
+    "kind": "bare_pass",
+    "body": "except Exception:\n                pass"
+  },
+  {
+    "file": "careervp/handlers/vpr_worker_handler.py",
+    "line": 589,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n                logger.warning(\n                    'Could not update application artifact_statuses for VPR',\n                    job_id=job_id,\n                    application_id=application_id_str,\n                    error=str(e),\n                )"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 192,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        error_details = f'{type(exc).__name__}: {str(exc)}'\n        logger.error(\n            'Gap question generation failed',\n            job_id=job_id,\n            error=error_details,\n            exc_info=True,\n        )\n        return _error_response(\n            HTTPStatus.SERVICE_UNAVAILABLE,\n            f'Failed to invoke LLM model: {error_details}',\n            ResultCode.LLM_API_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 238,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 267,
+    "kind": "bare_pass",
+    "body": "except Exception:\n        pass"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 383,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Unexpected DAL exception while saving gap responses', error=str(exc), job_id=job_id)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 401,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Could not update application with gap responses', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 478,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to start artifact chain', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 576,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('DAL error loading CV for gap prompt', user_id=user_id, cv_id=cv_id, error=str(exc))\n        return _cv_not_found_error_envelope()"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 634,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Could not fetch job data for gap prompt', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 881,
+    "kind": "bare_pass",
+    "body": "except Exception:\n        pass"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 965,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning(\n            'Unable to read trial usage snapshot',\n            endpoint=endpoint,\n            user_id=user_id,\n            error=str(exc),\n        )\n        return None"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 445,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning('Could not load job for artifact chain input', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/artifact_failure_handler.py",
+    "line": 65,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - defensive: never raise from a failure handler\n        logger.error('Failed to mark artifact failed', job_id=job_id, artifact_type=artifact_type, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/export_handler.py",
+    "line": 91,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to read artifact', exc_info=exc)\n        return _json_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'message': 'Export failed. Please try again.'},\n        )"
+  },
+  {
+    "file": "careervp/handlers/export_handler.py",
+    "line": 103,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to generate or upload export', exc_info=exc)\n        return _json_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'message': 'Export failed. Please try again.'},\n        )"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 151,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - context resolution failure is a server error\n        logger.error('AI-assist context resolution failed', user_id=user_id, error=str(exc), exc_info=True)\n        return _build_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'error': 'Could not assemble assist context', 'code': ResultCode.INTERNAL_ERROR},\n        )"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 207,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - unexpected failure must be a safe 500\n        logger.error('AI-assist generation failed', error=str(exc), exc_info=True)\n        return _build_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'error': 'AI-assist failed', 'code': ResultCode.INTERNAL_ERROR},\n        )"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 277,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist ownership check failed', application_id=application_id, error=str(exc))\n        return False"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 294,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist job-ownership fallback failed', application_id=application_id, error=str(exc))\n        return False"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 378,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist VPR lookup failed', application_id=application_id, error=str(exc))\n        return None"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 409,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist gap question lookup failed', application_id=application_id, error=str(exc))\n        return None"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 474,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist tailored CV lookup failed', application_id=application_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 510,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist company research canonical lookup failed', application_id=application_id, error=str(exc))\n        canonical = None"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 518,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist company research lookup failed', application_id=application_id, error=str(exc))\n        return None"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 555,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n        return None"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 573,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('AI-assist cache write failed', error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 367,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            logger.warning('AI-assist CV lookup failed', table_name=cv_dal.table_name, error=str(exc))\n            continue"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 440,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            logger.warning('AI-assist gap responses lookup failed', table_name=gap_dal.table_name, error=str(exc))\n            continue"
+  },
+  {
+    "file": "careervp/handlers/artifact_cleanup_handler.py",
+    "line": 42,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Cleanup: failed to load application', application_id=application_id, error=str(exc))\n        app = None"
+  },
+  {
+    "file": "careervp/handlers/artifact_cleanup_handler.py",
+    "line": 69,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Cleanup: failed to roll back job status', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/artifact_cleanup_handler.py",
+    "line": 179,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Artifact cleanup reaper error', error=str(exc))\n        return {'status': 'error', 'cleaned': cleaned, 'dry_run': dry_run}"
+  },
+  {
+    "file": "careervp/handlers/artifact_cleanup_handler.py",
+    "line": 192,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Cleanup: scan failed', error=str(exc))\n        return []"
+  },
+  {
+    "file": "careervp/handlers/artifact_cleanup_handler.py",
+    "line": 176,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                logger.warning('Cleanup: error processing job', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 59,
+    "kind": "no_raise",
+    "body": "except Exception:  # pragma: no cover - fallback for tests\n    import logging\n\n    logger = logging.getLogger(__name__)"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 263,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.info('CV tailoring failed', request_id=getattr(context, 'aws_request_id', 'unknown'))\n        return _response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {\n                'success': False,\n                'code': ResultCode.INTERNAL_ERROR,\n                'message': str(exc),\n            },\n            headers,\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 406,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.warning('Failed to fetch job record', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 605,
+    "kind": "no_raise",
+    "body": "except Exception as e:  # noqa: BLE001\n        logger.warning(\n            'Could not update application artifact_statuses for cv_tailored',\n            artifact_type=artifact_type,\n            error=str(e),\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 879,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during cv tailoring cancel', error=str(exc))\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'}, headers)"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 981,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to update cv_tailored', cv_tailoring_id=cv_tailoring_id, error=str(exc))\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'success': False, 'message': 'Failed to update tailored CV'}, headers)"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 1024,
+    "kind": "bare_pass",
+    "body": "except Exception:  # noqa: BLE001\n        pass"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 1032,
+    "kind": "bare_pass",
+    "body": "except Exception:  # noqa: BLE001\n        pass"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 1044,
+    "kind": "bare_pass",
+    "body": "except Exception:  # noqa: BLE001\n        pass"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 98,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n            logger.exception('Error in get_tailored_cv_status')\n            return _response(\n                HTTPStatus.INTERNAL_SERVER_ERROR,\n                {'success': False, 'message': 'Internal server error'},\n                headers,\n            )"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 423,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            logger.warning('VPR fetch failed \u2014 proceeding without VPR', vpr_id=vpr_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 454,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            logger.warning('Failed to fetch job record from JobsRepository', job_id=job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 895,
+    "kind": "no_raise",
+    "body": "except Exception:\n            item = None"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 103,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.warning('Failed to cache presigned URL in DynamoDB', job_id=job_id, error=str(e))"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 131,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return False"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 256,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.warning('Unable to enrich completed VPR payload from S3', job_id=job_id, error=str(e))"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 396,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during VPR cancel', job_id=vpr_id, error=str(exc))\n        return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 437,
+    "kind": "bare_pass",
+    "body": "except Exception:\n        pass"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 441,
+    "kind": "bare_pass",
+    "body": "except Exception:\n        pass"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 478,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Chain stop after VPR cancel failed (non-fatal)', error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 597,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return None"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 364,
+    "kind": "no_raise",
+    "body": "except Exception:\n                logger.warning('Jobs table fallback failed for VPR list metadata', job_id=job_id, ref_job_id=ref_job_id)"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 447,
+    "kind": "bare_pass",
+    "body": "except Exception:\n                pass"
+  },
+  {
+    "file": "careervp/handlers/artifact_dependency_utils.py",
+    "line": 171,
+    "kind": "bare_pass",
+    "body": "except Exception:\n        pass"
+  },
+  {
+    "file": "careervp/handlers/artifact_dependency_utils.py",
+    "line": 232,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return"
+  },
+  {
+    "file": "careervp/handlers/artifact_dependency_utils.py",
+    "line": 58,
+    "kind": "no_raise",
+    "body": "except Exception:\n            return None"
+  },
+  {
+    "file": "careervp/handlers/artifact_dependency_utils.py",
+    "line": 68,
+    "kind": "no_raise",
+    "body": "except Exception:\n                return None"
+  },
+  {
+    "file": "careervp/handlers/vpr_submit_handler.py",
+    "line": 83,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return True"
+  },
+  {
+    "file": "careervp/handlers/vpr_submit_handler.py",
+    "line": 205,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.warning(\n            'Could not update application artifact_statuses on idempotent VPR',\n            job_id=job_id,\n            error=str(e),\n        )"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 121,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Could not load application for CR field hydration', job_id=input_data.job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 140,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Could not hydrate CR fields from jobs table', job_id=input_data.job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 218,
+    "kind": "no_raise",
+    "body": "except Exception as signal_exc:\n        logger.info(\n            'CR cancel chain signal suppressed (execution already stopped)',\n            job_id=input_data.job_id,\n            error=str(signal_exc),\n        )"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 235,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.info('CR cancel: could not set company_research_error', job_id=input_data.job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 244,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.info(\n            'CR cancel state transition skipped (application already past cr_pending)',\n            job_id=input_data.job_id,\n            error=str(exc),\n        )"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 273,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('Hard-fail DAL update partial', error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 287,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        from botocore.exceptions import ClientError as _ClientError\n\n        if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':\n            logger.info(\n                'Hard-fail state transition skipped (application not in cr_pending)',\n                job_id=input_data.job_id,\n            )\n        else:\n            logger.warning('Hard-fail state transition failed', error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 382,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.warning('CR worker state transition skipped', job_id=input_data.job_id, error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 444,
+    "kind": "any_raise",
+    "body": "except Exception:\n        if idempotency_repo is not None:\n            idempotency_repo.release_operation(idempotency_key)\n        raise"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 439,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.warning('Terminal-state check failed; proceeding with processing', error=str(exc))"
+  },
+  {
+    "file": "careervp/handlers/company_research_worker_handler.py",
+    "line": 467,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            logger.exception('Unexpected error processing CR record', message_id=message_id, error=str(exc))\n            batch_item_failures.append({'itemIdentifier': message_id})"
+  },
+  {
+    "file": "careervp/handlers/utils/dynamic_configuration.py",
+    "line": 58,
+    "kind": "any_raise",
+    "body": "except Exception as exc:\n        raise DynamicConfigurationException(f'appconfig schema failed pydantic validation, exception={str(exc)}') from exc"
+  },
+  {
+    "file": "careervp/handlers/utils/observability.py",
+    "line": 40,
+    "kind": "any_raise",
+    "body": "except Exception:\n            logger.append_keys(status_code=500)\n            logger.exception('request failed with an unhandled exception', status_code=500)\n            raise"
+  },
+  {
+    "file": "careervp/logic/utils/web_scraper.py",
+    "line": 39,
+    "kind": "no_raise",
+    "body": "except Exception:\n        return False"
+  },
+  {
+    "file": "careervp/logic/utils/web_scraper.py",
+    "line": 72,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - safety net\n        return Result(success=False, error=str(exc), code=ResultCode.SCRAPE_FAILED)"
+  },
+  {
+    "file": "careervp/logic/utils/tavily_client.py",
+    "line": 72,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(success=False, error=f'Tavily search error: {exc}', code=ResultCode.SEARCH_FAILED)"
+  },
+  {
+    "file": "careervp/logic/utils/llm_client.py",
+    "line": 283,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.exception('Unexpected LLM error', error=str(e))\n            return Result(success=False, error=str(e), code=ResultCode.INTERNAL_ERROR)"
+  },
+  {
+    "file": "careervp/logic/utils/llm_client.py",
+    "line": 79,
+    "kind": "any_raise",
+    "body": "except Exception as e:  # noqa: BLE001 - allow retry for overloaded transient provider errors.\n                    if _is_transient_error(e):\n                        last_exception = e\n                        delay = base_delay * (2**attempt)\n                        logger.warning(\n                            'Transient provider error, retrying attempt=%s error_type=%s delay=%.2f',\n                            attempt + 1,\n                            type(e).__name__,\n                            delay,\n                        )\n                        sleep(delay)\n                    else:\n                        raise"
+  }
+]

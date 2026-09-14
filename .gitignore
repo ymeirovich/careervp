@@ -69,3 +69,10 @@ src/frontend/tests/e2e/.auth/
 .coverage
 coverage.json
 htmlcov/
+
+# STATE page — a rendered view of proofs, never a source. Regenerate, do not commit.
+state/
+
+# Playwright run artifacts — regenerated every run, never source.
+src/frontend/playwright-report/
+src/frontend/test-results/

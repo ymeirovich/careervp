@@ -1,0 +1,3126 @@
+{
+  "scope_note": "Modes distinguish individual review from AST/hash/test coverage. Bare filenames, search results and unavailable paths are not promoted to full semantic inspection. Audit outputs added later are listed by artifact-validation.json. No Pass-A output was read.",
+  "files": [
+    {
+      "path": ".clauderules",
+      "sha256": "e349540a805a02b446c7b4492b87d7aff2cac8c3c1ada1ea768bef218b7b802b",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "sha256": "2e89e0a340a909c85a509f0956351ac8010c6fee447cada3b83b975717896d69",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "560ce22cb49f52e108a3f1b2a1f1d48a8b1967d01cd2c8b8646b4a1179fe64f3",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "033418362f7d2249a81b1e932ecb38a1357139e5d401275c37982b4b1cc8858c",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "amplify.yml",
+      "sha256": "3575448a5a05d58f8b9b648715f71844dd55a2856385d081f76b7bb4dc84a69a",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "docs/db-redesign/code/code-analysis/project/specs/P-04-P-05-auth-idor-spec.md",
+      "sha256": "6c7483dae9318860b0c18a1316effd67889a99b6b02084731022f61a381f1397",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-jobs-corrected.json",
+      "sha256": "6d9155747877d23a038a766bfb9c2d2ea9372e686e63a91612b60f1dc37c8e07",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-jobs.json",
+      "sha256": "116091487ba0ad494ce7407726ed8141dd0e0cf124a19ee56caddcdcb2adc889",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E005-ttl.json",
+      "sha256": "863123e7ce8058d5bd42b1d93bfb6a397f5ff02afa60d167a8b74a03645b5090",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E006-applications.json",
+      "sha256": "9555953e3009ed66f5f78e86f56165bbf37a1a9c8be9c9ebf9e509fca53c9000",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E008-Errors.json",
+      "sha256": "62423a737d58ebcb9119065041977b7f936f1266f47635057b5ca91c317edb3a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E008-Invocations.json",
+      "sha256": "ceb4188f2551c1f68622711243c704dfc994ddabe2f75e8d282a7576e30994c1",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E009-classifier-records.json",
+      "sha256": "d3d1a0e2494127cdb8721ee52436ce138aad20aea9638f8691ed32b4ee6c5807",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E009-explicit-error-returns.json",
+      "sha256": "6acb1a34ca103f012d269e363d7cf91ca2d634bcad5a5f4d18241fcadfaacd1e",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-fatal-write-only.diff",
+      "sha256": "a6f8a765b4f2dea3a9dafda7d37a088a9a956752b92ff59f23bbe4460176d143",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-clean.json",
+      "sha256": "d78e0b93ca2140648bc9733f96a7ec5235e3a9542bd8be96a53edb56d829997e",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-clean.log",
+      "sha256": "e749a52601de4803980973a131fdd3020b6ebb2d756b14b4a808182d6fc3f73c",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-controlled.json",
+      "sha256": "41b7965f57813a3d55f7f86847fd0542530afde35e06b5369e81d962848b9a55",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-head-controlled.log",
+      "sha256": "7ff7debd9eba6f81161c27ca363114bfd3a670303a2996c1c81a8bc8ca0dc8dd",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-matched-after.json",
+      "sha256": "a97294b6e729a01c89feadbcf1833ea0fc20c003cd123004c207158eec6b84bb",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-matched-before.json",
+      "sha256": "ef13d1167b05f231ac5749a09e9b08be6f6f9362d60c63d32e09eb112eac2d61",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-clean.json",
+      "sha256": "dee340ab8a922e2d30419b651abe753e4d3125f9dbfd1aefba610633e4f367fe",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-clean.log",
+      "sha256": "61e44b9f678537465fd0f50943b1ab73edd84420725f3b0e7153b3c942ae7917",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-controlled.json",
+      "sha256": "84dd1de346d1120a6db4528200711adadd8536bdc8dd4632adcf7db9d4d93133",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-controlled.log",
+      "sha256": "c676870463c60ff8d7a62eea90fc9dac4baf0ed2490465ca059db014a39f360b",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E010-parent-tests-fatal-write-only.json",
+      "sha256": "71caa0e7f3016b6b34ebca0388bb83c303466ccd64ba8b6b95f1888e18b844e2",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.diff",
+      "sha256": "f22f09610e72a8a52985b8892cad5fbaaabd4fcb047a494965bcbbaf8c5a6e03",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.json",
+      "sha256": "8c80054c75106960d432cee8ae38dffbd35aff133b66e10804759d8c77735b27",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both-controlled.log",
+      "sha256": "34785016f06a26ab87590cebac6ca24f9b2d3c4bccde06c6b0d901401cca0771",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-both.diff",
+      "sha256": "f22f09610e72a8a52985b8892cad5fbaaabd4fcb047a494965bcbbaf8c5a6e03",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-live-mutant-control.json",
+      "sha256": "de449b5fca03b6b3bb323505128d28e3f84af436758a5342d596438b8534b9da",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.diff",
+      "sha256": "01da64160c4a33012abefe1ec0576ade8db6667384c227819bd71e244acd85e0",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.json",
+      "sha256": "df189c53ff62d9944469f0b32892f6c41353175bc7cdb0c427bf931de5887047",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E011-status-controlled.log",
+      "sha256": "a95a4b79332c776a3be86f5d1e52306abaf7e4b0aec176a71afc47692ea73e4e",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.diff",
+      "sha256": "630811221db04b5f811aa0801063da16cd62ff56aa4c592c60137bbe79949f3f",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.json",
+      "sha256": "ff6ed84c709dc796e171ef6455192fc8bdcfc849ebb47750426b9f9efcfec43b",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-both-header-cases.log",
+      "sha256": "7275cbec4b2cadd2e378b2dc81ddfd057978179e0b9177a655ca8a1e3d8b69f2",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.diff",
+      "sha256": "17de47a8670874ac7a879560db5ae70bb8d083c0f368f482180ccfce204cdad9",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.json",
+      "sha256": "3e58981bfedfc3945739a43b7294eb1d45f56d8a78df55157ff3c77d41891e3f",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E012-controlled.log",
+      "sha256": "cd3a3d44c0bf673aa5979b7edc44ac48317ea05db7873b6a299a7fb543e82a04",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E015-http-apis.json",
+      "sha256": "8aa088cd27dd81b1528a0b422694659b180666dde5af83971150a8794fae5797",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E015-rest-apis.json",
+      "sha256": "c8b1e1055c57fcdbaef800e4f22415fb5ed35f1049fce67e1b90a0618d10b26e",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E016-knowledge-count.json",
+      "sha256": "12a8ea70a245e1e9a2344d4f62618df8fe5037cca63efa9b92653f581c37fc22",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E019-callers.json",
+      "sha256": "d45a929dbc79cc803d0d84d9694d3e942c2eb480d6fe123ec40e091ec6e5be71",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E020-callers.json",
+      "sha256": "a708d0810d080a67755add148ce61c7cc6b64ea141f914eda18f645ecc3fb91f",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E021-callers.json",
+      "sha256": "9b83f9b3df3e8bdbc5bd96962d74d30880f89ce547c10ebd0867f80085fa6785",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/E022-submit.json",
+      "sha256": "b86b343d2c0159532f4e615bb717aa5e9543af0ad1b705e6a3b961d5fac36ef1",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/S2-invoke-grants.json",
+      "sha256": "c0fc31f033905f240d7cffcb87c861c5c467ae9d4b4886ca31ef0782c5437965",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/S26-length-controls.json",
+      "sha256": "076db38a6bb2a05e964fc1381c62634829b576ddb8474f772fcd59baa86830f9",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/additional-controls-command.json",
+      "sha256": "582706b95babc0a450bcc4b0cbe6b6da47436c5416649d8b0cba0ae46b761ad2",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/additional-controls.json",
+      "sha256": "95c6fa261669a85f8628e9849f2a3f921a28b7779a8b3b998e6648243a693dee",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-authorizers.json",
+      "sha256": "33638433846676919761543b623f151b9729bd7d209ecc4a1fda1f6b9166ae85",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-definition.json",
+      "sha256": "8fcea7060ba3a72ed24c39f681f044d2e314dbbe67df23bb3baf45323ba9f969",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-resources.json",
+      "sha256": "6dcff193e9805e069436bc5270308cbda5c83cd633d2c4d13ec4de3666103b27",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/api-stages.json",
+      "sha256": "e351f295165a9bddafe7f1e9d86daca2d82f358c6e0b9f4d6576b7baa5d3a818",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/artifact-validation.json",
+      "sha256": "e361949475c1cf4e4b29b2f981bbbe2c43167b16835ba43c063afa9ba30c1b86",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/cleanup-errors-log.json",
+      "sha256": "b336272f74864570761ab4f154917ac2b02eda13429ab4780938397df9099d54",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/defect-proofs.log",
+      "sha256": "b485a9dac47714906f2fac97efc2f1cb243062d9817336b3078da594b5043f2a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-api-export-command.json",
+      "sha256": "a0487cd8853e5a4582816c40295a82397e4dd56ef0dc01732fd619347376ff1c",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-api-oas.json",
+      "sha256": "e865149551a6eab9b2c3fab745e0362cf2a3bc1efe70fce0701e8fa31c3a0caf",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+      "sha256": "65d2ef587a7be46d237f32a993b7e838639629b2ddbe7c0026152eaee6e60375",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/export-aliases.json",
+      "sha256": "71eeeeb2eff8f27767ef53c965621d6791691dea67cd4d35595cbc6903b04519",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/export-policy-live-devx.json",
+      "sha256": "b2ee76ed681dc151cbc006eb3457f02a2249d050acc7541726c6e0d8efb5d7d1",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls-command.json",
+      "sha256": "3942c6af0c8419a8066f5ce89fb78c4068feb36f55bfa5dcead0a84ea0d166cb",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls-corrected-command.json",
+      "sha256": "5ac430ae85abf2b13b4fb73e2dbacf8a7f55f25278901cb4065f35ef55546616",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-source-controls.json",
+      "sha256": "18fb179507ef8df66aa47da3855e1e45ccf9dec6d06e6eb215bc5ca664c56bf2",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/final-worktree-status.json",
+      "sha256": "0a71a4048b1ed3a132f9dbcaaafd3620e1ef2ab02726c06745dd85750a83fff7",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/finding-assessments.json",
+      "sha256": "f8d84f9aaeb841a1c79c9cbe4072918ee0864048de6af0fec7f762b2daf31901",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/header-equivalent-command.json",
+      "sha256": "5803dafc09e299a46224ff576e8cce0888d835e6e8dc256fb4d3ab9bfae6630c",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-control-command.json",
+      "sha256": "6987a8b333c241946e53a8804eca5f5aec16535f37b1799c45de92e6c3bad7d4",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-matched-command.json",
+      "sha256": "820fb824991e038567ad745f5bd2141ed6ce2ff0531f1108ad8095dbfe7d2a92",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/historical-upload-only.json",
+      "sha256": "d6020db6d7e9f2762d33840e0d9f14b69f1c82be4df70939e11e06089d999993",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-authorization-details.json",
+      "sha256": "d83af5cc682555c9326ef514abefb617f3ec3da212917a1c8a23307b36383a43",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-local-policies.json",
+      "sha256": "fdf141c0fbea394ac50475dba33d0b0133d7f638327c82f1ff40683aeb878115",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/iam-roles.json",
+      "sha256": "b1764b35836280faf8140e760565d4ab19e8e1373e4735a4d83548d8065079c0",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/identity.json",
+      "sha256": "a212fdbb687a5946a0958ebecb5279cbdc8e91883697c9bc8e84d01ff2ab8d65",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-controls-command.json",
+      "sha256": "b1a7191cff0e66249ea52e23a8d96d62072c2eb6dc38e805c7cbd72b38494aac",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-controls.json",
+      "sha256": "39f0de0910441eca585be29e27f1950e34357c97a2d2c37d2458cb14692883ef",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/independent-source-notes.md",
+      "sha256": "d460fa80a5b367a807c7ee00407465f180069378a03af840b2739d6900a2c491",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/inspected-resources.json",
+      "sha256": "94fbc4670f7c3aec5d4ef84310a0db868ba347bcf47de9688246fdf194f6a78e",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-jobs.json",
+      "sha256": "002b84164c6ce6eba53d553a6348ae737fd3236430e9bbf6b76002f08c55f5c4",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-knowledge-base.json",
+      "sha256": "c3fad6d3e9dbd3e39b9742ca349514ece91261a84b5ee92c221f7e02ebe209b6",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/integration-vpr.json",
+      "sha256": "f75ec85d610e95d9c0b13bc80047b42ffce190cad3bd8c9c4df1b13854db74d8",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/invoke-policy-candidates.json",
+      "sha256": "addabcffd380ea87bf055dcd8d15a47c222ae62972d3a3ba5ea48aef580e6f60",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/knowledge-callers.json",
+      "sha256": "63ea0d674f7daac317efe7685a84f0c86b7463eeb634f0d7cb01ca6b9ea4878c",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/lambda-inventory.json",
+      "sha256": "865d52e68928cbff2117a62dda457d391e7e480382e53d36056a509c9c728731",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/main-leaked-network-control.json",
+      "sha256": "481aa9568eab5bf2005d757c190c6e6b35b34425a8855baa0a06efae97ef5d8f",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-jobs.json",
+      "sha256": "a055c94d07296a99b7ccaf5b280fc43336f05678e99480e38c7adc365fecd27b",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-knowledge-base.json",
+      "sha256": "1ac09811ef3568388cf429e586991ef25341cc072d77c33a2f4d880e8ff829da",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/method-vpr.json",
+      "sha256": "c2a403b665ecb916058dcbd4de99442b1da181d78720f541b630aff047acb9ab",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/mutation-command.json",
+      "sha256": "6eb49a65c2ca33c07a2294f4ef39ffed191727c0981f2f54e77a063249344c2a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-artifact-cleanup-lambda-devx.json",
+      "sha256": "0255179e4e30e9bb4c5035eb7c1dabd0e767cbb0cff9c7d4282ad55b3e1b372a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-export-lambda-devx.json",
+      "sha256": "2a07d9d5e1bede3d96df0148dcdc8b43c8b079d7e155156293c297333e37b05b",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-vpr-status-lambda-devx.json",
+      "sha256": "d8ebcb245048a228ae48b29a71d4679e3e24ea50f9c12f1a07e72b4a780e49f2",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/policy-careervp-vpr-worker-lambda-devx.json",
+      "sha256": "024301e7381bacec641ad0081c58a926060c3d7fded011e481826f81111d98a0",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/reproductions-explicit.log",
+      "sha256": "feee66e058ea95a85ca420f1ccf1ee534100512a33bc97fadee844c04ada7478",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/reproductions.log",
+      "sha256": "b4ab4f3f490ec400dfc09dc97749042ab03b9e65e5d8e1a16a5a4f6804efb8fa",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/results-lifecycle.json",
+      "sha256": "5ab1d21ee4360b602ff489d90521a11eef3ebbce693b1f0db886fc352f77979b",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/results-objects.json",
+      "sha256": "c83fac620f11ffc95f3d599787f7eda8b6d973feae9de531ea415456cee8e315",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/run-metadata.json",
+      "sha256": "cdb1e4a567f63275b7e931db4a73198a8c694e0b1f0ebc385c455fcc99203105",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-applications.json",
+      "sha256": "9de5aae9d3fe69ae325bcbcf76e008bbf6879d790d417c07c0058bde8142d63c",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-artifacts.json",
+      "sha256": "fa48410367ac4509034e44ea448eb1b0f295c8cc93435825dba76fb6c4b0789d",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-gap-responses.json",
+      "sha256": "bf5266dd30c369a78c52221f936ce5d63491b8accf2c87ef6bcf127f9c6af12f",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-jobs.json",
+      "sha256": "64a7a5481cb9f890c467c82f40c510bcd5e894ca626742df5d71cde1d740b751",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/schema-knowledge.json",
+      "sha256": "50bf76d8552c56f455d1325134b89b12fddb1c20d025b104245a26bf5cfbaef0",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/stack-resources.json",
+      "sha256": "c233f13f803674c34fcf13e4356332429e64da664cc2945a99e6b206c47048dc",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/stack-stamp.json",
+      "sha256": "e25af13e1584b453c225c0250f23ef0afa2b96f6547e67d2bbaaa10288de6a36",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/tailor-aliases.json",
+      "sha256": "d431c09fea90a028f64fef927c9ce8d1b421ae8556062d236583a007d5949e45",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/tailor-policy.json",
+      "sha256": "202a04b25097a610449e0c83725b1cb4c736d4adddd86985b226fb4269a61ab8",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/unit-baseline.log",
+      "sha256": "0bfb81f3af062b41f136690d52e57d146d053b2956435593db252d34958e147a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/vpr-status-aliases.json",
+      "sha256": "0cdc4840912d870b48379c97c5759965ee54d6c60520cb9f7efcc92247a21f6a",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/vpr-status-policy-live-devx.json",
+      "sha256": "e15bf357bb0461ca8ba0446ff79246398bfe53a647acbe2af4644f1f7983eda0",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/waf-prod.json",
+      "sha256": "32fe6fe6d5b8ff0fde7e65cd428b80552504f092fe44d7f2acca1a2b7d72a723",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/astra-pass-b/worktrees.json",
+      "sha256": "6a54a73bf9e9fb7c87108b579b9860d6a18f10eacfbfd60f6cefec2480cbd943",
+      "inspection_modes": [
+        "Raw output / audit instrument / derivation receipt inspected"
+      ]
+    },
+    {
+      "path": "docs/evidence/p1-repro/README.md",
+      "sha256": "69e2c1b181f3589e32ba55f766f3d486a3c613c0c09f769c73cb77e8aa5a80b3",
+      "inspection_modes": [
+        "P1 reproduction source/README inspected and explicitly executed as applicable"
+      ]
+    },
+    {
+      "path": "docs/evidence/p1-repro/s0a_export_idor_test.py",
+      "sha256": "684013d4b3613db651cf0382f76467be628b3a6674f477f3f85ab17cd7ab2655",
+      "inspection_modes": [
+        "P1 reproduction source/README inspected and explicitly executed as applicable"
+      ]
+    },
+    {
+      "path": "docs/evidence/p1-repro/s0b_status_fallback_test.py",
+      "sha256": "35152f686f52297bf52cc92467687ae85c0a45ba842d53f96d2f41b66bcf2367",
+      "inspection_modes": [
+        "P1 reproduction source/README inspected and explicitly executed as applicable"
+      ]
+    },
+    {
+      "path": "docs/evidence/p1-repro/s11d_gpa_float_test.py",
+      "sha256": "b0e8e8893936a54d4b393c3d06145c3e14ccc1d643a044b147a61e12e0d7c608",
+      "inspection_modes": [
+        "P1 reproduction source/README inspected and explicitly executed as applicable"
+      ]
+    },
+    {
+      "path": "docs/evidence/p1-repro/s25_state_machine_test.py",
+      "sha256": "3b1835b3fa1392b8e1059a346bdb98fdc5a1ba4b96ebb7d38fb714342beca7cb",
+      "inspection_modes": [
+        "P1 reproduction source/README inspected and explicitly executed as applicable"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-12-P1-VERDICTS.md",
+      "sha256": "c0d6a32b703e50d673e5fbe898db553b1e67c5a3e52c11fca362afcd88f1d266",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-PASS-B-evidence-audit.md",
+      "sha256": "5fb7e0e49787c4db15e184bcea1dfa55792f88c5b941a366475b87fa242ad10d",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-PASS-B-results.md",
+      "sha256": "a0e8f8902a4fd869b2b200d47f31da98a95b04487de2538d1e4363b526f46c35",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-PASS-B-results.yaml",
+      "sha256": "fe0ca242404df93aa6d228d7d57b3f3eb8e322900ae70c5d3c27149e227be8ab",
+      "inspection_modes": [
+        "Audit output/metadata validated"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-evidence-register.yaml",
+      "sha256": "0b77d49797caf82743aa3429b6ac0c6b58024187f8ca4359928600d7dc345aba",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-findings-manifest.yaml",
+      "sha256": "a829761aac3879f69cf1716c6d1574849bd0ab515114529d15d8c0c76b792dd2",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "infra/careervp/api_construct.py",
+      "sha256": "2d1ceb8bd34efd0c9757b7dbf2fb659d6706caada18489816eb2155b60cac4ee",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "infra/careervp/api_db_construct.py",
+      "sha256": "f9f12952d924348350deaff18f5b5e43d8e5f5e1f4c0bb3e9323a7d76a3118c8",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "infra/careervp/frontend_stack.py",
+      "sha256": "357e87d7c996c2a062128e60274e368d332363c519f3719aed328d79dab991db",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "infra/careervp/service_stack.py",
+      "sha256": "44ea327d722f66762c2009953ad3c2f8c564e7506df173f1a2e202231dd93ee2",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "infra/careervp/waf_construct.py",
+      "sha256": "ba756d99f5b4dc1a8691955099527e65ac2e8e7a8242a00b1d852e09c3cc5efc",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/__init__.py",
+      "sha256": "0fe6e770c449390fe9744b12d4e2def46d6a79527dab8deccbc0f5687867ed4f",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/api_storage_adapter.py",
+      "sha256": "3877a42a222f2a52f8bf74ddc4133c2fcf954accd7768e32847361af7bf994d8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/application_repository.py",
+      "sha256": "25a15f26354f659d068ad17aa868a23feb7c92547adf699f3ec1511846314a15",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/core_repository.py",
+      "sha256": "b5d5af1058c77d95b55049a90e224acf7baae0e99e46eca4aba08c036a7747a5",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/cv_dal.py",
+      "sha256": "104526af19c02a9ecf25a1016629ee309b240ef448196d2185aa2b84bfc92e6f",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/cv_repository.py",
+      "sha256": "06abeb6ee3fa66da19daeca62bc22d6cf435e8d6583b2a68b9328c10521a2d73",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/cv_tailoring_dal.py",
+      "sha256": "c1b9f3f871e9a68aafdeb1310ee15d185e324be23c6a031669ebadc3fec0883b",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/db_handler.py",
+      "sha256": "b59eb066060c69340142a66767e06ff74333796735500b7006cd38ca0e335a16",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/dynamo_dal_handler.py",
+      "sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/idempotency_repository.py",
+      "sha256": "0d7838f6bc9c7e5321ef0d8e77c8059708b2c3adc1e508f3cc6cff22e8eba3c6",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/identity_map_repository.py",
+      "sha256": "e823e926ed34e6ca4cb3bc6f05b6516f281f49bec267d1c91595a493f2f2eb49",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/jobs_repository.py",
+      "sha256": "2bac26c4a3868c3e5a62f26b1f5991b48aaa2501c251a8aee1d99f5c45ba4cd0",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/knowledge_repository.py",
+      "sha256": "50239683a3da6b5c72217652ec01dca90952a8b21e5cb71ea72d3c543b58c7e1",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/models/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/subscription_repository.py",
+      "sha256": "3e5ab3cbbeb7b969996e91e1c5ce6b0fc86d1104d472bf6f9bcefae4d8163a01",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/table_registry.py",
+      "sha256": "27077a553c5a60402c37f33385582c72a5b130e3bdffc3a60a72c4ea48af6fa2",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/dal/user_repository.py",
+      "sha256": "fad3fe14937893a781e18110d3908e726bbffd9b07b49ad867e7317950d0003c",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/ai_assist_handler.py",
+      "sha256": "ffc0e13dace63662ae5ea4a1fcde1070560be83160d1a27035497e089c00f9a2",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/api_gateway_authorizer.py",
+      "sha256": "e337aa38588e3855097c052a60d9f2a4d54fcc28af91be4431456a3a0bbfbfbd",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/application_handler.py",
+      "sha256": "9dd2f105efdd41471ad062baa9929eb22a21ed2a0792da3f8ae5cf3e2e8b2f07",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/artifact_cleanup_handler.py",
+      "sha256": "20e83ede943ab21d13089f269aa9d62ab145d6ed5a91cd0214ee7adacb91bc1c",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/artifact_dependency_utils.py",
+      "sha256": "d0d48dc47cb57f3022702ba836be4dac0b141991ef80de6c9d0a899fb7dd6b4c",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/artifact_failure_handler.py",
+      "sha256": "be4c48a0830123f4a2e57b07b06319a956413788433371f7f168610ccd1ac11a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/auth_handler.py",
+      "sha256": "726c8c11af0ad07c5916faf1cb78a888971a7baf49fcc60be4415161e05320d7",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/auth_middleware.py",
+      "sha256": "bd42668bc0a9cc9976e501a5ea05f1c1a86910c586339e72873e7e02d8c82374",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/auth_utils.py",
+      "sha256": "df819baaf757adde4586c6023cc9a6c843ed243beead7009c2810cc3de287274",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/billing_handler.py",
+      "sha256": "5b9673ff087f243420af5db3a24eb37ea9adec972912c73dd17c268f33221187",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/billing_reconcile_handler.py",
+      "sha256": "79db9ff0c30e1112197edd1a6bfd2386e7963c3788f9c97e0e0f55b96891bcee",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/company_research_handler.py",
+      "sha256": "00ed7e7b98bfa812010eebe09b5da3a5ce0967789878e503eca3264c19a532ff",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/company_research_worker_handler.py",
+      "sha256": "309006f346d3d9fa3363f00889a8979ea0b1f8ba830e82375866c954093e23ba",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cors_utils.py",
+      "sha256": "05f4ff3eaaf21e9da87bd81ed7ec2099c760ae759c53dd53e0598a4b27aaaba8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+      "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cover_letter_submit_handler.py",
+      "sha256": "706cf9967160a009162a8277b1cedda24c1b8b157ac9afffdcb9ea8807794745",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cr_failure_handler.py",
+      "sha256": "2987ebd7f48721ad417e1552f2e2c92902404e0685a7c5978f584eda9d9b65ad",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+      "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/cv_upload_handler.py",
+      "sha256": "dc03cac19de9b85a986e9a28636509fc2aac1e9011a8224216c9320cd2f04824",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/error_report_handler.py",
+      "sha256": "ea6ec42529662192af556689c8bd8765109e13d74082ebe928b709b2739b52bc",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/export_handler.py",
+      "sha256": "72472bb3adcedc14bce037378bf58299a14440769d913074aee251cac65edb75",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/gap_handler.py",
+      "sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/health_handler.py",
+      "sha256": "f63ca9ca964230bdf3de8e26fe9f7c6e7f894b09ce163f5c7cef735972df15fd",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/interview_prep_handler.py",
+      "sha256": "59c1db64e8e49077e456d302e54554beb6e9823c68fb51d95d6e89f68098a799",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/interview_prep_submit_handler.py",
+      "sha256": "b972d054d6b6cf8a02ba1512c3b4e6ee00e0c90fbe25e7143003727275a0453a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/job_handler.py",
+      "sha256": "4ccc68a63139ec169e108150747dd2825cdf1f8b6702d44bad19b81129adc6f1",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/knowledge_base_handler.py",
+      "sha256": "bbf00e5dd418b2bcd6fb45a5198ddff3b6351fc81592d79fbf90c148464bce94",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/models/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/models/dynamic_configuration.py",
+      "sha256": "7ffe122516a6cb4e62955e907e61fc96b3678195ca74e1401c394ad8d41a68ea",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/models/env_vars.py",
+      "sha256": "fc3b0e621d6314e128d03e224d83a5f3a82f1a9b637906a667baacec24701b7e",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/user_handler.py",
+      "sha256": "cbc23ac0c3f25661e332578236aa137df3faeb5ee57446c3d5f056026a5cb5ff",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/dynamic_configuration.py",
+      "sha256": "c1450e0b80f1aeca3440306757123bf7fc1622c804cd195602b59aceb65d3874",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/env_guard.py",
+      "sha256": "9f5506cbb3bba765c975095a5267c1d2e66a6be7d57878edc6070621d9f311d9",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/observability.py",
+      "sha256": "bf69abde509806fdd0c8f06655d6e399bef35957c0c2a3fb6145ba3f7cbdc986",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/rest_api_resolver.py",
+      "sha256": "0259e1d78cc1f66bc0703e22920610437db719d3156e78826646d1e867190236",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/utils/validation.py",
+      "sha256": "f3d91827ec3799b3b93c32be6d6183b3650ac02e2b83525929e9cec3445c32c3",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/validators.py",
+      "sha256": "d2b90e34ba3cabeff027c844acf31ade098a686680695c8391269765d3a16c6a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/vpr_dlq_handler.py",
+      "sha256": "ca6e421a45e5347d10477a4a09fe71d5b27bfda9d23ac23305e950ac9b01cae6",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/vpr_handler.py",
+      "sha256": "c158edbdc482f1c6ba314fb48e21d09ae534ba6b2c9935bcd9c106a9f0b8e7eb",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/vpr_status_handler.py",
+      "sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/vpr_submit_handler.py",
+      "sha256": "f63dcf76dc2c6684e416c3f30696da314355f085b1779f895cae464d1f0d60e0",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/handlers/vpr_worker_handler.py",
+      "sha256": "f3e53ab5443d203be4967fc2267b60ba980d15f36a56dc02502399328849ecc2",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/infrastructure/__init__.py",
+      "sha256": "c9dd126a726983fea9fd786de1757ff432c63644f01e9f9c7815ad4b0ac25969",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/infrastructure/stacks/__init__.py",
+      "sha256": "c523bd834343fc0d352780854cd45228ee3c38396e375d772ebd0b4345c8cb5a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/infrastructure/stacks/cv_tailoring_stack.py",
+      "sha256": "61be793734993243f444795d9bb5c3a7cbd0b4186c0ffc65c6569abbf7fb749f",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/__init__.py",
+      "sha256": "5fb5cb8f332fc0a14e51c8d7f3afaf1c0dc21ef3226d308c89444ebf93c273ce",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/artifact_dependency_resolver.py",
+      "sha256": "864539b1d16f820a2054bd4744026898317bdc6fc97d76f9b9bcdaa90b7a2003",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/auth_service.py",
+      "sha256": "8a50d60728a56e84962a24df9348c55884c854eafd19ef741b8c0adf7f09a652",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/billing_service.py",
+      "sha256": "281c39cd7885d3817f175f5f6fe299149e87a92788acf914dcd3589028441f79",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cancellation.py",
+      "sha256": "475c8349d718152f717d4fa2ee3ed2e16749cf69e71973b394dbc4ec384d2f99",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/circuit_breaker.py",
+      "sha256": "eea22657adc1b3201fd85c452becdcfd8f4df576d8be2d5b75be15912b88b967",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/company_intel_cache.py",
+      "sha256": "54de917277a62b81766d28f215d815e2aec5978a7ce7610ac78c2c7635d9bdb3",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/company_research.py",
+      "sha256": "d3dec14d4d239bb30178de226d8e05e158212265341af2468ad898a58a8a11a6",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/company_research_store.py",
+      "sha256": "5e7e17b79ff5b2dc5e7a68d9dcd0df639d9b682f69f9d8413ce57fed6e98e053",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cover_letter.py",
+      "sha256": "651638e5f39101abc225eefdbdfd363613cda8ceec2244de10a481131d453e02",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_parser.py",
+      "sha256": "0e6446031b84c958678655b2b7614806c09b94d0b086aeca9ce273f9fa446cb8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_summarizer.py",
+      "sha256": "d73d7a4d7be7d27f6db193c7e294a42c19c12b744de737a948bcbf3c6967e3e0",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_tailoring.py",
+      "sha256": "b4ac5bcb0f2d1be2391ab26afe9003e6d8cf15e3b994a9e620bf275afbda05bb",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_tailoring_ats.py",
+      "sha256": "41da590f7a67b7559c00685e93d9a6a7fa0f5f4f85883229c505ee6267738abb",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_tailoring_logic.py",
+      "sha256": "34c972e78532d6dc410c086d9098d68517d2caf22fefe9dc2e389ce5addce95a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_tailoring_pipeline.py",
+      "sha256": "2103630330866ab6355c8ca207f9cf1dff3f4836b1aee403998aab2099da9c9b",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/cv_tailoring_prompt.py",
+      "sha256": "39e847239fa98ecfc7720a2d62bbba05b0bbaacb9522b884a5055ba8511afe03",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/fvs_validator.py",
+      "sha256": "71f4d217f098e65b85c2a76838ccbabb7f3a134aa885d96274a288786b8c62e5",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/gap_analysis.py",
+      "sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/identity_resolver.py",
+      "sha256": "baf3fce66a1d6d9f111080a414a6e94b669d55fb33c348972612269ba43e6ba0",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/interview_prep.py",
+      "sha256": "346da06627e7161d73741babe5d24869686da5be4d78541fe116eaab82e5da49",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/llm_cache.py",
+      "sha256": "a305de688e79ebb0116ba686d57c8d305e5e13592e469158172320e72535c682",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/llm_client.py",
+      "sha256": "b69ee45e489700f83acf1e35da846e6d30b461a67d336a607d73d4723b1815b7",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/__init__.py",
+      "sha256": "3679c149ae51bfebb8765443fdb23caee22d1e8863ad4998109653bc6ec7fc0a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/ai_assist_prompt.py",
+      "sha256": "517df29a35d178bdc3e86d781410ff8c6c28ed109c4a3ce45b17c2107e973dca",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/company_research_prompt.py",
+      "sha256": "2a8938cdc3d15014d2f082d6b7fbf58d3071dd7c755a645d79bd15e24bc6a1fe",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/cover_letter_prompt.py",
+      "sha256": "a43bef0196cca9d6f88f74566c619abb3076c0ba1a553f11a775e9b5b74c0e7f",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/gap_analysis_prompt.py",
+      "sha256": "a6a32a8710484c8c3f42bc00989f755883420e7d76b45ad8649bf2c02ed81e5a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/interview_prep_prompt.py",
+      "sha256": "6dbc0b9de1223c2045aed517292d30a1590b72c75e4a3ddc6c05b08a242c7676",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/prompts/vpr_prompt.py",
+      "sha256": "a3edf563d613b1f94bd50d6a68b8cd786adc4f0ad67e4de33c3d20f1a507ac22",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/quota_service.py",
+      "sha256": "86772916f3c6233f72611f084bf1f35a755b87f014f74569d1df398f6955e6f0",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/reconciliation_service.py",
+      "sha256": "41c30fe7eebc916214a6673e3e68417ac69b09e915771af6a6cfd70440df6352",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/trial_service.py",
+      "sha256": "6a79cb66faac35361726fa7d1e30e03f03c49dbabc217f605eeb97a904af05f5",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/__init__.py",
+      "sha256": "c632e16798c3fb292485902cd0e03839de92d5702cee70be5acb675a6c08bf4d",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/constants.py",
+      "sha256": "184c7211429c66fffc8a78bc098006ec531cdee3efcd01f5876222973cdfaf53",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/domain_validator.py",
+      "sha256": "b47302af6673a6b8a8c32221b0dfbd4dbf4c47204362689610e2faa557b81eb9",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/idempotency.py",
+      "sha256": "8f380094dd50a4176907e3497c59605ed5388ccb960b0851174de1a4a7bab6e4",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/llm_client.py",
+      "sha256": "70a60ae1c289c189a6cb2fd9dd3a95aff991dd7e12f48047611aabc1038c1215",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/llm_metering.py",
+      "sha256": "24b476ed7b61d440935604954e6dbae93d31ca54e45250a9d5810f2cbbd52236",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/secret_provider.py",
+      "sha256": "c919d94d45de656f88bb8813fb0515547598a261230f3fd53025824d1b541790",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/tavily_client.py",
+      "sha256": "5efb68ebbba0793b8d8df9ca8753167e2b9c4de7646898d915a70193c6ba2843",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/web_scraper.py",
+      "sha256": "469552fc14cf7e013241f2f8b85d6ce7b50e968ea79bdc588df57361a9bdfe9c",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/utils/web_search.py",
+      "sha256": "05722455ec754bbb775e5cadd2310d2cf58f514f3ee7e138324aff1a8c3df251",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/vpr_generator.py",
+      "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/logic/webhook_service.py",
+      "sha256": "890016df6d58b81767bfd5463cb1d762aed501932b53347adaf53f4322a6408e",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/__init__.py",
+      "sha256": "53190c450375dd103c61a35fcd2aca4bd933badbc0532784caa02c002b95a454",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/api_models.py",
+      "sha256": "1a3e6dd93cbfec5b703dba5844bf17e1b026e9de6b08cc7f4d10c7d87b5b8f34",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/company.py",
+      "sha256": "2ff931c9683e6bef09d8e78b513c7bb372a8919cca1337ed218529b1d0797258",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/cover_letter.py",
+      "sha256": "5a2eda1680a59c13f47d358f26dbd9537d6e65f389104a5026758984911d49a6",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/cv.py",
+      "sha256": "86fef080a0b3aa5a774e760ffc054adfebdb15b10ca19b3a49d4d0575631ac6a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/cv_models.py",
+      "sha256": "0cc91b33cb8162e0a7864f05c16e7fe3e8c5c19f8491963c575259f4b6d76391",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/cv_tailoring.py",
+      "sha256": "e0fafe49dd14ce392a4f097b320efdcd2b128566d277e4b9f16b1de23a859244",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/cv_tailoring_models.py",
+      "sha256": "dec497dc78b2e84ac7d0d409033693d13a4e69f4852a03a23c3f94d6183e26f4",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/exceptions.py",
+      "sha256": "be3ff0b2c104eb6a2a667954edebeb44712723dfe9899363a7a77fa5c17bba0a",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/fvs.py",
+      "sha256": "1b29e938ec91b22bd2d27cfa8ab5ad2fe68677ea77c50669f709edfb843df2c8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/fvs_models.py",
+      "sha256": "0eee16d07ad5fe93a6f6196c5fb933b79ea328a5849828cbb2116bfaaeaa8796",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/gap_analysis.py",
+      "sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/interview_prep.py",
+      "sha256": "c2d7fc1c3709be11cbec75d3b28034f9a227997bf78ad5d2a7b97c23a6ec71a7",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/job.py",
+      "sha256": "8e39a9e20fd82c20bfe91b5cb0d6c1935aea438c62c2968ca4346d0208312e57",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/knowledge_base.py",
+      "sha256": "bc2202bc8fc6d460554189038f643593942980d6e1928a48e5126562c148b114",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/output.py",
+      "sha256": "dfbc07991c9d10ef83ef4345ca5f9b92714d6470b1cd0c60fc06df4b30d55792",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/result.py",
+      "sha256": "d38940aec53f8567819409509693b4318dd372580c5b6c70b29632962fde1060",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/user.py",
+      "sha256": "34148356ac8c0317e0c7d52d82a548d3dac53e1b7bc8121b995fe6d4a4187747",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/models/vpr.py",
+      "sha256": "ac821b533faf6b5d29d4e53c44d0adbe6630da38d0099b419c03c82f986e1f33",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/__init__.py",
+      "sha256": "78d4a3b7f8bbd1bb9e6aedbd92b36a85e4f27ecdd9e793cf11936dd30a3ea88f",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/factory.py",
+      "sha256": "7ffaa333e0c228ca80da8302f8cf61a88dd7737972c36e57b92f8186a78e7ff8",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/interface.py",
+      "sha256": "34f8e093912188b253c7dfaa908968b4ffa7822f6bf32bb205d02e0f3f8632e1",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/mock_provider.py",
+      "sha256": "9677d951a99e310dff1fb127efe41258bd570c632df6fc7cec4142af0d99ef5b",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/placeholder.py",
+      "sha256": "5a9ea45e610cf413ef156dd5b7fcefd0b5900241103d5a827fcc583097661b3b",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/payment_providers/stripe_provider.py",
+      "sha256": "7467879c5e96a53e35a66e7d6391b1bdea95f7e47ab129fbaddbc2d29f2fde00",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/validation/__init__.py",
+      "sha256": "dcc5a5d2c155ea06628be7bd28eb269b81ffa50c0a3a315b2bdc2f1d46bd9d02",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/careervp/validation/cv_tailoring_validation.py",
+      "sha256": "6732d55bf6e57756de03dcd10dc2720ed12c399d93933bf7f40ae2b642dc3dfe",
+      "inspection_modes": [
+        "AST census; source bytes compared with deployed bundle where listed in deployed-bundle-comparison.json"
+      ]
+    },
+    {
+      "path": "src/backend/pyproject.toml",
+      "sha256": "886294befb39b4b75b618a03a282c875a3a89818e997760e828d10d805e9aee5",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/scripts/verify_aws_state.py",
+      "sha256": "ca7cd271cd636f070c13d7882eadd6929f6bbf47f0cf7d832525c7f19f7aca20",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/tests/conftest.py",
+      "sha256": "c6195b33b31cee78e08ce7e3daa82c7700720e4fb46178118d51ebf6e663a681",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/tests/integration/p05_owner_check_registry.py",
+      "sha256": "b2441e4de2758c2f44e1f6e864cddf5065b9d7fc499ec814bd102706e52fb120",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/tests/integration/test_p05_cross_tenant_idor.py",
+      "sha256": "57987b0044453d4553021a1c3fd45e878b771161dbf1c7f303ef65483782443e",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Finding mechanism semantically inspected at cited location and callers"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/conftest.py",
+      "sha256": "1c82df5ff8c85cd3319bf5f55a48f7a18f8e2475b4e5927ac1be6b2aef74be3a",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_ats_scoring_100pt.py",
+      "sha256": "a92d26fe62c602f7dac9845e2f8bc08efac28ab13ea85482d28149d586d91e3c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_ground_truth_inputs.py",
+      "sha256": "7e5252177b1c834cc99c3b1327571fc3173b81df24e5e352085161cdfd22f31f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_output_schema.py",
+      "sha256": "ffa4d9cc479f56cb08aa7120ac7b161f74d4cfb7c58e2492e61a13ccf16ff4a6",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_pipeline.py",
+      "sha256": "f64c1edd419559e877c04ecba864918b23822ca50374bd800f72334bb7a0c820",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_pipeline_wiring.py",
+      "sha256": "9c36d6caf8ecae45372b4dbf570f5a384e4f1c815e3f467ef7ee5be9838676f6",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_regen_artifact_id.py",
+      "sha256": "f9eb523bdfd08b6de94ac2b117476b50aed66eb6f99c812d10fa6630696fafef",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/cv_tailoring/test_schema_compliance.py",
+      "sha256": "fc1faf1af255de6c391a802a2e5ada4f752571b52e9845ab9196cb79c1071a1e",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/infra/test_p03_api_surface.py",
+      "sha256": "cb22de215bb37ace3fcd0259f3fa413f40ae8e4bbd2fbadfd4f49cd4b8fb44b1",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_ai_assist_handler.py",
+      "sha256": "1afb29af2b00c2fb06c8eedab18f01bdb37a7be49b45f5c83b17fd01c15b52b5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_ai_assist_prompt.py",
+      "sha256": "dca0f84a2847ca8ccdee83688292a644a146825a96356fa6a96fc1cc26a38782",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_api_gateway_authorizer.py",
+      "sha256": "4e2b442641f3984af37a61303f260eebff1f7de758c9741794a346e3ee98c615",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_api_models.py",
+      "sha256": "bba7c6128a9c780afa04923c0729ae5afd7e3dc7313dc0e29dbe78f0768c5772",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_api_storage_adapter.py",
+      "sha256": "027f205635de31a534ecbcae977b5d40089951c4bebaead02371422247d38a41",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_application_state.py",
+      "sha256": "884d7b3bd3deab119b19ca601bbbf4d026ad2c17ac18be86186020448b6ac3de",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_application_state_machine.py",
+      "sha256": "7e12cdc0f618152dbb2c4ce4f3447dc68e63d2fd51d895749fb721f776c7e85a",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_artifact_dependency_resolver.py",
+      "sha256": "eb298f5cc42880e495f22363e84f2e55fda0957c522c3968ed5de7973b3320e3",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_artifact_dependency_utils.py",
+      "sha256": "9634e9faf3efd938d8ccab6415ff96d658693b1aa13cdbc6ea915d1d552dc067",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_artifact_id_characterization.py",
+      "sha256": "2852620022806a43c0d30273b117b57c46b820ff0bc148be6589ab84f7755f48",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_async_submit_handlers.py",
+      "sha256": "973de34917ddcde043401a9692d7027361717562a2ed7dd28b3f236372bcf62b",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_auth_handler.py",
+      "sha256": "9555ef511478ee58fd24c96e66bc996031f04c98b017dcbf9bedc80ed10bb912",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_auth_handler_logout.py",
+      "sha256": "c5e6c02c79139b0ba6076d090fbbd8b672e2b0c81a0778a5dc5847d93eb6c240",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_auth_utils.py",
+      "sha256": "4edd9631caeb7bf388b28282da6b231d7b074bc95c526b5c7dab21844141d2bd",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_billing_service.py",
+      "sha256": "c0299596e9bae93893935a2f3e163cda11e3e9a0c3cebbcee92a1827ba6a6719",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cancellation.py",
+      "sha256": "4fc3a2888863661cde1fb284ca6d4c2562af014a7a28d7494840a3fbfe3fb5da",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_check_evidence_integrity.py",
+      "sha256": "defc503b797e9554de860b8031e7c25568ccdfa1ce657c5597166e72a0fae62c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_circuit_breaker.py",
+      "sha256": "715b0d7649eeeb2a4982a8a4601f0e0a449f94fe728956259e7a948f6f2059fa",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cl_ip_task_token.py",
+      "sha256": "850406d5faccbf89c11fc507ece05c3ef4f0394a628df940fa89811de1bf3b97",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cognito_middleware.py",
+      "sha256": "a58c5f0e4f5c440856a50ac8738b66e1d2c2f257ff24360cfcf0f8b61e1ccd53",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_intel_cache.py",
+      "sha256": "744d1ffe99a2953009bb3042e744fde0436b97953c88f82973d6f613ca8707bc",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research.py",
+      "sha256": "a35b589f59ec16b6c29a7426b8e5994db07357c4b7dad6930392407a5e8e3f80",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_cache_flow.py",
+      "sha256": "c7c7f2ef1640c735b3f71074f52bd680b13557979b3220a182b6ee7c9ac1c1fd",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_cancel.py",
+      "sha256": "68159e778cff4df3711720cf44dbe9dbb90c11aa406ea17e9a6f2b7ab4c6df25",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_handler.py",
+      "sha256": "b52061ac7054b18104e3bd3db55ac1fad6e12b66c923410c036ec0dd8b72abf7",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_prompt_golden.py",
+      "sha256": "801cc6ab54259078635ee76d66ca26e40f0701cf4024e3829c2e923f2b674281",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_quality.py",
+      "sha256": "0d9e50bd403cf2d8de4463655e20daf7bff7824f60fd7516b6f50df7f5344c84",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_status.py",
+      "sha256": "b5cb4f21819a3ced5c3c2017910962a72c66b9880c0af1fe688b62f3bb4876bc",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_store.py",
+      "sha256": "f1b15ba06e4d7a7994670d0c92100bcca43529a17b55f0bdc64f036bb7c17bc9",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_worker.py",
+      "sha256": "b283f7ca3fa719d8c2f23cdb85abd1f94a1a9ee8fa42a11cd8dbca70fe1b6df4",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_company_research_worker_handler.py",
+      "sha256": "063b1d316365d397e81d06e45b1c24c80bbfe50f8873388e5835248ae80f3665",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_corr_canonical_vpr.py",
+      "sha256": "1e1b06a8a9a099d8e485b8fec1466ad9dd4349b6d58ae7e6fcb62bec62a7c146",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_cancel_handler.py",
+      "sha256": "340c1bca13b4584d89ae4732c31c68d2267e7805a03b669f4a3b313e7c646f52",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_context_materialization.py",
+      "sha256": "2177ec70e5ef8ca79aed846c8239c101f3e9d70c5a60fe39cc23c6f6053d2f53",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_list_includes_generated_artifact.py",
+      "sha256": "ecb07e3f4e4ec9328c8ebb20c5363c0c337a55f720ada2f589b483f2a6448187",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_prompt_constraints.py",
+      "sha256": "1ba0dd0cb0e473c01dc19c7260372b8f06bfa3c97630be6bd3e7b4bc52e46f6f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_prompt_cr_insertion.py",
+      "sha256": "704c912c7dd8ff56119fa978e01b818e664553ae38533e8c1f4808082cf5bd6b",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_status.py",
+      "sha256": "29d6b92b3479e6a4ad79779f3742eabecab5672e7f0b5e15618cb76e8acd07eb",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cover_letter_status_storage_keys.py",
+      "sha256": "85fa5c7021fd7f3eb10d24df811662f391f398fc33e7750c073224606dc0ee62",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cr_store_resolution.py",
+      "sha256": "94a5c32f521a403bb957c2e79a1d37b631a89d0f92789d8f2930276e744bb661",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_management.py",
+      "sha256": "0619a98ba3f565fb6518296dd0c000648b6e1d4ba80e9f4915312fd0b01d9b4c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_parser.py",
+      "sha256": "882e12d03b53266390bbb4c43fd4af2c9117811363df1cc88f864930daecd434",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_summarizer.py",
+      "sha256": "2854d011ad290357d7aaf9fbfb54de33dd7a344e4ddc47a0297149680f507b74",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring.py",
+      "sha256": "4eeea385647e28ffd4773e7807b49b60b2aa8773d06ec501ae8402ca1012fae8",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring_cancel_handler.py",
+      "sha256": "b4e4b17dc42ee20aa36b612c68a7fb817a9d5e5880abf0f7fc9c54b19b30161f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring_prompt_cr_insertion.py",
+      "sha256": "34d6c60485d780b68ba8acb89fe41408f4351d957a443aa4f45fe6f65f3113af",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring_sfn_entrypoint.py",
+      "sha256": "95738e6f6111fa235ea2da3bc08e126ef94e247088ef62edc4d71cd38eb9ff3a",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring_status.py",
+      "sha256": "b509561383c69a7c3281d8811206b87153c01babef9c034b4bf17ea4174b7215",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_tailoring_vpr.py",
+      "sha256": "85eb17355b93b4ebaf1c155ba2ce6d038ea5fffacdbfe8a22f96b824f7867236",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_cv_upload_handler.py",
+      "sha256": "2d7e21a97a2397706debace2751b1dae5876defaa346ce08664efaa153912ecd",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_dh2_dh3_key_authority.py",
+      "sha256": "833b6aa7b3fe5bb28f7b6e0307a867ac42987370b0cd4ac8664959cd503e537d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_dh4_p01_canonical_artifact.py",
+      "sha256": "ece75dd77fd07cb173a0e447ba13150ec1ee65f1f60ab188a01463f692fe625a",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_dh7_request_path_scans.py",
+      "sha256": "1918f77d4aefaf56b059c3e3e205edc4f4cdc2b7c1b903f12f5c208bcfd4751d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_domain_validator.py",
+      "sha256": "83fe9fae1840e5004c508179932467a7106fb80aee9eafa855aba419d75adc49",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_dynamo_dal_handler.py",
+      "sha256": "1ba6242fb7ca126e687dbce0833943ecde523d64fa459163e8c2a1e15aa9df56",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_env_guard_fail_fast.py",
+      "sha256": "cda939251c62e5ced335caceca636e8b5ad4781f9770b398f1a1c38b89ba0653",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_env_vars_parser.py",
+      "sha256": "c93e11297b26c427b2982d3146c65cf72fdefcce5f63687917099602dbd96962",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_error_report_handler.py",
+      "sha256": "11218be98c97eea531c7e63688aaf63e707e4589a7ab516a276ff5c3d7962afa",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_export_handler.py",
+      "sha256": "684f721616ede45da454fe997f14e1828dfdd07ba1ffa912ff86ae839a60820d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_frontend_asset_hygiene.py",
+      "sha256": "16adce04d97b7e4e66d039bc211d9c5945fca0b1e7d7b5b45bcf00361ded5885",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_frontend_oracle_schema_emission.py",
+      "sha256": "c644bdf0fd6bf9b1893456e8d6a4b3e3b718bf39240f4a07214e37b93d9d5bc8",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_fvs_validator.py",
+      "sha256": "2878777980d881036f98743c6811cfa187e367288c6b796d9d4ef7c23fdda46b",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_fvs_vpr_structural.py",
+      "sha256": "f5deefe420d5ea2f5a678c5e2dd8a752d9fc7ccc30d9fad15f8edd63816b376d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_analysis_handler.py",
+      "sha256": "81e22e50ca52f92f71d490ab1428d199058333fe331db8f85e4e537a9b561451",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_dal_job_id_filter.py",
+      "sha256": "4c12611ed21bd325240dbe8bc1af34af79344e86baf9320439e7a0d90ec54f65",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_handler_artifact_chain.py",
+      "sha256": "4a93dd2174b3e3e968bc150e18fb6b163d5fb58f85999709de5f68f1b5eba6af",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_handler_config_validation.py",
+      "sha256": "f5359e37dad39bb1b272f7d3852f43e09f9d0526989f1d82d710d8c2febd7120",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_handler_persistence_required.py",
+      "sha256": "4fa4bef2fd5da1d4e3cea1faf282d64ff51292e65e86a2a3a7c8b0324bc72df5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_q02_real_cv.py",
+      "sha256": "8e6bcbf09af5056803dc64d58cfa129d04facd71865679613389d5d344c966ed",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_gap_quality.py",
+      "sha256": "97c7f457b8c2b9ff53d249cfbb32d9482843c690cfb65f76b965341307217db5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_generate_openapi.py",
+      "sha256": "68a9079f529b8966123cf62d679ddca8df8fd5bc77e043c3acdfc78b2ff76ed8",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_health_handler.py",
+      "sha256": "f616046d1c8e404c7cb668306688984390fa5d3db095007c08314b1147d76fb5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_answer_model.py",
+      "sha256": "89dfc310441304b153ca3498b5823edbe3defd1d4db9510475c2036001a4bdf9",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_cancel_handler.py",
+      "sha256": "574c17b68111fdb6668e1abb94aa10faf5b750a84f120dffab944c4df59bc3e0",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_context_resolution.py",
+      "sha256": "854d8c135d534f4be7263813d8ad88b132c5079a05abe631c78a4b0129bd8484",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_patch_handler.py",
+      "sha256": "0711a0fc91e44c3d1f7978a1368af8cc6c3f3f4b44c59de729ef50a28c4d66f9",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_prompt_context.py",
+      "sha256": "fa28569d5611fb4d2fc9682e402150fe7b3a8025fc9281b415d622d26467505c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_interview_prep_status.py",
+      "sha256": "ee8437b186ef657bf7a1e62b4d2d9ffea2004af96c2a37903ea4be4b5d7eae5d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_job_handler.py",
+      "sha256": "04b2a433dd0eae19a0d25213ce744ab908800e2c217534fe3fd6d292b83732af",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_jobs_repository_vpr_pagination.py",
+      "sha256": "2dca5a846c45aca48c996e31e76f42b7ff40b89deaa807a786b32093b573ec04",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l0_company_research_latency.py",
+      "sha256": "937593553f06060cdd6765271d614d6e6d2e2ef2a7168cf1a9ec75e2b8b41518",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l0_cover_letter_generation.py",
+      "sha256": "e66f69f34533f1a5bea1f11b21f17ca00a9b5fe89c42aba29e21cb54adb63a36",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l0_cv_tailoring_scores.py",
+      "sha256": "feee647f1a64d25c02ed031920577c5f6ddbc0ecb1e07960337622c01434135e",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l0_gap_analysis_generation.py",
+      "sha256": "36620bf56282016affc06a85cd4d592465a0d6a9a18e696e58f4a57ba0514a06",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l0_interview_prep_generation.py",
+      "sha256": "d3d62d29dc4d00203429cf76df801506d8f210fb3c6e4dadc4c767fa644dec12",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l1_artifact_persistence.py",
+      "sha256": "aca3fd39acbe2d0e780d4473b7295e1e6feed03e4ea9f8dab6306e5dda10c1ac",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l1_dal_unification.py",
+      "sha256": "cab5a7b628e4321ce40b77cdbbee13a3db1a2a8dd147e3f0cdc0770547aea369",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l1_health_check.py",
+      "sha256": "f93b2c6e5ea769961dac593d88d4876c75a6992228eeb726f48ae25fe29d4893",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l1_list_endpoints.py",
+      "sha256": "46496491d7779a8975c99440992dd3243d86f297f2f764c62944a7dae4443255",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l3_application_recovery.py",
+      "sha256": "4d9ddb0707139e27c7e32ddd5de4a700f78d74b12ea07af116715a43cdd42acc",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l3_application_schema.py",
+      "sha256": "2d3f1efe651494e2c719196e9fe2aa81a55babfafbbcf306cd764de468e6d440",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l3_state_recovery.py",
+      "sha256": "948ebd9333ce0d9f9eaa18e46f9138c3664db55e4a3d29b425ea3c941f71e562",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l3_trial_credit_charging.py",
+      "sha256": "d947e4ef2d4a7eae1e5646e82826202bc434532858cb70c81add9830dc222f97",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l6_route_dedup.py",
+      "sha256": "434c948eb9bd4d44bf5290a293cba1add4311f514f59d6dfa8d254004c82728b",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_l6_route_surface.py",
+      "sha256": "f38da416960355a3573fca12e889fd8da080153f9c4345ae0caa79c854412375",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_live_test_api_base_resolution.py",
+      "sha256": "abd1bf591447cec0446a866bfd677eeecf3fc2b836ee6a8a3ddfe53a11a82568",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_live_test_runner_summary_json.py",
+      "sha256": "aef3d85756da70bab21fced3eeba80466a980cd107165b83913d9c1a7a340d0d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_llm_cache.py",
+      "sha256": "2a03704cfc181a4380b3519d50480ba03e109ba6553df44ab4981eeebf0c7c97",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_llm_client.py",
+      "sha256": "560a79f553e08b57a57fd4df6b4a9a291df5611aae94fba20594feb274f4b9f8",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_llm_metering.py",
+      "sha256": "194cf6cf9952d11316dcc2e0a9c7a13121f4162e117c09ad7ea0fccd09423518",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_llm_router_retry.py",
+      "sha256": "bcf7a59124ccb391c46b351b3fe177238383ad2480dfd8a677741b0c6d8cf524",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p04_p05_auth_idor.py",
+      "sha256": "b3894af6531c30fa04c3c6937e158ff8360e47ca9e92e664f1c10f6e07534a9d",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p06_secret_provider.py",
+      "sha256": "8fc3f7fa06742512f7bf1aaf9a47c9aed2d4ad971ad09945b87bc280fab693ad",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p10_cors_cutover_checklist.py",
+      "sha256": "90d6e674433a7d5b7301c116034beef09e0aa4d7ba69ff5dde4379c307366525",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p14_p15_billing_idempotency.py",
+      "sha256": "b68f4820b79be82538aafbd112cba164b58c39a5dd765e9e60e8e31a55693aba",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p17_worker_batch_item_failures.py",
+      "sha256": "bdd46d0adbd9d066e6a1acc71831cac835413bec8d3134ddd61a34826be3108f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p21_subscription_evidence.py",
+      "sha256": "de36f0e9a6dd1536c17c312d313ac3a3029ffd7c6d84d7de00f7f4ee8db2f72d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p24_identity_surrogate.py",
+      "sha256": "d013a9766fa2fbb02bc8314fd4629413a03b2c6d7e38e54236ddcf1c9f98bc9d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p25_configured_provider.py",
+      "sha256": "d5aa1f5223bfc504992cbc83f216f5f1ad904c23e713d2c9c313a4b0dc39ff16",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p25_mock_event_id_is_stable_across_retries.py",
+      "sha256": "e6a098814b64a7b7898f38d9b80b4eb6c28406ea73e914a9a43ed38be53060ab",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p25_payment_provider_port.py",
+      "sha256": "4170888d9fdcc5f371574d41275a27280c64650ca3f88ee1984c3dc509a94fe1",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p25b_stripe_provider.py",
+      "sha256": "6bd1471d22c60b182e9ab1ee0b69f13c7e40690202dfce63aa3c036483fa505c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p29_evidence_pack.py",
+      "sha256": "ae862774669d607ff57c4a46c678440bc69ce7d96fbb16ef8e6d9e2b0faad600",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p30_smoke_harness.py",
+      "sha256": "4cd3f81a55a87a21806c9b8fabb86c0d92aac8b448c53899bada951c740788e3",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_p32_budget_evidence.py",
+      "sha256": "924f407752337cc14c066c973b11a086806756787b0a0b05fad46afd9a8d0fef",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_parse_configuration.py",
+      "sha256": "80efdcbdfdeaa4acd66cb5a6fe566aaba06fb4eea17c57e49155359ed276a22f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_quota_service.py",
+      "sha256": "7639883f7aa296b68509101a3d2c7e88e118aebcefbb4a55b5b7b62a10b4a6d8",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_refactor3_artifact_bootstrap.py",
+      "sha256": "4eb0c6a24baca02d9700f32f6013fc6704895bbad96c3118f21828e0a184f4fa",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_refactor3_preflight_script.py",
+      "sha256": "545c78c419adee2b72001494c5b8cc0750c4a4b111b9dd163cedfa859b67dd90",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_resolver_cr_gate_matrix.py",
+      "sha256": "072d295d0369ae5ab13387156a0b4487d251daad8315bc0243767aa076c8f480",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_resolver_ownership.py",
+      "sha256": "efcc1a026c9abf9c394117157bcbf66dc6f95281438e1b60efbf4a92c99903d3",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_route_authorizer_policy.py",
+      "sha256": "12153490a2d4d0b69e0ae012f31c9f1afc4bf570de6bb254d74f699900ddc72f",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_route_parity_openapi.py",
+      "sha256": "ff6195f28b5330df0d7003ac6adc43b29f0034c3a08a4b1760f0e6fb28846c54",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_route_smoke_script.py",
+      "sha256": "22647b21d3dbd57e7f217538e94d7ffe25d4bd27cd3cb47d930b7d92f3ceec75",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_subscription_repository.py",
+      "sha256": "b4f965ff23426c38c82e5b9539ebfc1c099c7b145a6db035c6eb5fdd6e35ca11",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_table_registry_characterization.py",
+      "sha256": "2ecb58581d6316e01949d3fd6349ad26a46954b2286a10e065a8e20317183d7a",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_tavily_client.py",
+      "sha256": "a81a3f5a904f55e08b4cbfff3e8d316a786e229a2edd192ea4141c5554adbd30",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_test_infrastructure_debt.py",
+      "sha256": "8614be59f11cb536c23dcdb9ce18ead6e56e8b3a7e3e3acb984945583b6ccd26",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_token_optimization.py",
+      "sha256": "b1d0a54929350303b634efe29eddfd6bfe6c2dbc741a9899b75ee8d2cf86aa54",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_trial_credit_attribution.py",
+      "sha256": "d6fb395c826b704f901090379dcb8750795f45e5d75e9d0b4e475ef7e14823ab",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_trial_enforcement.py",
+      "sha256": "a76b82147c86f9600ca1188e047f068a5fe1589a13f51bf9a9d9fd1d9054b2f2",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_user_handler.py",
+      "sha256": "a024e8f81fedfbd21767cd71998a74dd7d8db57a87df6b93a0200c742156982c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_validators.py",
+      "sha256": "97b1bddb27d3bca0759a6329ad714907142493ff577215ada6d64297ba28a3bc",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_cancel_handler.py",
+      "sha256": "6364c0653355af5fdd5da18adbd3b7cd56b65d80b1b4a7ab4f787468756eb182",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash",
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_company_research_binding.py",
+      "sha256": "5e8414ebe35e1421252385914d2fb3a2b9ecaa392bef43be082f5489b4e23ba9",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_dal.py",
+      "sha256": "b55a539dc716fd05120dec36024ed74e4d09878faafd9b0e4668cb8966c733ee",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_dead_code_removed.py",
+      "sha256": "1a9996cd4f6a892ff1c116fd820aba90e1e0f279a085d51e3ea2437bfd7e3817",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_endpoints.py",
+      "sha256": "31121b1765c3818a5c58da7b40957ebcf9d6d121d5653dcc3fd37e696c85addf",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_generator.py",
+      "sha256": "363dc121c52ea13444ec19d9cae54ddf672ac6f35d2a727e8fc036e60888e13d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_generator_phase2.py",
+      "sha256": "f61bb867a1d6c7199be70e0bb4ef68ab6bbb9e00642ef7c3ed1cbda327cf585d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_handler.py",
+      "sha256": "df28ca9bfb5feaab690809925308b8a84d030094b2e38af13c75faeed52b7abb",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_handler_serialization.py",
+      "sha256": "76f2b30370f3cc226aa2a73c0cd12ba8c090329f7f75f03db4662112a93105a5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_models.py",
+      "sha256": "7913e55b933a7aaf0545affd84d6334b8d838d090a62184c61f38c24cc6c59e6",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_pipeline_timeout_fix.py",
+      "sha256": "c853739a9142d7296532076d2b38e814b1465fc3f0c8f5a1bd3cf981d5ca3897",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_prompt.py",
+      "sha256": "ac8c404303d96d47575bdca75cc967e77b5c8fdc983f02832401893b616dc36d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_prompt_golden.py",
+      "sha256": "a103960315ae6e253f8f59f72c9a80a9841bf0fed5a9685e6b654deaf65e12dd",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_prompt_quality.py",
+      "sha256": "6a8db4b97f3bd260b6b89126725b1e447a8105f6f275c9c3c3d504c7dc8042fb",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_prompts_phase2.py",
+      "sha256": "87feac5fc17c009bd62303bc4d50eda7ebc8b453126382684509ce18d6821159",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_status_handler.py",
+      "sha256": "3907deddedc6717040935199c34118c74016c75c04343844604823c54cbfb1d6",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_worker_record_parsing.py",
+      "sha256": "1ce7be3c4b5b4c838690e87dcacbe00af105cc587040fbeaff30cd8c20acce8e",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_vpr_worker_task_token.py",
+      "sha256": "f22bd882ce8f39e54079cdbbdaa58fbf20a634fcb33950ee59b2086905a79b26",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_web_scraper.py",
+      "sha256": "9012fdf8b7d380fce01ee803e431a237934975ef75b8e55840a44937804f58c5",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_web_search.py",
+      "sha256": "6a1c0eec999112d49124288b85c45767bb5e04fa540b69b280be15541ec4147d",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_webhook_service.py",
+      "sha256": "761821cc806b5ed10f55f1c3e939c9de09f6e16a88a8b76a3b721a79e59d001c",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_worker_cancelled_guard.py",
+      "sha256": "f07f87119089230f76492aac5baa45196b89e4c0c8972b17776495d26b1a9ba0",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/backend/tests/unit/test_worker_skip_cancelled.py",
+      "sha256": "7b9b885dfa7c42667c2c1c31cfd135a24f9757829207375ce935f25718d59260",
+      "inspection_modes": [
+        "Unit suite scope; executed/collected as pytest allowed, not individual semantic review"
+      ]
+    },
+    {
+      "path": "src/frontend/components/RichTextEditor/RichTextEditor.tsx",
+      "sha256": "398ef64fe6b6deb4a1f39f3bec42e5159f03ea5426f9e56dc1a008d925917fd1",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/frontend/components/RichTextEditor/markdownSerializer.ts",
+      "sha256": "1dc84aa0d5fafa2844fc6b67671a5a3dbf5f6df969ec82c3c6b892c59b20a7b1",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/frontend/contexts/AuthContext.tsx",
+      "sha256": "d63f42747a1688f0d694a0941d46da9a452ab1a6bb770c00568aa09babf5085c",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/frontend/lib/auth-config.ts",
+      "sha256": "465bbe386a2b629e8294f699f3f0bd4a11ba7d8e18ff41b451ca4ad73b4a64d1",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/frontend/middleware.ts",
+      "sha256": "d4100ce12d028e1637ef809736a930ab860c4f0408309feebeba9d06b24b71bb",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    },
+    {
+      "path": "src/frontend/next.config.js",
+      "sha256": "fce297ef31f748b8094d4dc47ea1d3a593891efc5d3be614b74a448a1d2e4900",
+      "inspection_modes": [
+        "Full file or relevant source excerpts inspected; metadata hash"
+      ]
+    }
+  ]
+}

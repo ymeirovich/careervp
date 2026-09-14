@@ -1,0 +1,776 @@
+{
+  "timestamp": "2026-09-14T03:58:52.002799+00:00",
+  "bundle_checks": [
+    {
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "receipt_download_verified": true,
+      "unique_members": 137,
+      "duplicate_members": 0,
+      "hash_mismatches": [],
+      "missing_commit_members": [],
+      "extra_members": [],
+      "zip_not_redownloaded": true,
+      "full_dependency_or_config_equality_proven": false
+    }
+  ],
+  "functions": [
+    {
+      "function": "careervp-export-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "477d5c0a-6588-44f7-aaf2-9a9a279dbf3b"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-export-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:24.414234+00:00"
+    },
+    {
+      "function": "careervp-export-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "477d5c0a-6588-44f7-aaf2-9a9a279dbf3b"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-export-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:32.576642+00:00"
+    },
+    {
+      "function": "careervp-vpr-status-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "b0d683c4-8a53-4e3f-a175-4cdf711143e1"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-status-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:34.250340+00:00"
+    },
+    {
+      "function": "careervp-vpr-status-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "b0d683c4-8a53-4e3f-a175-4cdf711143e1"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-status-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:35.091878+00:00"
+    },
+    {
+      "function": "careervp-vpr-worker-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-worker-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:36.751598+00:00"
+    },
+    {
+      "function": "careervp-cv-parser-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "0fb44bb4-f271-4be2-bc56-64d1e59ff8e7"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cv-parser-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:38.376135+00:00"
+    },
+    {
+      "function": "careervp-cv-parser-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "0fb44bb4-f271-4be2-bc56-64d1e59ff8e7"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cv-parser-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:39.610271+00:00"
+    },
+    {
+      "function": "careervp-cvtailor-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:31.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "9d83d75f-600e-4343-8b45-c7dd06337519"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cvtailor-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:41.271191+00:00"
+    },
+    {
+      "function": "careervp-cvtailor-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:31.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "9d83d75f-600e-4343-8b45-c7dd06337519"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cvtailor-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:42.166310+00:00"
+    },
+    {
+      "function": "careervp-artifact-cleanup-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-artifact-cleanup-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:43.802251+00:00"
+    }
+  ],
+  "jobs": {
+    "rows": 36,
+    "status_counts": {
+      "active": 26,
+      "COMPLETED": 10
+    },
+    "with_ttl": 10,
+    "last_evaluated_key": null
+  },
+  "applications": {
+    "count": 12,
+    "states": {
+      "gap_responses_submitted": 8,
+      "missing": 4
+    }
+  },
+  "lifecycle": {
+    "TransitionDefaultMinimumObjectSize": "all_storage_classes_128K",
+    "Rules": [
+      {
+        "Expiration": {
+          "Days": 365
+        },
+        "ID": "delete-after-365-days",
+        "Filter": {
+          "Prefix": ""
+        },
+        "Status": "Enabled"
+      }
+    ]
+  },
+  "routes": {
+    "/vpr/{vprId}/status": {
+      "get": {
+        "parameters": [
+          {
+            "name": "vprId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "responseTransferMode": "BUFFERED",
+          "type": "aws_proxy"
+        }
+      },
+      "options": {
+        "parameters": [
+          {
+            "name": "vprId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "204 response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {}
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "204",
+              "responseParameters": {
+                "method.response.header.Access-Control-Max-Age": "'60'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+                "method.response.header.Vary": "'Origin'"
+              },
+              "responseTemplates": {
+                "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://app.careervp.com\" || $origin == \"https://dev.careervp.com\" || $origin == \"https://stage.careervp.com\" || $origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{ statusCode: 200 }"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    },
+    "/knowledge-base": {
+      "get": {
+        "security": [
+          {
+            "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-devx:live-devx/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "responseTransferMode": "BUFFERED",
+          "type": "aws_proxy"
+        }
+      },
+      "options": {
+        "responses": {
+          "204": {
+            "description": "204 response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {}
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "204",
+              "responseParameters": {
+                "method.response.header.Access-Control-Max-Age": "'60'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+                "method.response.header.Vary": "'Origin'"
+              },
+              "responseTemplates": {
+                "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://app.careervp.com\" || $origin == \"https://dev.careervp.com\" || $origin == \"https://stage.careervp.com\" || $origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{ statusCode: 200 }"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    },
+    "/cv-tailoring/generate": {
+      "post": {
+        "security": [
+          {
+            "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "responseTransferMode": "BUFFERED",
+          "type": "aws_proxy"
+        }
+      },
+      "options": {
+        "responses": {
+          "204": {
+            "description": "204 response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {}
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "204",
+              "responseParameters": {
+                "method.response.header.Access-Control-Max-Age": "'60'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+                "method.response.header.Vary": "'Origin'"
+              },
+              "responseTemplates": {
+                "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://app.careervp.com\" || $origin == \"https://dev.careervp.com\" || $origin == \"https://stage.careervp.com\" || $origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{ statusCode: 200 }"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    },
+    "/jobs/{jobId}/artifacts/{moduleType}/export": {
+      "get": {
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "moduleType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "responseTransferMode": "BUFFERED",
+          "type": "aws_proxy"
+        }
+      },
+      "options": {
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "moduleType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "204 response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {}
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "204",
+              "responseParameters": {
+                "method.response.header.Access-Control-Max-Age": "'60'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+                "method.response.header.Vary": "'Origin'"
+              },
+              "responseTemplates": {
+                "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://app.careervp.com\" || $origin == \"https://dev.careervp.com\" || $origin == \"https://stage.careervp.com\" || $origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{ statusCode: 200 }"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    },
+    "/vpr/generate": {
+      "post": {
+        "security": [
+          {
+            "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-devx:live-devx/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "responseTransferMode": "BUFFERED",
+          "type": "aws_proxy"
+        }
+      },
+      "options": {
+        "responses": {
+          "204": {
+            "description": "204 response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Max-Age": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {}
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "204",
+              "responseParameters": {
+                "method.response.header.Access-Control-Max-Age": "'60'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'https://main.d3j2wnm8g5clnw.amplifyapp.com'",
+                "method.response.header.Vary": "'Origin'"
+              },
+              "responseTemplates": {
+                "application/json": "#set($origin = $input.params().header.get(\"Origin\"))\n#if($origin == \"\")\n  #set($origin = $input.params().header.get(\"origin\"))\n#end\n#if($origin == \"https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com\" || $origin == \"https://app.careervp.com\" || $origin == \"https://dev.careervp.com\" || $origin == \"https://stage.careervp.com\" || $origin == \"http://localhost:3000\")\n  #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)\n#end"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{ statusCode: 200 }"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    }
+  },
+  "security_schemes": {
+    "securitySchemes": {
+      "CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header",
+        "x-amazon-apigateway-authtype": "cognito_user_pools"
+      }
+    }
+  },
+  "alias_policies": {
+    "export-policy-live-devx.json": {
+      "Policy": "{\"Version\":\"2012-10-17\",\"Id\":\"default\",\"Statement\":[{\"Sid\":\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-ExportLambdaAliaslivedevxAllowApiGatewayRou-LpHwzgONUO6e\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"apigateway.amazonaws.com\"},\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx\",\"Condition\":{\"ArnLike\":{\"AWS:SourceArn\":\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/jobs/*\"}}}]}",
+      "RevisionId": "477d5c0a-6588-44f7-aaf2-9a9a279dbf3b"
+    },
+    "vpr-status-policy-live-devx.json": {
+      "Policy": "{\"Version\":\"2012-10-17\",\"Id\":\"default\",\"Statement\":[{\"Sid\":\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-vprstatusAliaslivedevxAllowApiGatewayRoutes-UDkPOtgVEMZ9\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"apigateway.amazonaws.com\"},\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx\",\"Condition\":{\"ArnLike\":{\"AWS:SourceArn\":\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/vpr/*\"}}},{\"Sid\":\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-vprstatusAliaslivedevxAllowApiGatewayRoutes-9W7PoIw4KOYT\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"apigateway.amazonaws.com\"},\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx\",\"Condition\":{\"ArnLike\":{\"AWS:SourceArn\":\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/vprs\"}}}]}",
+      "RevisionId": "b0d683c4-8a53-4e3f-a175-4cdf711143e1"
+    }
+  }
+}

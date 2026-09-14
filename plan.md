@@ -10,6 +10,10 @@
 
 ## Wave 1 Security Cutover
 
+## Wave 3 — 3.FIX-SECURITY (complete 2026-08-01)
+
+- [x] Fix and live-verify CV-upload authorizer-only ownership plus interview-prep allow-listed logging; cleanup/evidence recorded in `docs/evidence/wave3-3fixsecurity-devx-20260801.md`.
+
 - [x] Step 1.3c implementation window: code+PKCE frontend, dual OAuth grants, Cognito Plus threat protection, OPTIONAL TOTP enrollment grace, 401 contract coverage, and environment-tuned WAF rate rules.
 - [x] ~~Human deployment and soak: observe for at least the 30-day refresh-token lifetime~~ **Superseded 2026-07-22.** The soak was never startable — the PKCE frontend was never deployed (commit `4228346` sits on `db-redesign`; Amplify builds `main`, `ui-upgrade`, `front/ui-update-amplify1`), so the clock had no start date and waiting changed nothing. Replaced by step 1.6's concrete verification. Rationale: `docs/db-redesign/code/code-analysis/project/runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)".
 - [ ] **Step 1.6 (blocks 1.1):** make missing Cognito config fail loudly instead of falling back to the hardcoded dev pool; register devx callback URLs; deploy the PKCE SPA to an Amplify `db-redesign` branch pointed at `CareerVpCrudDevx`; capture one verified end-to-end login (redirect → callback → token exchange → authed call → forced 401 → exactly one refresh → sign-out) as evidence.

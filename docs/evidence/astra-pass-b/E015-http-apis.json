@@ -1,0 +1,16 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigatewayv2",
+    "get-apis"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:29.761289+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Items\": []\n}\n",
+  "stderr": ""
+}

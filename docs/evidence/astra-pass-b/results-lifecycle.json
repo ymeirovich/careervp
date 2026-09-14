@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "s3api",
+    "get-bucket-lifecycle-configuration",
+    "--bucket",
+    "careervp-devx-vpr-results-use1-747cad"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:10.939666+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"TransitionDefaultMinimumObjectSize\": \"all_storage_classes_128K\",\n    \"Rules\": [\n        {\n            \"Expiration\": {\n                \"Days\": 365\n            },\n            \"ID\": \"delete-after-365-days\",\n            \"Filter\": {\n                \"Prefix\": \"\"\n            },\n            \"Status\": \"Enabled\"\n        }\n    ]\n}\n",
+  "stderr": ""
+}

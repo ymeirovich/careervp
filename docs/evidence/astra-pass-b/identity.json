@@ -1,0 +1,16 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "sts",
+    "get-caller-identity"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:18.510390+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"UserId\": \"AIDA3PAPU3DOLSGOA7KGO\",\n    \"Account\": \"788159322332\",\n    \"Arn\": \"arn:aws:iam::788159322332:user/presgen_user\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "get-policy",
+    "--function-name",
+    "careervp-export-lambda-devx",
+    "--qualifier",
+    "live-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:04.446092+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Policy\": \"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Id\\\":\\\"default\\\",\\\"Statement\\\":[{\\\"Sid\\\":\\\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-ExportLambdaAliaslivedevxAllowApiGatewayRou-LpHwzgONUO6e\\\",\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"apigateway.amazonaws.com\\\"},\\\"Action\\\":\\\"lambda:InvokeFunction\\\",\\\"Resource\\\":\\\"arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx\\\",\\\"Condition\\\":{\\\"ArnLike\\\":{\\\"AWS:SourceArn\\\":\\\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/jobs/*\\\"}}}]}\",\n    \"RevisionId\": \"477d5c0a-6588-44f7-aaf2-9a9a279dbf3b\"\n}\n",
+  "stderr": ""
+}

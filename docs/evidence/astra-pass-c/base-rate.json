@@ -1,0 +1,137 @@
+{
+  "sampling_frame": "P1 reported sort -R over SEV-1/2/3 inventory IDs before reading them, with ten defect IDs represented here and two separate confirmed-good checks. Four Tier-1 IDs were selected for impact. No raw randomization seed/draw receipt or full finite sampling-frame size was provided to C.",
+  "core_definition": "Direct actionable defect in the specified mechanism at the evidenced layer. A true signature or trusted interface without the alleged reachable unauthorized path is not a confirmed security defect.",
+  "material_error_definition": "Directly contradicted trigger/scope/cause that changes remediation or impact classification. Unproven impact and immaterial exception syntax are not counted as false.",
+  "random": {
+    "ids": [
+      "S1",
+      "S2",
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S23",
+      "S26",
+      "K9"
+    ],
+    "n": 10,
+    "confirmed_core": [
+      "S6",
+      "S7",
+      "S8",
+      "S10",
+      "S11",
+      "S23",
+      "K9"
+    ],
+    "refuted_core": [
+      "S1",
+      "S2"
+    ],
+    "uncertain_core": [
+      "S26"
+    ],
+    "materially_wrong": [
+      "S1",
+      "S2",
+      "S6",
+      "S11",
+      "S23",
+      "S26"
+    ]
+  },
+  "rates": {
+    "random_confirmed_core": {
+      "k": 7,
+      "n": 10,
+      "wilson95": [
+        0.396778,
+        0.892209
+      ]
+    },
+    "random_refuted_core": {
+      "k": 2,
+      "n": 10,
+      "wilson95": [
+        0.056682,
+        0.509838
+      ]
+    },
+    "random_materially_wrong": {
+      "k": 6,
+      "n": 10,
+      "wilson95": [
+        0.312674,
+        0.83182
+      ]
+    },
+    "decided_only_core_sensitivity": {
+      "k": 7,
+      "n": 9,
+      "wilson95": [
+        0.452589,
+        0.936775
+      ],
+      "note": "Drops unresolved S26, which need not be missing at random."
+    },
+    "unresolved_as_confirmed_sensitivity": {
+      "k": 8,
+      "n": 10,
+      "wilson95": [
+        0.490162,
+        0.943318
+      ]
+    }
+  },
+  "purposive_tier1": {
+    "ids": [
+      "S0a",
+      "S0b",
+      "S11d",
+      "S25"
+    ],
+    "n": 4,
+    "confirmed_core": 4,
+    "materially_wrong": [
+      "S0b",
+      "S11d"
+    ],
+    "population_interval": null
+  },
+  "combined_descriptive_only": {
+    "confirmed_core": 11,
+    "refuted_core": 2,
+    "uncertain_core": 1,
+    "n": 14,
+    "materially_wrong": [
+      "S0b",
+      "S11d",
+      "S1",
+      "S2",
+      "S6",
+      "S11",
+      "S23",
+      "S26"
+    ],
+    "materially_wrong_numerator": 8,
+    "population_interval": null
+  },
+  "good_checks": {
+    "ids": [
+      "G1",
+      "G4"
+    ],
+    "n": 2,
+    "confirmed_specific_good": 1,
+    "uncertain_composite_good": 1,
+    "population_interval": null
+  },
+  "excluded_premises": [
+    "PREMISE-P2",
+    "PREMISE-P3",
+    "PREMISE-P4",
+    "PREMISE-P5"
+  ],
+  "interval_method": "95% Wilson score, z=1.959963984540054, no finite-population correction because exact population and draw not independently verified. Conditional on claimed sampling scheme; not a precision guarantee for the approximately 85 remainder."
+}

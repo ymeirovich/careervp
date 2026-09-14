@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-09-14T04:01:49.524625+00:00",
+  "baseline_failures": [
+    "tests/unit/infra/test_p03_api_surface.py::test_cdk_synth_has_no_api_gateway_resource_named_api",
+    "tests/unit/test_application_state.py::TestRecoveryCompanyResearch::test_recovery_includes_company_research_artifact",
+    "tests/unit/test_company_research_worker_handler.py::TestConfidenceGate::test_llm_fallback_always_hard_fails_immediately",
+    "tests/unit/test_company_research_worker_handler.py::TestConfidenceGate::test_web_search_below_threshold_hard_fails_at_max_retries",
+    "tests/unit/test_company_research_worker_handler.py::TestIdempotency::test_process_record_hydrates_company_fields_for_chain_payload",
+    "tests/unit/test_company_research_worker_handler.py::TestIdempotency::test_processes_if_cr_not_yet_completed",
+    "tests/unit/test_company_research_worker_handler.py::TestIdempotency::test_skips_if_cr_already_completed",
+    "tests/unit/test_interview_prep_context_resolution.py::test_context_prefers_cvs_table_for_cv_lookup",
+    "tests/unit/test_interview_prep_context_resolution.py::test_context_prefers_gap_responses_table_for_gap_lookup",
+    "tests/unit/test_interview_prep_context_resolution.py::test_context_uses_canonical_artifact_not_jobs_table_payload",
+    "tests/unit/test_interview_prep_context_resolution.py::test_cv_exception_does_not_raise",
+    "tests/unit/test_interview_prep_context_resolution.py::test_cv_missing_produces_none_cv_facts",
+    "tests/unit/test_interview_prep_context_resolution.py::test_default_language_is_en",
+    "tests/unit/test_interview_prep_context_resolution.py::test_gap_responses_missing_produces_none",
+    "tests/unit/test_interview_prep_context_resolution.py::test_job_id_passed_through_context",
+    "tests/unit/test_interview_prep_context_resolution.py::test_resolves_cv_facts_from_cv_record",
+    "tests/unit/test_interview_prep_context_resolution.py::test_resolves_gap_responses_filtered_by_ids",
+    "tests/unit/test_interview_prep_context_resolution.py::test_resolves_language_from_vpr_record",
+    "tests/unit/test_interview_prep_context_resolution.py::test_resolves_vpr_differentiators_from_vpr_record",
+    "tests/unit/test_interview_prep_context_resolution.py::test_vpr_exception_raises_value_error",
+    "tests/unit/test_interview_prep_context_resolution.py::test_vpr_missing_raises_value_error",
+    "tests/unit/test_l0_cover_letter_generation.py::TestCoverLetterHandlerFlow::test_cover_letter_generated_metric_emitted",
+    "tests/unit/test_l0_cover_letter_generation.py::TestCoverLetterHandlerFlow::test_llm_error_returns_503",
+    "tests/unit/test_l0_cover_letter_generation.py::TestCoverLetterHandlerFlow::test_returns_artifact_id",
+    "tests/unit/test_l0_cover_letter_generation.py::TestCoverLetterHandlerFlow::test_wrong_user_cv_returns_403",
+    "tests/unit/test_l0_gap_analysis_generation.py::TestGapAnalysisOutputShape::test_handler_returns_questions_from_llm_generation",
+    "tests/unit/test_l0_gap_analysis_generation.py::TestGapAnalysisOutputShape::test_llm_error_maps_to_503",
+    "tests/unit/test_l0_interview_prep_generation.py::TestInterviewPrepHandlerFlow::test_llm_error_returns_503",
+    "tests/unit/test_l0_interview_prep_generation.py::TestInterviewPrepHandlerFlow::test_missing_cv_degrades_gracefully_and_returns_200",
+    "tests/unit/test_l0_interview_prep_generation.py::TestInterviewPrepHandlerFlow::test_returns_artifact_id_in_handler_response",
+    "tests/unit/test_l0_interview_prep_generation.py::TestInterviewPrepHandlerFlow::test_wrong_user_cv_does_not_block_generation",
+    "tests/unit/test_l1_artifact_persistence.py::test_cover_letter_generation_persists_to_dynamodb",
+    "tests/unit/test_l1_artifact_persistence.py::test_gap_analysis_generation_persists_item_with_non_null_artifact_id",
+    "tests/unit/test_l1_artifact_persistence.py::test_interview_prep_persisted_item_contains_prefix_and_ttl",
+    "tests/unit/test_l3_application_recovery.py::TestApplicationRecoveryReloadRouting::test_reload_route_matches_state[artifacts_completed-/artifacts]",
+    "tests/unit/test_l3_application_recovery.py::TestApplicationRecoveryResponseFields::test_recovery_populated_artifacts_when_completed",
+    "tests/unit/test_l3_state_recovery.py::TestArtifactsCompletedRecovery::test_artifacts_completed_recovery",
+    "tests/unit/test_l3_state_recovery.py::TestArtifactsGeneratingRecovery::test_artifacts_generating_recovery",
+    "tests/unit/test_l3_trial_credit_charging.py::TestCreditChargedBeforeLLM::test_consume_credit_called_once_per_request",
+    "tests/unit/test_l3_trial_credit_charging.py::TestCreditChargedBeforeLLM::test_credit_charged_before_llm_called",
+    "tests/unit/test_l3_trial_credit_charging.py::TestCreditChargedBeforeLLM::test_llm_not_called_when_trial_exhausted",
+    "tests/unit/test_l3_trial_credit_charging.py::TestCreditChargedBeforeLLM::test_llm_not_called_when_trial_expired",
+    "tests/unit/test_trial_enforcement.py::TestApplicationCounter::test_exhausted_response_contains_upgrade_url",
+    "tests/unit/test_trial_enforcement.py::TestApplicationCounter::test_fourth_application_returns_403",
+    "tests/unit/test_trial_enforcement.py::TestTrialIntegration::test_day_15_user_blocked_on_any_route",
+    "tests/unit/test_vpr_worker_task_token.py::test_success_path_sends_task_success"
+  ],
+  "baseline_summary": [
+    "46 failed, 1380 passed, 15 skipped, 4 xfailed, 124 warnings in 181.91s (0:03:01)"
+  ],
+  "E011-status-controlled": {
+    "added_failures": [],
+    "recovered_failures": [],
+    "summary": [
+      "46 failed, 1380 passed, 15 skipped, 4 xfailed, 124 warnings in 166.88s (0:02:46)"
+    ],
+    "sha256": "a95a4b79332c776a3be86f5d1e52306abaf7e4b0aec176a71afc47692ea73e4e"
+  },
+  "E011-both-controlled": {
+    "added_failures": [
+      "tests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_wrong_owner_returns_403"
+    ],
+    "recovered_failures": [],
+    "summary": [
+      "47 failed, 1379 passed, 15 skipped, 4 xfailed, 124 warnings in 166.02s (0:02:46)"
+    ],
+    "sha256": "34785016f06a26ab87590cebac6ca24f9b2d3c4bccde06c6b0d901401cca0771"
+  },
+  "E012-both-header-cases": {
+    "added_failures": [
+      "tests/unit/test_auth_utils.py::test_extract_user_id_does_not_use_x_user_id_header_fallback",
+      "tests/unit/test_cognito_middleware.py::TestExtractUserId::test_spoofed_body_user_id_is_not_honored",
+      "tests/unit/test_cognito_middleware.py::TestExtractUserId::test_spoofed_query_param_user_id_is_not_honored",
+      "tests/unit/test_cognito_middleware.py::TestExtractUserId::test_spoofed_x_user_id_header_is_not_honored",
+      "tests/unit/test_p04_p05_auth_idor.py::test_p04_no_x_user_id_fallbacks_remain",
+      "tests/unit/test_p04_p05_auth_idor.py::test_p05_route_matrix_has_owner_assertion_for_every_authenticated_route"
+    ],
+    "recovered_failures": [],
+    "summary": [
+      "52 failed, 1374 passed, 15 skipped, 4 xfailed, 124 warnings in 169.37s (0:02:49)"
+    ],
+    "sha256": "7275cbec4b2cadd2e378b2dc81ddfd057978179e0b9177a655ca8a1e3d8b69f2"
+  },
+  "historical_reproduction": {
+    "added_failures": [
+      "tests/unit/test_cv_upload_handler.py::TestCVUploadDynamoDBPersistence::test_openapi_payload_uses_bearer_token_for_user_id"
+    ],
+    "recovered_failures": []
+  }
+}

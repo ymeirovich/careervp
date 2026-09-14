@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-c",
+    "from unittest.mock import patch\nimport sys,pytest\nwith patch('botocore.httpsession.URLLib3Session.send',side_effect=AssertionError('PASS C unmocked AWS transport blocked')):\n raise SystemExit(pytest.main(sys.argv[1:]))\n",
+    "tests/integration/test_p05_cross_tenant_idor.py",
+    "-q",
+    "--tb=short",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend",
+  "timestamp": "2026-09-14T04:03:29.030126+00:00",
+  "environment": {
+    "TABLE_NAME": "local-careervp-users",
+    "IDEMPOTENCY_TABLE_NAME": "local-careervp-idempotency",
+    "AWS": "fake credentials; transport denied"
+  },
+  "exit_code": 0,
+  "stdout": ".........                                                                [100%]\n=============================== warnings summary ===============================\ntests/integration/test_p05_cross_tenant_idor.py::test_p05_cross_tenant_authenticated_routes_deny[gap.questions.get]\ntests/integration/test_p05_cross_tenant_idor.py::test_p05_cross_tenant_authenticated_routes_deny[applications.get]\ntests/integration/test_p05_cross_tenant_idor.py::test_p05_cross_tenant_authenticated_routes_deny[vpr.status.get]\n  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/lib/python3.14/site-packages/aws_lambda_powertools/metrics/provider/base.py:211: UserWarning: No application metrics to publish. The cold-start metric may be published if enabled. If application metrics should never be empty, consider using 'raise_on_empty_metrics'\n    self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n9 passed, 3 warnings in 1.17s\n",
+  "stderr": "",
+  "correction": "Use supported fixture environment overrides for CloudFormation outputs; preserve each test own isolated moto context. Outer moto attempt retained as invalid shared-table harness."
+}

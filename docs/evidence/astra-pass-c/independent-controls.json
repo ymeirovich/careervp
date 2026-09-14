@@ -1,0 +1,439 @@
+{
+  "S1": [
+    {
+      "dependency_owner": "attacker",
+      "status": 202,
+      "body": "{\"request_id\": \"cv-tail-b1581c8b-feaf-434e-88c3-1fd49c13356a\", \"job_id\": \"cv-tail-b1581c8b-feaf-434e-88c3-1fd49c13356a\", \"status\": \"failed\", \"estimated_time_seconds\": 0}",
+      "legacy_read_calls": 0
+    },
+    {
+      "dependency_owner": "victim",
+      "status": 409,
+      "body": "{\"status\": \"upstream_required\", \"generating\": [], \"missing\": [\"vpr\"], \"chain_execution_arn\": null, \"requested_artifact\": \"cv_tailored\"}",
+      "legacy_read_calls": 0
+    }
+  ],
+  "S2": {
+    "v2_body": false,
+    "top_level_fields": true,
+    "rest_v1": false
+  },
+  "S6": [
+    {
+      "payload": {
+        "questions": []
+      },
+      "success": true,
+      "code": "GAP_QUESTIONS_GENERATED",
+      "count": 10
+    },
+    {
+      "payload": "not JSON",
+      "success": true,
+      "code": "GAP_QUESTIONS_GENERATED",
+      "count": 10
+    },
+    {
+      "transport_failure": true,
+      "success": false,
+      "code": "LLM_API_ERROR"
+    }
+  ],
+  "S7": [
+    {
+      "passed_gate_input": true,
+      "success": true,
+      "quality_warning": false,
+      "passed_gate_output": true
+    },
+    {
+      "passed_gate_input": false,
+      "success": true,
+      "quality_warning": true,
+      "passed_gate_output": false
+    }
+  ],
+  "S8": [
+    {
+      "table": "p05-artifacts-table",
+      "dal_success": false,
+      "dal_code": "TABLE_SCHEMA_MISMATCH",
+      "context_count": 0,
+      "context": []
+    },
+    {
+      "table": "gap-correct",
+      "dal_success": true,
+      "dal_code": "SUCCESS",
+      "context_count": 0,
+      "context": []
+    }
+  ],
+  "S10": {
+    "primary_write": [
+      {
+        "write_success": true,
+        "status": 200,
+        "body": "{\"status\": \"cancelled\"}"
+      },
+      {
+        "write_success": false,
+        "status": 200,
+        "body": "{\"status\": \"cancelled\"}"
+      }
+    ],
+    "all_chain_failures": "returned None without exception"
+  },
+  "S11": [
+    {
+      "handler": "cover",
+      "schema": "canonical",
+      "status": 200,
+      "stored_status": "CANCELLED",
+      "keys": {
+        "applicationId": "u",
+        "artifactId": "ARTIFACT#COVER_LETTER#x"
+      }
+    },
+    {
+      "handler": "cover",
+      "schema": "legacy",
+      "status": 500,
+      "stored_status": "PROCESSING",
+      "keys": {
+        "pk": "u",
+        "sk": "ARTIFACT#COVER_LETTER#x"
+      }
+    },
+    {
+      "handler": "cv",
+      "schema": "canonical",
+      "status": 500,
+      "stored_status": "PROCESSING",
+      "keys": {
+        "applicationId": "u",
+        "artifactId": "ARTIFACT#CV_TAILORED#x"
+      }
+    },
+    {
+      "handler": "cv",
+      "schema": "legacy",
+      "status": 200,
+      "stored_status": "CANCELLED",
+      "keys": {
+        "pk": "u",
+        "sk": "ARTIFACT#CV_TAILORED#x"
+      }
+    }
+  ],
+  "S25": [
+    {
+      "existing_cv_selected": false,
+      "state_after_upsert": "gap_responses_submitted"
+    },
+    {
+      "existing_cv_selected": true,
+      "state_after_upsert": "cv_selected"
+    }
+  ],
+  "G4": [
+    {
+      "method": "list_cover_letters_canonical",
+      "cursor_present": false,
+      "items": [
+        {
+          "id": "first"
+        }
+      ],
+      "queries": 1,
+      "cursor_forwarded": "call(KeyConditionExpression=<boto3.dynamodb.conditions.And object at 0x114411a50>)"
+    },
+    {
+      "method": "list_cover_letters_canonical",
+      "cursor_present": true,
+      "items": [
+        {
+          "id": "first"
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "queries": 2,
+      "cursor_forwarded": "call(KeyConditionExpression=<boto3.dynamodb.conditions.And object at 0x114411b50>, ExclusiveStartKey={'key': 'cursor'})"
+    },
+    {
+      "method": "list_tailored_cvs",
+      "cursor_present": false,
+      "items": [
+        {
+          "id": "first"
+        }
+      ],
+      "queries": 1,
+      "cursor_forwarded": "call(KeyConditionExpression=<boto3.dynamodb.conditions.And object at 0x1140734d0>)"
+    },
+    {
+      "method": "list_tailored_cvs",
+      "cursor_present": true,
+      "items": [
+        {
+          "id": "first"
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "queries": 2,
+      "cursor_forwarded": "call(KeyConditionExpression=<boto3.dynamodb.conditions.And object at 0x114073110>, ExclusiveStartKey={'key': 'cursor'})"
+    }
+  ],
+  "K9": [
+    {
+      "variable_present": false,
+      "error": "jobs table is not configured: none of DYNAMODB_TABLE_NAME is set",
+      "type": "MissingTableEnvError"
+    },
+    {
+      "variable_present": true,
+      "result": "dependencies built"
+    }
+  ],
+  "E013-owner-control": [
+    {
+      "route": "jobs.get",
+      "path_params": {
+        "jobId": "job-0bdbd86b39"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"job-0bdbd86b39\", \"job_id\": \"job-0bdbd86b39\", \"user_id\": \"victim\", \"title\": \"p05-victim-secret-title\", \"company_name\": \"Victim Co\", \"description\": \"\", \"status\": \"PENDING\", \"url\": null, \"requirements\": [], \"created_at\": \"2026-07-24T00:00:00+00:00\"}",
+          "markers": [
+            "p05-victim-secret-title"
+          ]
+        },
+        {
+          "identity": "attacker",
+          "status": 403,
+          "body": "{\"error\": \"User can only access own jobs\", \"error_code\": \"forbidden\", \"field\": \"jobId\", \"classification\": \"access_denied\"}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "gap.questions.get",
+      "path_params": {
+        "jobId": "job-3d4840e6f5"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"job_id\": \"job-3d4840e6f5\", \"cv_id\": null, \"questions\": []}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 200,
+          "body": "{\"job_id\": \"job-3d4840e6f5\", \"cv_id\": null, \"questions\": []}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "applications.get",
+      "path_params": {
+        "application_id": "app-c6c32b4ae1"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"application\": {\"application_id\": \"app-c6c32b4ae1\", \"state\": \"created\", \"created_at\": null, \"trial_credit_consumed\": false, \"company_research_error\": false}, \"job\": {\"job_id\": null}, \"cv\": null, \"gap_analysis\": {\"questions\": [], \"responses\": []}, \"artifacts\": {\"vpr\": {\"status\": \"pending\", \"artifact_id\": null}, \"cv_tailored\": {\"status\": \"pending\", \"artifact_id\": null}, \"cover_letter\": {\"status\": \"pending\", \"artifact_id\": null}, \"interview_prep\": {\"status\": \"pending\", \"artifact_id\": null}, \"gap_analysis\": {\"status\": \"pending\", \"artifact_id\": null}, \"company_research\": {\"status\": \"pending\", \"artifact_id\": null}}, \"reload_route\": \"/applications\"}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 404,
+          "body": "{\"error\": \"Application not found\"}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "vpr.status.get",
+      "path_params": {
+        "vprId": "vpr-07ff79cbcb"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"vpr-07ff79cbcb\", \"job_id\": \"vpr-07ff79cbcb\", \"status\": \"completed\", \"result\": {\"uvp\": \"Value proposition generated\", \"differentiators\": [{\"text\": \"Value proposition generated\", \"source\": \"cv\"}, {\"text\": \"Cross-functional delivery across engineering disciplines\", \"source\": \"cv\"}, {\"text\": \"Cloud-native implementation experience with measurable impact\", \"source\": \"cv\"}], \"strategic_narrative\": \"Value proposition generated\", \"company_job_fit_score\": 8.0, \"meta_evaluation\": {\"persuasion_score\": 8.0, \"completeness_score\": 8.0}, \"company_research_id\": null, \"company_research_at\": null, \"company_context_included\": false}, \"created_at\": \"2026-07-24T00:00:00+00:00\", \"completed_at\": null, \"company_research_id\": null, \"company_research_at\": null, \"company_context_included\": false}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 403,
+          "body": "{\"error\": \"User can only access own VPRs\", \"status_code\": 403}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "cv-tailoring.status.get",
+      "path_params": {
+        "cvTailoringId": "cvt-d214958673"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"cvt-d214958673\", \"status\": \"completed\"}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 404,
+          "body": "{\"success\": false, \"code\": \"CV_NOT_FOUND\", \"message\": \"Tailored CV not found\"}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "cover-letter.status.get",
+      "path_params": {
+        "coverLetterId": "cl-5d54e43916"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"cl-5d54e43916\", \"status\": \"completed\"}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 404,
+          "body": "{\"error\": \"Cover letter not found\", \"code\": \"COVER_LETTER_NOT_FOUND\"}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "interview-prep.status.get",
+      "path_params": {
+        "interviewPrepId": "ip-6d384f1fd9"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"ip-6d384f1fd9\", \"status\": \"completed\", \"result\": {\"questions\": []}}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 404,
+          "body": "{\"error\": \"Interview prep not found\", \"code\": \"INTERVIEW_PREP_NOT_FOUND\"}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "company-research.get",
+      "path_params": {
+        "jobId": "job-81f7daff2e"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 200,
+          "body": "{\"id\": \"job-81f7daff2e\", \"company_name\": \"p05-victim-secret-title\", \"mission\": \"\", \"values\": [], \"recent_news\": [], \"culture\": \"\", \"products\": [], \"funding_status\": \"\", \"size_range\": \"\", \"industry\": \"\", \"status\": \"completed\"}",
+          "markers": [
+            "p05-victim-secret-title"
+          ]
+        },
+        {
+          "identity": "attacker",
+          "status": 200,
+          "body": "{\"status\": \"not_generated\", \"company_research\": null}",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "route": "jobs.export.get",
+      "path_params": {
+        "jobId": "job-4e35398f15",
+        "moduleType": "cv_tailored"
+      },
+      "responses": [
+        {
+          "identity": "victim",
+          "status": 404,
+          "body": "{\"message\": \"Artifact not found.\"}",
+          "markers": []
+        },
+        {
+          "identity": "attacker",
+          "status": 404,
+          "body": "{\"message\": \"Artifact not found.\"}",
+          "markers": []
+        }
+      ]
+    }
+  ],
+  "S26": {
+    "name_100k_accepted": 100000,
+    "job_100k_accepted": 100000,
+    "answer_100k_accepted": 100000,
+    "scrape_words_in": 3000,
+    "scrape_words_out": 2500,
+    "generate_signature": "(self, prompt: 'str', timeout: 'int' = 300, cv: 'UserCV | None' = None, model_name: 'str' = 'claude-haiku-4-5-20251001', temperature: 'float' = 0.3) -> 'dict[str, Any]'",
+    "complete_signature": "(self, prompt: 'str', system_prompt: 'str' = '', max_tokens: 'int' = 2500, model_name: 'str' = 'claude-haiku-4-5-20251001', temperature: 'float' = 0.3, use_system_cache: 'bool' = False) -> '_LLMTextResponse'"
+  },
+  "PREMISE-P3": {
+    "counts": {
+      "no_raise": 144,
+      "any_raise": 20,
+      "bare_pass": 12
+    },
+    "total": 176,
+    "interview_handlers": 17,
+    "nested_raise_classifier": "surfaces",
+    "nested_raise_actual": "returns normally"
+  },
+  "S23": {
+    "timings": [
+      {
+        "requirements": 20,
+        "evidence": 50,
+        "words_padding": 12,
+        "milliseconds": 1.7535419901832938
+      },
+      {
+        "requirements": 40,
+        "evidence": 200,
+        "words_padding": 12,
+        "milliseconds": 14.835958951152861
+      },
+      {
+        "requirements": 60,
+        "evidence": 500,
+        "words_padding": 12,
+        "milliseconds": 55.46504200901836
+      },
+      {
+        "requirements": 60,
+        "evidence": 500,
+        "words_padding": 120,
+        "milliseconds": 318.6559999594465
+      }
+    ],
+    "tokenizer_calls_3x2": 9,
+    "representative_of_production": "unknown; synthetic only"
+  }
+}

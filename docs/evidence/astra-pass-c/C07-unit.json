@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-c",
+    "from unittest.mock import patch\nfrom contextlib import nullcontext\nfrom moto import mock_aws\nimport sys,pytest\nwith nullcontext(), patch('botocore.httpsession.URLLib3Session.send',side_effect=AssertionError('PASS C unmocked AWS transport blocked')):\n raise SystemExit(pytest.main(sys.argv[1:]))\n",
+    "tests/unit/test_auth_utils.py",
+    "tests/unit/test_cv_upload_handler.py",
+    "tests/unit/test_vpr_status_handler.py",
+    "tests/unit/test_vpr_cancel_handler.py",
+    "tests/unit/test_artifact_dependency_resolver.py",
+    "tests/unit/test_artifact_dependency_utils.py",
+    "tests/unit/test_table_registry_characterization.py",
+    "-q",
+    "--tb=short",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend",
+  "timestamp": "2026-09-14T04:01:53.212204+00:00",
+  "exit_code": 0,
+  "stdout": "..........................................................               [100%]\n=============================== warnings summary ===============================\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_no_auth_returns_401\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_task_not_found_returns_404\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_wrong_owner_returns_403\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_pending_returns_200_and_calls_update\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_processing_returns_200_and_calls_update\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_completed_returns_409_no_update\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_failed_returns_409_no_update\ntests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_dynamodb_raises_returns_500\n  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/lib/python3.14/site-packages/aws_lambda_powertools/metrics/provider/base.py:211: UserWarning: No application metrics to publish. The cold-start metric may be published if enabled. If application metrics should never be empty, consider using 'raise_on_empty_metrics'\n    self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n58 passed, 8 warnings in 3.44s\n",
+  "stderr": "",
+  "correction": "Split collection; for integration wrap CloudFormation fixture initialization in moto before collection; keep transport denied"
+}

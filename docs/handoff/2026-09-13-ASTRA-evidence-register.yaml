@@ -1,0 +1,308 @@
+# Evidence register for the Astra second-order review.
+# This is the Pass-B input. DO NOT show it to Pass A.
+#
+# Each record is a COMMAND TRANSCRIPT: proof that a command once produced this
+# output on one machine at one time. It is NOT proof that the command tested the
+# object the claim is about. Re-run every record marked reproduction_required.
+#
+# Environment for all records:
+#   repo_commit: cea0799   branch: tools/proof-harness
+#   host: darwin arm64, Python 3.14.6, pytest 9.0.2, moto 5.x
+#   aws_account: 788159322332   region: us-east-1   stack: CareerVpCrudDevx
+#   aws_identity: arn:aws:iam::788159322332:user/presgen_user
+#   date: 2026-09-12
+#
+# KNOWN ENVIRONMENT GAP, audit this first: DEPLOYED_GIT_SHA returned null on the
+# live devx Lambdas (see E-022), so NO record below establishes that deployed
+# code matches cea0799. Every live-vs-code correspondence is an INFERENCE.
+
+register_version: 1
+records:
+
+  - evidence_id: E-001
+    kind: command_transcript
+    claims_supported: [S0a]
+    reproduction_required: true
+    artifact: docs/evidence/p1-repro/s0a_export_idor_test.py
+    command: "PYTHONPATH=$PWD uv run pytest <repro>/s0a_export_idor_test.py::test_s0a_authenticated_attacker_exports_victim_vpr -v -s --rootdir=$PWD"
+    cwd: src/backend
+    exit_code: 0
+    material_output: |
+      S0a status=200
+      S0a body keys=['download_url', 'expires_at']
+      S0a attacker received presigned URL: https://p05-artifacts-bucket.s3.amazonaws.com/exports/vpr/victim-job-0001/victim...
+      S0a victim secret present in exported DOCX: True
+      1 passed
+    interpretation_by_p1: "Authenticated cross-tenant VPR export succeeded."
+    harness_caveats:
+      - "moto in-process; does not traverse API Gateway, the Cognito authorizer, WAF, or IAM."
+      - "Test asserts the defect, so PASS means the leak reproduced."
+
+  - evidence_id: E-002
+    kind: command_transcript
+    claims_supported: [S0b]
+    reproduction_required: true
+    artifact: docs/evidence/p1-repro/s0b_status_fallback_test.py
+    command: "PYTHONPATH=$PWD uv run pytest <repro>/s0b_status_fallback_test.py -v -s --rootdir=$PWD"
+    cwd: src/backend
+    exit_code: 0
+    material_output: |
+      CONTROL (job row present): status=403
+      CONTROL body={"error": "User can only access own VPRs", "status_code": 403}
+      S0b (job row absent / TTL expired): status=200
+      S0b victim secret in body: True
+      S0b presigned download_url issued: True
+      2 passed
+    control_present: true
+    interpretation_by_p1: "Ownership check works when the row exists; bypassed when it does not."
+
+  - evidence_id: E-003
+    kind: command_transcript
+    claims_supported: [S11d]
+    reproduction_required: true
+    artifact: docs/evidence/p1-repro/s11d_gpa_float_test.py
+    command: "PYTHONPATH=$PWD uv run pytest <repro>/s11d_gpa_float_test.py -v -s"
+    cwd: src/backend
+    material_output: |
+      NO-GPA: save_cv succeeded
+      GPA: save_cv raised builtins.TypeError: Float types are not supported. Use Decimal types instead.
+      1 failed, 1 passed
+    control_present: true
+    harness_caveats:
+      - "Constructs UserCV(gpa=3.8) directly. Does NOT prove the live parser emits a float."
+
+  - evidence_id: E-004
+    kind: command_transcript
+    claims_supported: [S25]
+    reproduction_required: true
+    artifact: docs/evidence/p1-repro/s25_state_machine_test.py
+    command: "PYTHONPATH=$PWD uv run pytest <repro>/s25_state_machine_test.py -v -s"
+    cwd: src/backend
+    material_output: |
+      CONTROL: state advanced to gap_questions_pending
+      EMPTY-USER: raised ConditionalCheckFailedException: The conditional request failed
+      EMPTY-USER: real item state after call = cv_selected
+      2 passed
+    control_present: true
+
+  - evidence_id: E-005
+    kind: raw_tool_output
+    claims_supported: [S0b]
+    reproduction_required: true
+    note: "This record REFUTES the inventory's 24h-TTL trigger. Audit it hardest."
+    command: "aws dynamodb get-item --table-name careervp-jobs-table-devx --key '{\"job_id\":{\"S\":\"<id>\"}}' ; plus a scan projecting job_id,ttl"
+    material_output: |
+      374788f8-...: ttl=1817321028 created=2026-08-03T19:22:03 status=COMPLETED
+      5a220c3c-...: ttl=1817136558 created=2026-08-01T16:07:47 status=COMPLETED
+      computed: window = 365 days (8760h) for both
+      rows: 36   with ttl attr: 10   ttl already elapsed but row still present: 0
+      six sampled S3 results from 2026-08-01/03 ALL still have jobs rows
+    corroborating_code: "vpr_worker_handler.py:536 one_year_ttl = now + 365*24*3600, passed to update_job_status"
+
+  - evidence_id: E-006
+    kind: raw_tool_output
+    claims_supported: [S25]
+    reproduction_required: true
+    note: "This record REFUTES 'applications stall at cv_selected forever'."
+    command: "aws dynamodb scan --table-name careervp-applications-table-devx --projection-expression '#s' --expression-attribute-names '{\"#s\":\"state\"}'"
+    material_output: |
+      total: 12
+      Counter({'gap_responses_submitted': 8, '<missing>': 4})
+
+  - evidence_id: E-007
+    kind: raw_tool_output
+    claims_supported: [PREMISE-P2]
+    reproduction_required: true
+    command: "for each devx Lambda: aws lambda get-function-configuration --query Environment.Variables.DYNAMODB_TABLE_NAME"
+    material_output: |
+      20 None
+       6 careervp-artifacts-table-devx
+       5 careervp-users-table-devx
+
+  - evidence_id: E-008
+    kind: raw_tool_output
+    claims_supported: [K9]
+    reproduction_required: true
+    command: "aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name Errors|Invocations --dimensions Name=FunctionName,Value=careervp-artifact-cleanup-lambda-devx --period 86400 --statistics Sum (14 days)"
+    material_output: |
+      Errors:      24.0 per day, every day, 14 consecutive days
+      Invocations: 24.0 per day, every day, 14 consecutive days
+      live env: DYNAMODB_TABLE_NAME = None on careervp-artifact-cleanup-lambda-devx
+
+  - evidence_id: E-009
+    kind: command_transcript
+    claims_supported: [PREMISE-P3]
+    reproduction_required: true
+    command: "uv run python - <<EOF  (ast.walk over careervp/**/*.py, classify every ExceptHandler naming Exception/BaseException by whether any ast.Raise appears in the handler body)"
+    cwd: src/backend
+    material_output: |
+      TOTAL `except Exception` handlers: 176
+        swallows (no raise): 144  (82%)
+        re-raises (surfaces): 20  (11%)
+        bare pass: 12  (7%)
+    note: "Inventory claimed ~40 bare `except Exception: pass`. Actual bare-pass = 12."
+
+  - evidence_id: E-010
+    kind: command_transcript
+    claims_supported: [PREMISE-P4]
+    reproduction_required: true
+    command: "uv run pytest tests/unit/ -q   (at cea0799, and again in a worktree at 7cdc5e5^)"
+    cwd: src/backend
+    material_output: |
+      at cea0799:   1427 passed, 15 skipped, 4 xfailed
+      at 7cdc5e5^:  10 failed, 1413 passed, 15 skipped, 4 xfailed
+      all 10 failures in tests/unit/test_cv_upload_handler.py
+      representative failure: assert 400 == 201, cause "Authenticated user_id is required for /users/me/cv"
+      (the event fixture carried no requestContext.authorizer.claims until 7cdc5e5 added it)
+
+  - evidence_id: E-011
+    kind: command_transcript
+    claims_supported: [PREMISE-P4]
+    reproduction_required: true
+    mutation: "vpr_status_handler.py:408 and :556 -- both `if not job_owner or job_owner != user_id:` replaced with `if False:`"
+    command: "git worktree add <tmp> cea0799; apply mutation; uv run pytest tests/unit/ -q"
+    material_output: |
+      2 failed, 1424 passed
+      FAILED tests/unit/infra/test_p03_api_surface.py::test_cdk_synth_has_no_api_gateway_resource_named_api   <- pre-existing worktree-environmental failure, also present unmutated
+      FAILED tests/unit/test_vpr_cancel_handler.py::test_vpr_cancel_wrong_owner_returns_403
+    interpretation_by_p1: "Cancel ownership check is test-guarded; STATUS ownership check has zero coverage."
+    baseline_note: "Unmutated baseline in the same worktree: 1 failed (the cdk-synth test only)."
+
+  - evidence_id: E-012
+    kind: command_transcript
+    claims_supported: [G1, PREMISE-P4]
+    reproduction_required: true
+    mutation: "auth_utils.extract_user_id -- x-user-id header fallback reintroduced before the final `return None`"
+    command: "apply mutation; uv run pytest tests/unit/ -q"
+    material_output: |
+      7 failed, 1419 passed   (1 of the 7 is the pre-existing cdk-synth failure)
+      FAILED test_cognito_middleware.py::TestExtractUserId::test_spoofed_x_user_id_header_is_not_honored
+      FAILED test_cognito_middleware.py::TestExtractUserId::test_spoofed_body_user_id_is_not_honored
+      FAILED test_cognito_middleware.py::TestExtractUserId::test_spoofed_query_param_user_id_is_not_honored
+      FAILED test_p04_p05_auth_idor.py::test_p04_no_x_user_id_fallbacks_remain
+      FAILED test_p04_p05_auth_idor.py::test_p05_route_matrix_has_owner_assertion_for_every_authenticated_route
+
+  - evidence_id: E-013
+    kind: command_transcript
+    claims_supported: [S0a, PREMISE-P4]
+    reproduction_required: true
+    note: "The self-closing-test finding. Two sub-records."
+    sub_records:
+      - command: "uv run pytest tests/integration/test_p05_cross_tenant_idor.py -v"
+        material_output: "9 passed  (all 9 registered cross-tenant cases, AS SHIPPED)"
+      - command: "the same 9 cases re-run with seeding.authed_event (a real authenticated attacker) instead of seeding.forged_header_event"
+        material_output: |
+          [jobs.get]                  403  User can only access own jobs
+          [gap.questions.get]         200  {"questions": []}            <- 200-empty, no victim data
+          [applications.get]          404  Application not found
+          [vpr.status.get]            403  User can only access own VPRs
+          [cv-tailoring.status.get]   404  CV_NOT_FOUND
+          [cover-letter.status.get]   404  COVER_LETTER_NOT_FOUND
+          [interview-prep.status.get] 404  INTERVIEW_PREP_NOT_FOUND
+          [company-research.get]      200  {"status": "not_generated"}  <- 200-empty, no victim data
+          [jobs.export.get]           404  Artifact not found
+          no VICTIM_MARKERS leaked on any of the nine
+    interpretation_by_p1: >-
+      The shipped probe attacks with a forged x-user-id header. Since P-04 removed
+      that fallback, all 9 cases now return 401 at the auth gate and never reach
+      ownership code. Separately, p05_owner_check_registry.py:109 pins
+      moduleType='cv_tailored' -- a scoped branch -- so the vpr branch is never
+      exercised. The ratchet is handler-level; the defect is branch-level.
+    p1_self_correction: >-
+      P1's first scoring of this run marked the two 200-empty rows as failures
+      (denial criterion required 401/403/404). Inspecting the bodies showed no
+      victim data. That was a P1 instrument error, corrected before reporting.
+
+  - evidence_id: E-014
+    kind: raw_tool_output
+    claims_supported: [S8]
+    reproduction_required: true
+    command: "aws dynamodb describe-table --query Table.KeySchema, for careervp-artifacts-table-devx and careervp-gap-responses-table-devx"
+    material_output: |
+      artifacts-table-devx:      applicationId (HASH), artifactId (RANGE)
+      gap-responses-table-devx:  userId (HASH), questionId (RANGE)
+    corroborating_code: "get_gap_responses queries Key('userId') & Key('questionId'); cover_letter _get_dal() resolves the ARTIFACTS table."
+
+  - evidence_id: E-015
+    kind: raw_tool_output
+    claims_supported: [S2]
+    reproduction_required: true
+    note: "This record REFUTES S2's stated exploitation vector."
+    command: "aws apigatewayv2 get-apis --region us-east-1 ; aws apigateway get-rest-apis --region us-east-1"
+    material_output: |
+      apigatewayv2 get-apis: EMPTY (no HTTP API v2 exists in this account/region)
+      apigateway get-rest-apis: careervp-core-api-{dev,devx,staging}  (REST v1, always sets httpMethod)
+    corroborating_code: "_is_sfn_invoke guard is `not event.get('httpMethod') and {'user_id','cv_id','job_id'}.issubset(event)` -- the inventory quoted only the first conjunct."
+
+  - evidence_id: E-016
+    kind: raw_tool_output
+    claims_supported: [PREMISE-P5]
+    reproduction_required: true
+    command: "aws dynamodb scan --table-name careervp-knowledge-table-devx --select COUNT ; grep -rln 'KnowledgeRepository(' src/backend/careervp ; grep -rn knowledge_base_handler infra/"
+    material_output: |
+      knowledge-devx items: 0
+      sole non-test caller: src/backend/careervp/handlers/knowledge_base_handler.py
+      infra references to knowledge_base_handler: NONE
+      GET /knowledge-base routes to self.company_research_func (api_construct.py:3503)
+      table PK is userEmail (api_db_construct.py:435-437) while knowledge_repository writes pk/sk
+
+  - evidence_id: E-017
+    kind: command_transcript
+    claims_supported: [S23]
+    reproduction_required: true
+    note: "This record REFUTES S23's severity, not its mechanism."
+    command: "uv run python -c 'timeit _select_best_evidence over synthetic requirement/evidence sets'"
+    material_output: |
+      20 reqs x 50 evidence  = 1000 pairs  ->   3.4 ms
+      40 reqs x 200 evidence = 8000 pairs  ->  26.9 ms
+      60 reqs x 500 evidence = 30000 pairs -> 102.4 ms
+    corroborating_code: "VPR generation runs in vpr_worker_handler behind SQS, not behind the API Gateway 29s cap."
+
+  - evidence_id: E-018
+    kind: raw_tool_output
+    claims_supported: [S0a]
+    reproduction_required: true
+    command: "aws apigateway get-resources --rest-api-id ymzhvcxod0 ; aws apigateway get-method --resource-id jevqwf --http-method GET"
+    material_output: |
+      resource /jobs/{jobId}/artifacts/{moduleType}/export exists with GET and OPTIONS
+      GET method: {"auth": "COGNITO_USER_POOLS", "authorizerId": "9oadeg", "apiKey": false, "validator": null}
+    interpretation_by_p1: "Route is deployed and authenticated but not authorized."
+
+  - evidence_id: E-019
+    kind: raw_tool_output
+    claims_supported: [S11d]
+    reproduction_required: true
+    note: "REFUTES the save_vpr sibling sub-claim."
+    command: "grep -rn '\\.save_vpr(' src/backend/careervp --include=*.py"
+    material_output: "(no non-test callers)"
+
+  - evidence_id: E-020
+    kind: raw_tool_output
+    claims_supported: [TIER3-frontend-validation]
+    reproduction_required: true
+    command: "grep -rn 'validate_cv_upload' src/backend/careervp --include=*.py"
+    material_output: "src/backend/careervp/handlers/validators.py:92:def validate_cv_upload(   <- definition only, zero callers"
+
+  - evidence_id: E-021
+    kind: raw_tool_output
+    claims_supported: [S7]
+    reproduction_required: true
+    command: "grep -rn 'quality_warning' src/backend/careervp --include=*.py | grep -v tests"
+    material_output: |
+      vpr_generator.py:87   (comment)
+      vpr_generator.py:159  (field definition)
+      vpr_generator.py:262  (comment)
+      vpr_generator.py:272  (assignment)
+      -> zero consumers anywhere outside the file that sets it
+
+  - evidence_id: E-022
+    kind: raw_tool_output
+    claims_supported: [ENVIRONMENT-INTEGRITY]
+    reproduction_required: true
+    note: "The register's own weakest link. Audit before trusting any live record."
+    command: "aws lambda get-function-configuration --function-name careervp-vpr-submit-lambda-devx --query '{LastModified:LastModified,Sha:Environment.Variables.DEPLOYED_GIT_SHA}'"
+    material_output: |
+      {"LastModified": "2026-08-08T08:21:30.000+0000", "Sha": null}
+    implication: >-
+      DeployedGitSha is wired in service_stack.py:177-182 but is null on the live
+      function. Nothing establishes that deployed devx code equals cea0799.

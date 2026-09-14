@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigateway",
+    "get-authorizers",
+    "--rest-api-id",
+    "ymzhvcxod0"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:34.104446+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"items\": [\n        {\n            \"id\": \"9oadeg\",\n            \"name\": \"CareerVpCrudDevxCareerVpCrudDevxCrudCognitoAuthCF5F66F0\",\n            \"type\": \"COGNITO_USER_POOLS\",\n            \"providerARNs\": [\n                \"arn:aws:cognito-idp:us-east-1:788159322332:userpool/us-east-1_bAZ6jb6HP\"\n            ],\n            \"authType\": \"cognito_user_pools\",\n            \"identitySource\": \"method.request.header.Authorization\"\n        }\n    ]\n}\n",
+  "stderr": ""
+}

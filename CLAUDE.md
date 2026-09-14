@@ -52,6 +52,26 @@
 - **Models Source:** `src/backend/careervp/models/`
 - **Verification Scripts:** `src/backend/scripts/`
 
+## Agent Model & Effort Policy (as of Aug 2026)
+
+Applies to both OpenAI Codex and Claude Code sessions used on this repo. Model/effort tiers shift over time — treat this as the current calculation, not a permanent ranking; re-verify against provider docs if it's been a while.
+
+**Codex (GPT-5.6 family — Sol/Terra/Luna tiers):**
+- Routine implementation, tests, small refactors: **Terra**, medium reasoning.
+- Large feature, unfamiliar codebase, debugging: **Sol**, high reasoning.
+- Architecture, migrations, security-sensitive review, hard diagnosis: **Sol**, xhigh reasoning.
+- Simple searches, repetitive edits, narrow reviews: **Luna** (or GPT-5.4 mini), low/medium reasoning.
+- Maximum-quality final judgment call: **Sol**, max reasoning (or Pro mode).
+
+**Claude Code:**
+- Routine coding: **Sonnet 5**, high effort.
+- Complex multi-service work: **Opus 5**, high or xhigh effort.
+- Very difficult architecture or long-running autonomous work: **Opus 5**, xhigh/max effort.
+- Hardest long-running research/coding where quality gain justifies cost: **Fable 5**, high effort.
+- Use `opusplan` when a strong plan is needed but implementation should stay at normal cost (Opus plans, Sonnet executes).
+
+**General rule:** default to the cheaper/faster tier (Sonnet 5 / GPT-5.6 Terra); escalate only when the task is genuinely architectural, ambiguous, long-running, or expensive to get wrong. Model switches must be confirmed via `/status` (Claude Code) or the equivalent Codex indicator — do not assume a stated policy alone changed the active model.
+
 ## Git Workflow Rules
 - **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
 - **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main

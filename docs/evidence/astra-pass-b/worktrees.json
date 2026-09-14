@@ -1,0 +1,18 @@
+[
+  {
+    "label": "head",
+    "ref": "cea0799",
+    "path": "/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-head-0xc6quch/repo",
+    "exit_code": 0,
+    "stdout": "HEAD is now at cea0799 docs(runbook): record the type-O closure batch commit hash in the wave-3 ledger\n",
+    "stderr": "Preparing worktree (detached HEAD cea0799)\n"
+  },
+  {
+    "label": "parent",
+    "ref": "7cdc5e5^",
+    "path": "/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-parent-frb959g3/repo",
+    "exit_code": 0,
+    "stdout": "HEAD is now at 852b965 fix(waf): let a real CV reach the parser on devx (SizeRestrictions_BODY)\n",
+    "stderr": "Preparing worktree (detached HEAD 852b965)\n"
+  }
+]

@@ -1,0 +1,103 @@
+{
+  "S0a": [
+    {
+      "identity": "victim",
+      "status": 200,
+      "secret_in_docx": true
+    },
+    {
+      "identity": "attacker",
+      "status": 200,
+      "secret_in_docx": true
+    }
+  ],
+  "S0b": [
+    {
+      "throttle": false,
+      "status": 403,
+      "secret_in_body": false
+    },
+    {
+      "throttle": true,
+      "status": 200,
+      "secret_in_body": true
+    }
+  ],
+  "S11d": [
+    {
+      "gpa": null,
+      "saved": true,
+      "exists": true
+    },
+    {
+      "gpa": 3.8,
+      "saved": false,
+      "exception": "TypeError",
+      "message": "Float types are not supported. Use Decimal types instead."
+    }
+  ],
+  "S8-corrected": [
+    {
+      "table": "p05-artifacts-table",
+      "key": "ARTIFACT#GAP_RESPONSES#v1",
+      "dal_success": false,
+      "code": "TABLE_SCHEMA_MISMATCH",
+      "context": []
+    },
+    {
+      "table": "gap-correct-v2",
+      "key": "ARTIFACT#GAP_RESPONSES#v1",
+      "dal_success": true,
+      "code": "SUCCESS",
+      "context": [
+        {
+          "question_id": "q",
+          "question": "Question",
+          "answer": "secret-answer",
+          "destination": "CV_IMPACT"
+        }
+      ]
+    }
+  ],
+  "PREMISE-P5": [
+    {
+      "schema": [
+        "pk",
+        "sk"
+      ],
+      "success": true,
+      "error": "<bound method Result.error of <class 'careervp.models.result.Result'>>",
+      "count": 1
+    },
+    {
+      "schema": [
+        "userEmail",
+        "knowledgeType"
+      ],
+      "success": false,
+      "error": "Failed to save gap response: An error occurred (ValidationException) when calling the PutItem operation: One or more parameter values were invalid: Missing the key userEmail in the item",
+      "count": 0
+    }
+  ],
+  "S11-real-upsert": [
+    {
+      "delete_between": false,
+      "status": 200,
+      "item": {
+        "applicationId": "u",
+        "artifactId": "ARTIFACT#COVER_LETTER#race",
+        "status": "CANCELLED",
+        "content": "original"
+      }
+    },
+    {
+      "delete_between": true,
+      "status": 200,
+      "item": {
+        "applicationId": "u",
+        "artifactId": "ARTIFACT#COVER_LETTER#race",
+        "status": "CANCELLED"
+      }
+    }
+  ]
+}

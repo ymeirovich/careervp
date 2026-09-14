@@ -1,0 +1,30 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "cloudwatch",
+    "get-metric-statistics",
+    "--namespace",
+    "AWS/Lambda",
+    "--metric-name",
+    "Invocations",
+    "--dimensions",
+    "Name=FunctionName,Value=careervp-artifact-cleanup-lambda-devx",
+    "--start-time",
+    "2026-08-30T00:00:00Z",
+    "--end-time",
+    "2026-09-13T00:00:00Z",
+    "--period",
+    "86400",
+    "--statistics",
+    "Sum"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:44.669208+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Label\": \"Invocations\",\n    \"Datapoints\": [\n        {\n            \"Timestamp\": \"2026-09-11T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-05T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-08-30T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-12T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-06T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-08-31T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-07T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-01T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-08T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-02T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-09T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-03T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-10T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        },\n        {\n            \"Timestamp\": \"2026-09-04T03:00:00+03:00\",\n            \"Sum\": 24.0,\n            \"Unit\": \"Count\"\n        }\n    ]\n}\n",
+  "stderr": ""
+}

@@ -168,6 +168,19 @@ class ServiceStack(Stack):
         CfnOutput(self, "ClientId", value=self.cognito.client_id)
         CfnOutput(self, "RawApiInvokeUrl", value=self.api.rest_api.url)
 
+        # Which commit is this stack running? Without this, "is my change live?"
+        # is unanswerable, and every debugging session risks reading source that
+        # is not executing. Supplied by the deploy target as
+        # `--context git_sha=$(git rev-parse HEAD)`; a deploy from a dirty tree
+        # appends `-dirty`, which preflight treats as a failure because the
+        # running code is then in no repository at all.
+        CfnOutput(
+            self,
+            "DeployedGitSha",
+            value=self.node.try_get_context("git_sha") or "unstamped",
+            description="Git commit this stack was deployed from",
+        )
+
         if scratch_teardown_safe:
             self._name_scratch_auto_delete_provider()
 

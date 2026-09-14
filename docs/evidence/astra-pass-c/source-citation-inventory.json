@@ -1,0 +1,404 @@
+[
+  {
+    "finding_id": "S0a",
+    "citation": "export_handler.py:124-133",
+    "path": "src/backend/careervp/handlers/export_handler.py",
+    "sha256": "72472bb3adcedc14bce037378bf58299a14440769d913074aee251cac65edb75"
+  },
+  {
+    "finding_id": "S0a",
+    "citation": "export_handler.py:61",
+    "path": "src/backend/careervp/handlers/export_handler.py",
+    "sha256": "72472bb3adcedc14bce037378bf58299a14440769d913074aee251cac65edb75"
+  },
+  {
+    "finding_id": "S0a",
+    "citation": "api_construct.py:3165",
+    "path": "infra/careervp/api_construct.py",
+    "sha256": "2d1ceb8bd34efd0c9757b7dbf2fb659d6706caada18489816eb2155b60cac4ee"
+  },
+  {
+    "finding_id": "S0a",
+    "citation": "api_construct.py:3508",
+    "path": "infra/careervp/api_construct.py",
+    "sha256": "2d1ceb8bd34efd0c9757b7dbf2fb659d6706caada18489816eb2155b60cac4ee"
+  },
+  {
+    "finding_id": "S0b",
+    "citation": "vpr_status_handler.py:543-551",
+    "path": "src/backend/careervp/handlers/vpr_status_handler.py",
+    "sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3"
+  },
+  {
+    "finding_id": "S0b",
+    "citation": "vpr_status_handler.py:554-558",
+    "path": "src/backend/careervp/handlers/vpr_status_handler.py",
+    "sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3"
+  },
+  {
+    "finding_id": "S0b",
+    "citation": "jobs_repository.py:475",
+    "path": "src/backend/careervp/dal/jobs_repository.py",
+    "sha256": "2bac26c4a3868c3e5a62f26b1f5991b48aaa2501c251a8aee1d99f5c45ba4cd0"
+  },
+  {
+    "finding_id": "S11d",
+    "citation": "dynamo_dal_handler.py:99-105",
+    "path": "src/backend/careervp/dal/dynamo_dal_handler.py",
+    "sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9"
+  },
+  {
+    "finding_id": "S11d",
+    "citation": "models/cv.py:92",
+    "path": "src/backend/careervp/models/cv.py",
+    "sha256": "86fef080a0b3aa5a774e760ffc054adfebdb15b10ca19b3a49d4d0575631ac6a"
+  },
+  {
+    "finding_id": "S11d",
+    "citation": "dynamo_dal_handler.py:889",
+    "path": "src/backend/careervp/dal/dynamo_dal_handler.py",
+    "sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9"
+  },
+  {
+    "finding_id": "S11d",
+    "citation": "dynamo_dal_handler.py:304-311",
+    "path": "src/backend/careervp/dal/dynamo_dal_handler.py",
+    "sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9"
+  },
+  {
+    "finding_id": "S25",
+    "citation": "gap_handler.py:874-883",
+    "path": "src/backend/careervp/handlers/gap_handler.py",
+    "sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e"
+  },
+  {
+    "finding_id": "S25",
+    "citation": "application_repository.py:83-91",
+    "path": "src/backend/careervp/dal/application_repository.py",
+    "sha256": "25a15f26354f659d068ad17aa868a23feb7c92547adf699f3ec1511846314a15"
+  },
+  {
+    "finding_id": "S25",
+    "citation": "gap_handler.py:260-279",
+    "path": "src/backend/careervp/handlers/gap_handler.py",
+    "sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e"
+  },
+  {
+    "finding_id": "S1",
+    "citation": "cv_tailoring_handler.py:418-422",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S1",
+    "citation": "dynamo_dal_handler.py:318-340",
+    "path": "src/backend/careervp/dal/dynamo_dal_handler.py",
+    "sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9"
+  },
+  {
+    "finding_id": "S1",
+    "citation": "cv_tailoring_handler.py:476",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S1",
+    "citation": "cv_tailoring_handler.py:432-440",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S1",
+    "citation": "cover_letter_handler.py:356-358",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "S2",
+    "citation": "cv_tailoring_handler.py:301-318",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S2",
+    "citation": "cv_tailoring_handler.py:68",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S6",
+    "citation": "gap_analysis.py:299-305",
+    "path": "src/backend/careervp/logic/gap_analysis.py",
+    "sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8"
+  },
+  {
+    "finding_id": "S6",
+    "citation": "gap_analysis.py:299-305",
+    "path": "src/backend/careervp/models/gap_analysis.py",
+    "sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925"
+  },
+  {
+    "finding_id": "S6",
+    "citation": "gap_analysis.py:308",
+    "path": "src/backend/careervp/logic/gap_analysis.py",
+    "sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8"
+  },
+  {
+    "finding_id": "S6",
+    "citation": "gap_analysis.py:308",
+    "path": "src/backend/careervp/models/gap_analysis.py",
+    "sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925"
+  },
+  {
+    "finding_id": "S7",
+    "citation": "vpr_generator.py:469-517",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S7",
+    "citation": "vpr_generator.py:607",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S7",
+    "citation": "vpr_generator.py:262-274",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S7",
+    "citation": "vpr_handler.py:64",
+    "path": "src/backend/careervp/handlers/vpr_handler.py",
+    "sha256": "c158edbdc482f1c6ba314fb48e21d09ae534ba6b2c9935bcd9c106a9f0b8e7eb"
+  },
+  {
+    "finding_id": "S8",
+    "citation": "gap_handler.py:74-76",
+    "path": "src/backend/careervp/handlers/gap_handler.py",
+    "sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e"
+  },
+  {
+    "finding_id": "S8",
+    "citation": "cover_letter_handler.py:382",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "S8",
+    "citation": "cover_letter_handler.py:63-66",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "S8",
+    "citation": "cover_letter_handler.py:302-312",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "S8",
+    "citation": "interview_prep_handler.py:881-883",
+    "path": "src/backend/careervp/handlers/interview_prep_handler.py",
+    "sha256": "59c1db64e8e49077e456d302e54554beb6e9823c68fb51d95d6e89f68098a799"
+  },
+  {
+    "finding_id": "S10",
+    "citation": "vpr_status_handler.py:435-448",
+    "path": "src/backend/careervp/handlers/vpr_status_handler.py",
+    "sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3"
+  },
+  {
+    "finding_id": "S10",
+    "citation": "vpr_status_handler.py:420-424",
+    "path": "src/backend/careervp/handlers/vpr_status_handler.py",
+    "sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3"
+  },
+  {
+    "finding_id": "S11",
+    "citation": "cover_letter_handler.py:1470-1476",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "S11",
+    "citation": "cv_tailoring_handler.py:906-912",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S23",
+    "citation": "vpr_generator.py:977-989",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S23",
+    "citation": "vpr_generator.py:281-286",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "company_research.py:479-480",
+    "path": "src/backend/careervp/logic/company_research.py",
+    "sha256": "d3dec14d4d239bb30178de226d8e05e158212265341af2468ad898a58a8a11a6"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "models/company.py:25",
+    "path": "src/backend/careervp/models/company.py",
+    "sha256": "2ff931c9683e6bef09d8e78b513c7bb372a8919cca1337ed218529b1d0797258"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "prompts/company_research_prompt.py:14-19",
+    "path": "src/backend/careervp/logic/prompts/company_research_prompt.py",
+    "sha256": "2a8938cdc3d15014d2f082d6b7fbf58d3071dd7c755a645d79bd15e24bc6a1fe"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "vpr_generator.py:614-620",
+    "path": "src/backend/careervp/logic/vpr_generator.py",
+    "sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "models/job.py:49-68",
+    "path": "src/backend/careervp/models/job.py",
+    "sha256": "8e39a9e20fd82c20bfe91b5cb0d6c1935aea438c62c2968ca4346d0208312e57"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "models/job.py:79",
+    "path": "src/backend/careervp/models/job.py",
+    "sha256": "8e39a9e20fd82c20bfe91b5cb0d6c1935aea438c62c2968ca4346d0208312e57"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "gap_analysis.py:281-286",
+    "path": "src/backend/careervp/logic/gap_analysis.py",
+    "sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "gap_analysis.py:281-286",
+    "path": "src/backend/careervp/models/gap_analysis.py",
+    "sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "interview_prep.py:93",
+    "path": "src/backend/careervp/logic/interview_prep.py",
+    "sha256": "346da06627e7161d73741babe5d24869686da5be4d78541fe116eaab82e5da49"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "interview_prep.py:93",
+    "path": "src/backend/careervp/models/interview_prep.py",
+    "sha256": "c2d7fc1c3709be11cbec75d3b28034f9a227997bf78ad5d2a7b97c23a6ec71a7"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "cv_tailoring_handler.py:472-477",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "cv_tailoring_handler.py:37",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "S26",
+    "citation": "cv_tailoring_handler.py:228",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "K9",
+    "citation": "artifact_cleanup_handler.py:135",
+    "path": "src/backend/careervp/handlers/artifact_cleanup_handler.py",
+    "sha256": "20e83ede943ab21d13089f269aa9d62ab145d6ed5a91cd0214ee7adacb91bc1c"
+  },
+  {
+    "finding_id": "K9",
+    "citation": "api_construct.py:2717-2722",
+    "path": "infra/careervp/api_construct.py",
+    "sha256": "2d1ceb8bd34efd0c9757b7dbf2fb659d6706caada18489816eb2155b60cac4ee"
+  },
+  {
+    "finding_id": "G1",
+    "citation": "auth_utils.py:16-49",
+    "path": "src/backend/careervp/handlers/auth_utils.py",
+    "sha256": "df819baaf757adde4586c6023cc9a6c843ed243beead7009c2810cc3de287274"
+  },
+  {
+    "finding_id": "G1",
+    "citation": "cv_upload_handler.py:283",
+    "path": "src/backend/careervp/handlers/cv_upload_handler.py",
+    "sha256": "dc03cac19de9b85a986e9a28636509fc2aac1e9011a8224216c9320cd2f04824"
+  },
+  {
+    "finding_id": "G1",
+    "citation": "cv_upload_handler.py:301",
+    "path": "src/backend/careervp/handlers/cv_upload_handler.py",
+    "sha256": "dc03cac19de9b85a986e9a28636509fc2aac1e9011a8224216c9320cd2f04824"
+  },
+  {
+    "finding_id": "G4",
+    "citation": "cover_letter_handler.py",
+    "path": "src/backend/careervp/handlers/cover_letter_handler.py",
+    "sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861"
+  },
+  {
+    "finding_id": "G4",
+    "citation": "cv_tailoring_handler.py",
+    "path": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    "sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8"
+  },
+  {
+    "finding_id": "PREMISE-P2",
+    "citation": "api_db_construct.py:114",
+    "path": "infra/careervp/api_db_construct.py",
+    "sha256": "f9f12952d924348350deaff18f5b5e43d8e5f5e1f4c0bb3e9323a7d76a3118c8"
+  },
+  {
+    "finding_id": "PREMISE-P2",
+    "citation": "table_registry.py:75-90",
+    "path": "src/backend/careervp/dal/table_registry.py",
+    "sha256": "27077a553c5a60402c37f33385582c72a5b130e3bdffc3a60a72c4ea48af6fa2"
+  },
+  {
+    "finding_id": "PREMISE-P2",
+    "citation": "table_registry.py:114-135",
+    "path": "src/backend/careervp/dal/table_registry.py",
+    "sha256": "27077a553c5a60402c37f33385582c72a5b130e3bdffc3a60a72c4ea48af6fa2"
+  },
+  {
+    "finding_id": "PREMISE-P3",
+    "citation": "interview_prep_handler.py",
+    "path": "src/backend/careervp/handlers/interview_prep_handler.py",
+    "sha256": "59c1db64e8e49077e456d302e54554beb6e9823c68fb51d95d6e89f68098a799"
+  },
+  {
+    "finding_id": "PREMISE-P5",
+    "citation": "knowledge_base_handler.py",
+    "path": "src/backend/careervp/handlers/knowledge_base_handler.py",
+    "sha256": "bbf00e5dd418b2bcd6fb45a5198ddff3b6351fc81592d79fbf90c148464bce94"
+  },
+  {
+    "finding_id": "PREMISE-P5",
+    "citation": "knowledge_repository.py",
+    "path": "src/backend/careervp/dal/knowledge_repository.py",
+    "sha256": "50239683a3da6b5c72217652ec01dca90952a8b21e5cb71ea72d3c543b58c7e1"
+  },
+  {
+    "finding_id": "PREMISE-P5",
+    "citation": "api_db_construct.py:434",
+    "path": "infra/careervp/api_db_construct.py",
+    "sha256": "f9f12952d924348350deaff18f5b5e43d8e5f5e1f4c0bb3e9323a7d76a3118c8"
+  }
+]

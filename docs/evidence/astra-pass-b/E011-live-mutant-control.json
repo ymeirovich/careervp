@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-c",
+    "import os,json\nos.environ.update(AWS_ACCESS_KEY_ID='testing',AWS_SECRET_ACCESS_KEY='testing',AWS_DEFAULT_REGION='us-east-1',AWS_EC2_METADATA_DISABLED='true')\nfrom unittest.mock import MagicMock\nfrom moto import mock_aws\nwith mock_aws():\n import careervp.handlers.vpr_status_handler as h\n repo=MagicMock();repo.get_job.return_value={'user_id':'victim','status':'PENDING','created_at':'2026-08-01T00:00:00Z'}\n r=h._handle_status_or_list({'pathParameters':{'vprId':'job'}},repo,'attacker')\n print(json.dumps({'module':h.__file__,'status':r['statusCode'],'body':r['body']}))\n"
+  ],
+  "cwd": "/private/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-head-0xc6quch/repo/src/backend",
+  "exit_code": 0,
+  "stdout": "{\"level\":\"INFO\",\"location\":\"_handle_status_or_list:574\",\"message\":\"Status query successful\",\"timestamp\":\"2026-09-13 17:04:54,056+0300\",\"service\":\"service_undefined\",\"job_id\":\"job\",\"user_id\":\"attacker\",\"status\":\"pending\"}\n{\"module\": \"/private/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-head-0xc6quch/repo/src/backend/careervp/handlers/vpr_status_handler.py\", \"status\": 200, \"body\": \"{\\\"id\\\": \\\"job\\\", \\\"job_id\\\": \\\"job\\\", \\\"status\\\": \\\"pending\\\", \\\"created_at\\\": \\\"2026-08-01T00:00:00Z\\\"}\"}\n",
+  "stderr": ""
+}

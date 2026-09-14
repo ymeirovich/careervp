@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "describe-time-to-live",
+    "--table-name",
+    "careervp-jobs-table-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:26.609089+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"TimeToLiveDescription\": {\n        \"TimeToLiveStatus\": \"ENABLED\",\n        \"AttributeName\": \"ttl\"\n    }\n}\n",
+  "stderr": ""
+}

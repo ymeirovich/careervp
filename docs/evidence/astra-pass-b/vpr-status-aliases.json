@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "list-aliases",
+    "--function-name",
+    "careervp-vpr-status-lambda-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:05.261347+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Aliases\": [\n        {\n            \"AliasArn\": \"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx\",\n            \"Name\": \"live-devx\",\n            \"FunctionVersion\": \"16\",\n            \"Description\": \"\",\n            \"RevisionId\": \"b0d683c4-8a53-4e3f-a175-4cdf711143e1\"\n        }\n    ]\n}\n",
+  "stderr": ""
+}

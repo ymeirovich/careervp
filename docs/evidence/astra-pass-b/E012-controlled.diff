@@ -1,0 +1,15 @@
+diff --git a/src/backend/careervp/handlers/auth_utils.py b/src/backend/careervp/handlers/auth_utils.py
+index f283d21..3d45355 100644
+--- a/src/backend/careervp/handlers/auth_utils.py
++++ b/src/backend/careervp/handlers/auth_utils.py
+@@ -46,6 +46,10 @@ def extract_user_id(event: dict[str, Any]) -> str | None:  # noqa: C901
+     # resolver-failure *metric* is P-24's responsibility (AC-P04-2); it is not implemented here,
+     # and aggregate 401-rate is deliberately not treated as that signal.
+     logger.warning('Failed to extract user id from auth context')
++    headers = event.get('headers') or {}
++    claimed = headers.get('x-user-id')
++    if isinstance(claimed, str) and claimed.strip():
++        return claimed.strip()
+     return None
+ 
+ 

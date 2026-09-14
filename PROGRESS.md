@@ -2,6 +2,12 @@
 
 ## Current Phase: VPR Generator Complete
 
+## Wave 3 — 3.FIX-SECURITY (2026-08-01)
+
+- [x] Closed devx CV-upload IDOR: authorizer identity overrides every request shape; stored-owner regression and live verification pass.
+- [x] Removed interview-prep whole-event/body logging; bearer/body sentinel regression and live verification pass.
+- [x] Deleted the original and session-created synthetic IDOR probe records; evidence: `docs/evidence/wave3-3fixsecurity-devx-20260801.md`.
+
 ## Wave 1 Security — Step 1.3c
 
 - [x] P-11 WebACL rate rules implemented for dev, staging, and prod with API-stage association tests.
