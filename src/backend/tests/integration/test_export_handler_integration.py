@@ -115,6 +115,7 @@ def test_vpr_docx_full_event_returns_200(aws_resources: dict[str, Any]) -> None:
         'summary': 'Excellent candidate with strong background in Python and AWS.',
         'technical_skills': 'Python, AWS Lambda, DynamoDB, S3',
         'leadership': 'Led cross-functional team of 8 engineers.',
+        'userId': USER_ID,
     }
     aws_resources['s3'].put_object(
         Bucket=VPR_BUCKET,
@@ -218,7 +219,7 @@ def test_presigned_url_contains_artifacts_bucket_domain(aws_resources: dict[str,
     aws_resources['s3'].put_object(
         Bucket=VPR_BUCKET,
         Key=f'results/{JOB_ID}.json',
-        Body=json.dumps({'summary': 'Test'}).encode(),
+        Body=json.dumps({'summary': 'Test', 'userId': USER_ID}).encode(),
     )
 
     response = lambda_handler(_make_event(module_type='vpr'), None)
@@ -239,7 +240,7 @@ def test_cors_headers_present_on_200_response(aws_resources: dict[str, Any]) -> 
     aws_resources['s3'].put_object(
         Bucket=VPR_BUCKET,
         Key=f'results/{JOB_ID}.json',
-        Body=json.dumps({'summary': 'Test'}).encode(),
+        Body=json.dumps({'summary': 'Test', 'userId': USER_ID}).encode(),
     )
 
     response = lambda_handler(_make_event(module_type='vpr', origin=ALLOWED_ORIGIN), None)

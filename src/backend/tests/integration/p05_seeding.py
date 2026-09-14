@@ -26,6 +26,8 @@ MAIN_TABLE = 'p05-main-table'
 ARTIFACTS_TABLE = 'p05-artifacts-table'
 APPLICATIONS_TABLE = 'p05-applications-table'
 JOBS_TABLE = 'p05-jobs-table'
+VPR_RESULTS_BUCKET = 'p05-vpr-results-bucket'
+DOCX_ARTIFACTS_BUCKET = 'p05-docx-artifacts-bucket'
 
 # Fields we plant on the victim record and then assert never leak to the attacker.
 VICTIM_MARKERS = ('p05-victim-secret-title', 'victim-secret@example.invalid', 'Victim Secret Name')
@@ -44,6 +46,10 @@ def table_env() -> dict[str, str]:
         'JOBS_TABLE_NAME': JOBS_TABLE,
         'VPR_JOBS_TABLE_NAME': JOBS_TABLE,
         'CVS_TABLE_NAME': MAIN_TABLE,
+        'VPR_RESULTS_BUCKET_NAME': VPR_RESULTS_BUCKET,
+        # export_handler builds a DOCX and uploads it here for every moduleType,
+        # including the branches that don't otherwise touch S3.
+        'ARTIFACTS_BUCKET_NAME': DOCX_ARTIFACTS_BUCKET,
         'ENVIRONMENT': 'test',
         'POWERTOOLS_SERVICE_NAME': 'p05-idor-test',
         'POWERTOOLS_TRACE_DISABLED': 'true',
@@ -110,6 +116,9 @@ def create_all_tables(ddb: Any) -> None:
     )
     for name in (MAIN_TABLE, ARTIFACTS_TABLE, APPLICATIONS_TABLE, JOBS_TABLE):
         ddb.meta.client.get_waiter('table_exists').wait(TableName=name)
+
+    # export_handler always uploads a DOCX to this bucket, for every moduleType.
+    boto3.client('s3', region_name='us-east-1').create_bucket(Bucket=DOCX_ARTIFACTS_BUCKET)
 
 
 def _t(name: str) -> Any:
@@ -241,9 +250,52 @@ def seed_company_research(owner_user_id: str) -> str:
 
 
 def seed_export_artifact(owner_user_id: str) -> str:
-    # export_handler reads the tailored-CV artifact by pk=user_id via begins_with(ARTIFACT#CV_TAILORED#).
+    # export_handler._read_cv_tailored queries the MAIN table (pk/sk, via
+    # resolve_legacy_artifacts_table_name()) with pk=user_id, sk begins_with
+    # ARTIFACT#CV_TAILORED#, THEN filters by a 'job_id' field equal to the path
+    # param. This must NOT go through _seed_artifact (canonical applicationId/
+    # artifactId shape, wrong table entirely) or bare seed_cv_tailoring (no
+    # 'job_id' field at all — cv_tailoring_handler's own read path doesn't need
+    # one, but export's does) — either gap used to make the artifact invisible
+    # even to its rightful owner.
+    request_id = f'cvt-{uuid.uuid4().hex[:10]}'
+    _t(MAIN_TABLE).put_item(
+        Item={
+            'pk': owner_user_id,
+            'sk': f'ARTIFACT#CV_TAILORED#{request_id}',
+            'request_id': request_id,
+            'job_id': request_id,
+            'user_id': owner_user_id,
+            'status': 'completed',
+            'title': VICTIM_MARKERS[0],
+        }
+    )
+    return request_id
+
+
+def seed_export_vpr_artifact(owner_user_id: str) -> str:
+    """S0a: export_handler's vpr branch reads results/{job_id}.json directly from S3 —
+    there is no DynamoDB row to seed. Ownership is the payload's own `userId` field
+    (VPR.user_id, serialized via the model's camelCase alias_generator)."""
+    import json as _json
+
     job_id = f'job-{uuid.uuid4().hex[:10]}'
-    _seed_artifact(owner_user_id, f'ARTIFACT#CV_TAILORED#{job_id}')
+    s3 = boto3.client('s3', region_name='us-east-1')
+    try:
+        s3.create_bucket(Bucket=VPR_RESULTS_BUCKET)
+    except s3.exceptions.BucketAlreadyOwnedByYou:
+        pass
+    s3.put_object(
+        Bucket=VPR_RESULTS_BUCKET,
+        Key=f'results/{job_id}.json',
+        Body=_json.dumps(
+            {
+                'userId': owner_user_id,
+                'application_id': job_id,
+                'executive_summary': VICTIM_MARKERS[0],
+            }
+        ).encode(),
+    )
     return job_id
 
 
@@ -266,7 +318,12 @@ def seed_gap_questions(owner_user_id: str) -> str:
 # --------------------------------------------------------------------------------------------------
 
 
-def _base_event(path: str, method: str, path_params: dict[str, str] | None) -> dict[str, Any]:
+def _base_event(
+    path: str,
+    method: str,
+    path_params: dict[str, str] | None,
+    query_params: dict[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         'version': '1.0',
         'resource': path,
@@ -274,7 +331,7 @@ def _base_event(path: str, method: str, path_params: dict[str, str] | None) -> d
         'httpMethod': method,
         'headers': {'Content-Type': 'application/json'},
         'multiValueHeaders': {},
-        'queryStringParameters': None,
+        'queryStringParameters': query_params,
         'multiValueQueryStringParameters': None,
         'pathParameters': path_params,
         'stageVariables': None,
@@ -284,19 +341,31 @@ def _base_event(path: str, method: str, path_params: dict[str, str] | None) -> d
     }
 
 
-def forged_header_event(path: str, method: str, victim_user_id: str, path_params: dict[str, str] | None = None) -> dict[str, Any]:
+def forged_header_event(
+    path: str,
+    method: str,
+    victim_user_id: str,
+    path_params: dict[str, str] | None = None,
+    query_params: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """The attack: NO Cognito authorizer claims, only a forged ``x-user-id`` header = the victim.
 
     This is exactly the shape auth_utils.extract_user_id trusts today via its header fallback.
     """
-    event = _base_event(path, method, path_params)
+    event = _base_event(path, method, path_params, query_params)
     event['headers']['x-user-id'] = victim_user_id
     return event
 
 
-def authed_event(path: str, method: str, claims_sub: str, path_params: dict[str, str] | None = None) -> dict[str, Any]:
+def authed_event(
+    path: str,
+    method: str,
+    claims_sub: str,
+    path_params: dict[str, str] | None = None,
+    query_params: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """A legitimately authenticated caller (Cognito claims), used to exercise the existing denial."""
-    event = _base_event(path, method, path_params)
+    event = _base_event(path, method, path_params, query_params)
     event['requestContext']['authorizer'] = {'claims': {'sub': claims_sub}}
     return event
 
