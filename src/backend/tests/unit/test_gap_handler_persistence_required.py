@@ -113,12 +113,7 @@ def test_post_fails_on_save_failure() -> None:
             code=ResultCode.GAP_QUESTIONS_GENERATED,
         )
 
-        async def _async_questions(*args: Any, **kwargs: Any) -> Result:
-            return mock_gen.return_value
-
-        mock_gen.side_effect = None
-        with patch('asyncio.run', return_value=mock_gen.return_value):
-            response = gap_handler.generate_questions(event)
+        response = gap_handler.generate_questions(event)
 
     assert response['statusCode'] >= 500, f'Expected 5xx when persistence fails but got {response["statusCode"]}'
     body = json.loads(response['body'])
@@ -141,10 +136,10 @@ def test_post_fails_when_dal_raises_exception() -> None:
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
         patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(
+        mock_gen.return_value = Result(
             success=True,
             data=_generated_questions(2),
             code=ResultCode.GAP_QUESTIONS_GENERATED,
@@ -167,10 +162,10 @@ def test_post_fails_when_table_not_configured() -> None:
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
         patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(
+        mock_gen.return_value = Result(
             success=True,
             data=_generated_questions(2),
             code=ResultCode.GAP_QUESTIONS_GENERATED,
@@ -197,10 +192,10 @@ def test_post_returns_200_only_when_persistence_succeeds() -> None:
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
         patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(
+        mock_gen.return_value = Result(
             success=True,
             data=questions,
             code=ResultCode.GAP_QUESTIONS_GENERATED,

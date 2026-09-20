@@ -433,12 +433,12 @@ class TestIdempotency:
 
         with (
             patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
-            patch('careervp.handlers.company_research_worker_handler.asyncio') as mock_asyncio,
+            patch('careervp.handlers.company_research_worker_handler._async_process_record') as mock_async,
         ):
             _process_record(record)  # type: ignore[arg-type]
 
-        # asyncio.run should never be called — idempotency guard returns early
-        mock_asyncio.run.assert_not_called()
+        # the work coroutine is never even constructed — idempotency guard returns early
+        mock_async.assert_not_called()
 
     def test_processes_if_cr_not_yet_completed(self) -> None:
         """Record is processed when artifact_statuses.company_research != completed."""
@@ -448,11 +448,11 @@ class TestIdempotency:
 
         with (
             patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
-            patch('careervp.handlers.company_research_worker_handler.asyncio') as mock_asyncio,
+            patch('careervp.handlers.company_research_worker_handler._async_process_record') as mock_async,
         ):
             _process_record(record)  # type: ignore[arg-type]
 
-        mock_asyncio.run.assert_called_once()
+        mock_async.assert_called_once()
 
     def test_process_record_hydrates_company_fields_for_chain_payload(self) -> None:
         """Resolver-started chains send only IDs; CR worker hydrates company fields."""

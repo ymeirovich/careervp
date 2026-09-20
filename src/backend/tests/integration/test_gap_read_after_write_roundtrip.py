@@ -193,10 +193,10 @@ def test_get_after_post_returns_persisted_questions(gap_table: Any) -> None:
                 'education': [],
             },
         ),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        mock_gen.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
 
         post_response = gap_handler.generate_questions(_post_event())
 
@@ -234,10 +234,10 @@ def test_post_failure_does_not_return_200(gap_table: Any) -> None:
                 'education': [],
             },
         ),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(success=True, data=_generated_questions(3), code=ResultCode.GAP_QUESTIONS_GENERATED)
+        mock_gen.return_value = Result(success=True, data=_generated_questions(3), code=ResultCode.GAP_QUESTIONS_GENERATED)
         response = gap_handler.generate_questions(_post_event())
 
     assert response['statusCode'] >= 500, f'POST must return 5xx when persistence fails, got {response["statusCode"]}'
@@ -294,10 +294,10 @@ def test_get_with_wrong_job_id_returns_empty(gap_table: Any) -> None:
     with (
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(success=True, data=_generated_questions(2), code=ResultCode.GAP_QUESTIONS_GENERATED)
+        mock_gen.return_value = Result(success=True, data=_generated_questions(2), code=ResultCode.GAP_QUESTIONS_GENERATED)
         gap_handler.generate_questions(_post_event(job_id='job-A'))
 
     get_response = gap_handler.get_questions(_get_event(job_id='job-B'))
@@ -349,10 +349,10 @@ def test_cross_user_does_not_leak_questions(gap_table: Any) -> None:
                 'education': [],
             },
         ),
-        patch('asyncio.run') as mock_run,
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_run.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        mock_gen.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
         post_response = gap_handler.generate_questions(_post_event(user_id=user_a))
 
     assert post_response['statusCode'] == 200, f'User A POST failed: {post_response["body"]}'
