@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,8 @@ os.environ.setdefault('JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION', '1')
 from aws_cdk import App, Environment, NestedStack
 from aws_cdk.assertions import Template
 
+from tests.import_isolation import careervp_root
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 INFRA_SRC = str(REPO_ROOT / 'infra')
 LOAD_HARNESS_CONFIG = REPO_ROOT / 'infra' / 'loadtest' / 'load_harness_config.json'
@@ -27,34 +28,30 @@ BASELINE_SELF_DOS_BURST = 10
 
 
 def _synth_resources(infra_src: str) -> dict[str, dict[str, Any]]:
-    sys.path = [path for path in sys.path if path != infra_src]
-    sys.path.insert(0, infra_src)
-    for module_name, module in list(sys.modules.items()):
-        if module_name == 'careervp' or module_name.startswith('careervp.'):
-            module_file = str(getattr(module, '__file__', '') or '')
-            if not module_file.startswith(infra_src):
-                sys.modules.pop(module_name, None)
+    # `infra_src` is INFRA_SRC for the working tree, or an extracted older
+    # revision's infra/ for _synth_resources_at_revision() — careervp_root()
+    # is generic over which root wins, and restores the backend's either way.
+    with careervp_root(infra_src):
+        from careervp.naming_utils import NamingUtils  # type: ignore[import-untyped]
+        from careervp.service_stack import ServiceStack  # type: ignore[import-untyped]
 
-    from careervp.naming_utils import NamingUtils  # type: ignore[import-untyped]
-    from careervp.service_stack import ServiceStack  # type: ignore[import-untyped]
-
-    app = App(context={'p26_rehome_features': 'true'})
-    naming = NamingUtils(
-        environment='devx',
-        region='us-east-1',
-        account_id='788159322332',
-    )
-    stack = ServiceStack(
-        scope=app,
-        id=naming.stack_id('crud'),
-        env=Environment(account='788159322332', region='us-east-1'),
-        is_production_env=False,
-        naming=naming,
-        stack_feature='crud',
-    )
-    templates = [Template.from_stack(stack)]
-    templates.extend(Template.from_stack(construct) for construct in stack.node.find_all() if isinstance(construct, NestedStack))
-    return {logical_id: resource for template in templates for logical_id, resource in template.to_json().get('Resources', {}).items()}
+        app = App(context={'p26_rehome_features': 'true'})
+        naming = NamingUtils(
+            environment='devx',
+            region='us-east-1',
+            account_id='788159322332',
+        )
+        stack = ServiceStack(
+            scope=app,
+            id=naming.stack_id('crud'),
+            env=Environment(account='788159322332', region='us-east-1'),
+            is_production_env=False,
+            naming=naming,
+            stack_feature='crud',
+        )
+        templates = [Template.from_stack(stack)]
+        templates.extend(Template.from_stack(construct) for construct in stack.node.find_all() if isinstance(construct, NestedStack))
+        return {logical_id: resource for template in templates for logical_id, resource in template.to_json().get('Resources', {}).items()}
 
 
 def _all_resources() -> dict[str, dict[str, Any]]:

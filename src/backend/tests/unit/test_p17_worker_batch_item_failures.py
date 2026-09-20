@@ -5,16 +5,15 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
+from tests.import_isolation import backend_careervp
+
 FAILED_MESSAGE_ID = 'msg-failed'
-BACKEND_SRC = str(Path(__file__).resolve().parents[2])
 EXPECTED_FAILURE_RESPONSE = {'batchItemFailures': [{'itemIdentifier': FAILED_MESSAGE_ID}]}
 WORKERS = {
     'VprSqsWorkerLambda': ('careervp.handlers.vpr_worker_handler', 'lambda_handler'),
@@ -59,17 +58,17 @@ def _sqs_batch_with_one_failure() -> dict[str, list[dict[str, Any]]]:
 
 
 def _import_worker(module_name: str) -> Any:
-    sys.path = [path for path in sys.path if path != BACKEND_SRC]
-    sys.path.insert(0, BACKEND_SRC)
-    for loaded_name, module in list(sys.modules.items()):
-        if loaded_name == 'careervp' or loaded_name.startswith('careervp.'):
-            module_file = str(getattr(module, '__file__', '') or '')
-            if not module_file.startswith(BACKEND_SRC):
-                sys.modules.pop(loaded_name, None)
-    try:
-        return importlib.import_module(module_name)
-    except Exception as exc:  # noqa: BLE001
-        return {'import_error': f'{type(exc).__name__}: {exc}'}
+    # The mirror image of the CDK-synth tests: those want infra's `careervp`,
+    # this wants the backend's. Both used to evict the other's modules without
+    # restoring them, so whichever ran last owned `sys.modules['careervp']` for
+    # the rest of the process. backend_careervp() restores on exit; the module
+    # object returned here stays usable and _call_worker patches it by object,
+    # not by dotted name, so it does not need to stay in sys.modules.
+    with backend_careervp():
+        try:
+            return importlib.import_module(module_name)
+        except Exception as exc:  # noqa: BLE001
+            return {'import_error': f'{type(exc).__name__}: {exc}'}
 
 
 def _side_effect_from_record(record: dict[str, Any]) -> None:
