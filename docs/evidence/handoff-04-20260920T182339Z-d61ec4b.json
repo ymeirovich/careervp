@@ -1,0 +1,261 @@
+{
+  "handoff": "04",
+  "doc": "docs/handoff/2026-09-20-HANDOFF-04-ci-merge-ref-and-await-bugs.md",
+  "git_sha": "d61ec4b0569c09cd6da3b9a37516c02d3f96f31f",
+  "git_dirty": true,
+  "git_dirty_adjudication": "Three docs/handoff/*.md files from a prior session were already modified when this session opened and are the operator's to handle. The handoff's ground rules name them explicitly and forbid safe_commit.sh (git add -A) for this reason. Every path this session touched is committed: `git status --porcelain -uno -- . ':!docs/handoff'` returns 0 lines. No claim in this file depends on an uncommitted change.",
+  "branch": "tools/proof-harness",
+  "timestamp_utc": "2026-09-20T18:23:39Z",
+  "model": "Opus 5, high effort",
+  "commits_this_handoff": [
+    "ba04eab test(hermetic): restore AWS env via monkeypatch instead of deleting it",
+    "0a52bdc test(hermetic): skip P-03 cdk.out check when the artifact is absent",
+    "895491e ci(pr-validation): print skip reasons so an UNKNOWN cannot read as a PASS",
+    "d61ec4b ci(pr-validation): annotate absent/empty test dirs instead of failing the gate",
+    "2a2578b ci(pr-validation): run the real gate on every PR to main  [on branch ci/gate-on-main, PR #222]"
+  ],
+
+  "step0_verification_of_handoff_03": {
+    "verdict": "ALL EIGHT REPRODUCE, plus the group-marker count. Commands were run before reading handoff 03's prose, per the plan's obligation 1.",
+    "checks": [
+      {"id": "0.1", "recorded": "2118 tests collected", "observed": "2118 tests collected in 3.12s", "verdict": "MATCH"},
+      {"id": "0.2", "recorded": "2058 passed, 48 skipped, 12 xfailed", "observed": "2058 passed, 48 skipped, 12 xfailed, 139 warnings in 206.15s", "verdict": "MATCH"},
+      {"id": "0.3", "recorded": "0 failed / 8 locally", "observed": "unit 1430p/15s/4xf | integration 193p/11s/7xf | infrastructure 82p/1s | e2e 4p/21s | models 18p | regression 294p/1xf | security 3p | infra 34p; LOOP_FAIL=0", "verdict": "MATCH"},
+      {"id": "0.4", "recorded": "Success: no issues found in 137 source files", "observed": "identical", "verdict": "MATCH"},
+      {"id": "0.5", "recorded": "4 passed, then empty", "observed": "4 passed in 1.20s; git status --short docs/beta/ empty", "verdict": "MATCH"},
+      {"id": "0.6", "recorded": "clean, then empty", "observed": "tsc --noEmit clean; git status --short src/frontend/ empty", "verdict": "MATCH"},
+      {"id": "0.7", "recorded": "deploy-dev: required_reviewers,branch_policy / dev: (empty) / devx: required_reviewers / staging: required_reviewers,branch_policy", "observed": "identical", "verdict": "MATCH"},
+      {"id": "0.8", "recorded": "7 success, Pytest: failure on historical run 35524435480", "observed": "CDK Synth, Evidence Integrity, Deployed Parity, Mypy, Jest, Vitest, Ruff = success; Pytest = failure", "verdict": "MATCH — run not deleted or re-run"},
+      {"id": "group-markers", "command": "gh api repos/:owner/:repo/actions/jobs/106114031038/logs | grep -ac '##\\[group\\]tests/'", "recorded": 8, "observed": 8, "verdict": "MATCH"}
+    ],
+    "note_on_gh_api_placeholders": "`gh api repos/:owner/:repo/...` resolves :owner/:repo from the git remote of the CURRENT directory. Run from outside the repo it fails with `unable to expand placeholder in path`. Cost 1 wasted call."
+  },
+
+  "step1_hermeticity": {
+    "status": "DONE — 0 failed under the real CI condition, PROVEN IN CI, not just locally",
+    "THE_HANDOFF_PREMISE_WAS_FALSE": {
+      "handoff_04_claimed": "The two test_l3_state_recovery tests make real boto3 calls from a unit test. No moto, no mock. They pass on any machine with credentials configured. Fix with mock_aws, the way the rest of the suite does.",
+      "what_is_actually_true": "Those two tests are NOT independently non-hermetic. Run alone with zero credentials they PASS (12 passed). So do test_l3_application_recovery.py (18 passed), test_l1_artifact_persistence.py (6 passed) and test_l0_interview_prep_generation.py (20 passed). The defect is cross-test pollution, not a missing mock.",
+      "why_it_matters": "The prescribed fix — wrapping those two tests in mock_aws — would have made CI green while leaving the actual bug in place. The same latent fault would have resurfaced against any other unmocked call site, and under pytest-randomly's random ordering it would have surfaced as an intermittent failure on a different test each run.",
+      "evidence": "env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/nonexistent/creds AWS_CONFIG_FILE=/nonexistent/config uv run pytest tests/unit/test_l3_state_recovery.py -p no:randomly  ->  12 passed"
+    },
+    "the_handoffs_own_repro_command_does_not_repro": {
+      "command_as_written": "env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN AWS_EC2_METADATA_DISABLED=true uv run pytest tests/unit -q",
+      "observed": "1430 passed, 0 failed — does NOT reproduce",
+      "reason": "`env -u` unsets environment variables but does not touch ~/.aws/credentials. botocore's credential chain falls through the env provider to the shared-credentials-file provider, which supplies real keys. The laptop also carries infra/cdk.out (gitignored, mtime 2026-09-20 11:17), which is why test_p03 passes locally.",
+      "command_that_does_reproduce": "env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/nonexistent/creds AWS_CONFIG_FILE=/nonexistent/config AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1 uv run pytest tests/unit -q",
+      "what_the_laptop_supplies": ["~/.aws/credentials (116 bytes, present since 2026-07-04)", "infra/cdk.out (40 entries, gitignored at .gitignore:10)"]
+    },
+    "root_cause": {
+      "file": "src/backend/tests/unit/test_cv_upload_handler.py",
+      "lines": "41-52 (pre-fix)",
+      "defect": "An autouse, function-scoped fixture set AWS credentials with os.environ[...] = ... and, on teardown, os.environ.pop()'d them unconditionally. tests/conftest.py:60-65 sets those same keys ONCE at import time as the session-wide baseline. The pop deleted that baseline and never restored it, so every test that ran afterwards and made an unmocked boto3 call resolved no credentials at all.",
+      "this_is_the_carried_forward_item": "Handoff 02 recorded '8 test files mutate os.environ[...] directly instead of via monkeypatch' as a latent risk. This is that risk firing. It was the single cause of all 23 failures.",
+      "how_it_was_found": "Binary search over the 164 ordered files in tests/unit, running each candidate prefix followed by the target file. 1..99 -> 23 failed; 1..50 -> clean; 51..75 -> 2 failed; 51..63 -> 2 failed; 58..63 -> 2 failed; file 58 alone -> 2 failed. Corroborated with a pytest plugin that sampled os.environ['AWS_ACCESS_KEY_ID'] at every setup/teardown boundary: the only 'testing' -> None transitions in the entire run are inside test_cv_upload_handler.py.",
+      "minimal_reproducer": "uv run pytest tests/unit/test_cv_upload_handler.py tests/unit/test_l3_state_recovery.py -p no:randomly  ->  2 failed before, 27 passed after"
+    },
+    "why_CI_saw_3_and_a_bare_run_sees_23": {
+      "measured_locally_no_credentials": "23 failed, 1407 passed (18 NoCredentialsError + 5 knock-on assertion failures)",
+      "measured_in_pr_validation": "3 failed, 1427 passed",
+      "measured_in_refactoring_validation": "22 failed, 1408 passed (run 35524435461)",
+      "explanation": "All three are the same defect sampled at different points in the test order. The number of casualties is a function of how many unmocked-boto3 tests happen to run AFTER test_cv_upload_handler.py. pr-validation.yml does not pass -p no:randomly, so pytest-randomly reorders every run: its '3' was one draw from a distribution, not a property of the code. This is the sharpest correction in this handoff — the chain would have chased a moving number.",
+      "consequence_for_the_chain": "Handoff 04 framed the target as 'fix these 3 named tests'. Fixing the 3 named tests would not have made the gate reliably green, because a different draw fails a different set."
+    },
+    "fix_1": {
+      "commit": "ba04eab",
+      "change": "tests/unit/test_cv_upload_handler.py fixture now uses monkeypatch.setenv for all 11 keys; the manual pop list is deleted; the now-unused `import os` is removed.",
+      "why_monkeypatch": "monkeypatch restores each key to its prior value — including 'was absent' — at teardown. It cannot delete state it did not create, which is exactly the failure mode here."
+    },
+    "fix_2": {
+      "commit": "0a52bdc",
+      "change": "tests/unit/infra/test_p03_api_surface.py::test_cdk_synth_has_no_api_gateway_resource_named_api now SKIPS when infra/cdk.out is absent (or contains no templates) instead of asserting.",
+      "decision_and_its_cost": "Chose skip over synthesising in the job. Synthesising inside the Pytest job would add the Node+CDK toolchain and ~2-4 min to a job that currently needs neither. The honest alternative that converts this UNKNOWN back into a real gate is to publish cdk.out as an artifact from the EXISTING `CDK Synth` job (already green, already runs cdk synth) and download it in the pytest job — roughly 15 lines of YAML across two jobs, no new toolchain, but it couples two jobs and serialises them. Not taken here; left costed for the operator.",
+      "this_is_not_softening": "docs/HARNESS.md's three-result rule: a fact that cannot be checked is UNKNOWN, not PASS and not FAIL. The skip is visible — it prints its reason in CI (see verbatim line below) — so it cannot be mistaken for a pass. The prior behaviour was worse in BOTH environments: it failed in CI, and locally it passed against whatever cdk.out someone had synthesised days earlier.",
+      "docstring_correction": "The docstring claimed the directory was 'the CDK_OUT snapshot committed to infra/cdk.out'. It is not committed; .gitignore:10 ignores cdk.out/. Corrected."
+    },
+    "fix_3": {
+      "commit": "895491e",
+      "change": ".github/workflows/pr-validation.yml passes -rs to every pytest invocation so each skip prints its reason rather than collapsing to a bare 's'.",
+      "rationale": "Required by this handoff ('if you skip, the skip must be visible') and by HARNESS.md's three-result rule."
+    },
+    "measured_before_and_after": {
+      "condition": "no credentials (AWS_SHARED_CREDENTIALS_FILE and AWS_CONFIG_FILE pointed at nonexistent paths) AND infra/cdk.out temporarily moved aside — the exact CI condition",
+      "before": "23 failed, 1407 passed, 15 skipped, 4 xfailed  (+ test_p03 would fail, making 24; it passed locally only because cdk.out was present)",
+      "after": "0 failed, 1429 passed, 16 skipped, 4 xfailed",
+      "arithmetic_check": "CI recorded 3 + 1427 + 15 + 4 = 1449. After: 1429 + 16 + 4 = 1449. Same test population; 3 failures became 2 passes and 1 skip.",
+      "cdk_out_restored": "infra/cdk.out was moved to the scratchpad and moved back; `git status --short infra/` is clean and the directory still holds 40 entries. With it present the P-03 check evaluates for real: 4 passed."
+    },
+    "proven_in_ci": {
+      "run": 35527733635,
+      "url_fragment": "actions/runs/35527733635",
+      "conclusion": "success",
+      "jobs": "CDK Synth, Deployed Parity Gate, Evidence Integrity Gate, Pytest, Jest (unit + integration), Mypy Type Check, Vitest, Ruff Lint — all success",
+      "tests_unit_in_ci": "1429 passed, 16 skipped, 4 xfailed — exactly the locally predicted numbers",
+      "skip_line_verbatim_from_ci_log": "SKIPPED [1] tests/unit/infra/test_p03_api_surface.py:132: P-03: infra/cdk.out absent at /home/runner/work/careervp/careervp/infra/cdk.out (local build artifact, not in git) — run `cd infra && cdk synth` to evaluate AC-P03-2",
+      "later_run_after_the_absent_dir_fix": {"run": 35528608346, "conclusion": "success", "group_markers": 8, "per_directory": "1429/193/82/4/18/294/3/34 passed, 0 failed"}
+    }
+  },
+
+  "step2_gate_on_main": {
+    "status": "DONE — PR #222 open against main, every gate job green ON MAIN'S CODE",
+    "pr": 222,
+    "branch": "ci/gate-on-main",
+    "base": "main",
+    "mergeable": "MERGEABLE",
+    "premise_verified": {"command": "git show origin/main:.github/workflows/pr-validation.yml | grep -c 'tests/regression'", "expected": 0, "observed": 0},
+    "A_SECOND_FALSE_PREMISE_IN_THE_HANDOFF": {
+      "handoff_04_claimed": "So the highest-value production change in this repo is one file: take that one file, PR it. Once Step 1 lands, it will be green.",
+      "what_is_actually_true": "Copied verbatim onto main the gate is RED on every PR, for two independent reasons, neither related to the code under review.",
+      "blocker_1_tests_infra_does_not_exist_on_main": {
+        "evidence": "In a clean worktree at origin/main ee78796: `ls tests/infra/` -> No such file or directory; `uv run pytest tests/infra` -> exit code 4.",
+        "why_it_breaks_the_gate": "The loop ran `uv run pytest \"$d\" ... || fail=1`. pytest exits 4 for a missing directory and 5 for one that collects no tests. Either sets fail=1 and the job exits non-zero.",
+        "note": "tests/infra is one of the 11 new source areas that exist only on tools/proof-harness. This is Step 3's integration problem showing up inside Step 2."
+      },
+      "blocker_2_the_branch_file_silently_deletes_a_job_main_has": {
+        "evidence": "main's pr-validation.yml declares 7 jobs including `cv-tailoring-delete-observability: CV Tailoring Delete Observability`. The tools/proof-harness copy declares 8 and does NOT include it.",
+        "why_it_matters": "Copying the file wholesale would have removed an existing gate as an invisible side effect of adding others. Its test file (tests/integration/test_cv_tailoring_delete_roundtrip.py) is inside tests/integration and so IS covered by the new loop, but deleting a gate is a separate decision and was not made here.",
+        "action_taken": "The job was restored into the ported file. PR #222 declares 9 jobs = main's 7 + Jest + Vitest. Nothing was lost."
+      }
+    },
+    "fix_for_blocker_1": {
+      "commit": "d61ec4b",
+      "change": "The loop now distinguishes absent (exit 4) and empty (exit 5) from failing. Both emit a ::warning:: annotation and continue; only a genuine failure sets fail=1.",
+      "why_not_just_drop_tests_infra_from_the_list": "Because the list must stay identical on both branches. tests/infra exists on tools/proof-harness and runs 34 real tests there; hard-coding main's shorter list would mean the two branches gate differently and the difference would be invisible at merge time.",
+      "why_this_does_not_weaken_the_gate": "An absent or empty directory is annotated in the Actions UI rather than swallowed, so coverage cannot silently shrink — the failure mode this replaces (whole job red for an unrelated reason) trains people to ignore the gate, which is worse."
+    },
+    "main_measured_in_a_clean_worktree_before_opening_the_pr": {
+      "worktree": "detached at origin/main ee78796, created with `git worktree add` so no branch switch was needed with the operator's docs dirty",
+      "backend_loop": {"tests/unit": "1288 passed, 15 skipped, 4 xfailed, 1 xpassed", "tests/integration": "154 passed, 15 skipped", "tests/infrastructure": "11 passed", "tests/e2e": "4 passed, 19 skipped", "tests/models": "18 passed", "tests/regression": "39 passed", "tests/security": "3 passed", "tests/infra": "ABSENT — annotated", "loop_exit_code": 0},
+      "matches_handoff_03": "Yes — handoff 03 recorded 1288/154/11/4/18/39/3 and 'tests/infra no tests ran'. Every number reproduces. Handoff 03 did not record the 1 xpassed in tests/unit; noted here, it does not fail the gate because the xfail is non-strict.",
+      "mypy": "Success: no issues found in 126 source files",
+      "ruff": "All checks passed!",
+      "THE_PART_NO_PRIOR_HANDOFF_MEASURED": "main's FRONTEND was never measured. Handoff 03's 'pristine main is green' covered backend + mypy only, yet the file being ported adds Jest and Vitest jobs. Measured here for the first time: jest unit 21 suites / 128 tests passed; jest integration 17 suites / 83 tests passed; vitest 66 files / 735 tests passed. Had any of these been red, landing the gate would have blocked every PR in the repo — the exact outcome this handoff warned about."
+    },
+    "proven_in_ci_on_pr_222": {
+      "gate_jobs_all_green_against_mains_code": ["Ruff Lint: SUCCESS", "Mypy Type Check: SUCCESS", "Pytest: SUCCESS", "Jest (unit + integration): SUCCESS", "Vitest: SUCCESS", "CV Tailoring Delete Observability: SUCCESS", "Deployed Parity Gate (pre_merge): SUCCESS", "Evidence Integrity Gate (pre_merge): SUCCESS", "CDK Synth: SUCCESS", "CodeQL / Analyze (python): SUCCESS", "node-security, iac-security, code-security, auth-enforcement: SUCCESS"],
+      "two_failures_both_pre_existing_and_unrelated": {
+        "python-security": "FAILURE — the 23 CVEs of Step 5. Fails on main already; not introduced by this PR.",
+        "cdk-diff": "FAILURE — NOT a diff failure. The job computed its diff and then failed posting the PR comment: `Validation Failed: {\"resource\":\"IssueComment\",\"code\":\"unprocessable\",\"field\":\"data\",\"message\":\"Body is too long (maximum is 65536 characters)\"}`. A third red gate nobody owns, not named in any prior handoff. It also runs with real AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY on pull_request."
+      }
+    },
+    "what_is_left_for_a_human": "Review and merge PR #222. Merging it is what actually closes the 'no PR is gated' hole; opening it is as far as this session can go."
+  },
+
+  "step3_integration_problem_costed_not_decided": {
+    "status": "COSTED. Per HARNESS.md rule 5 no option is recommended.",
+    "measurements_re_derived_this_session": {
+      "merge_base": "8013618f8b730c70ba0102954a91ed7ea50af95b",
+      "src_backend_careervp": "57 files changed, 3498 insertions(+), 676 deletions(-)  [handoff 03 recorded 57 / +3498 / -676 — MATCH]",
+      "infra": "52 files changed, 4643 insertions(+), 706 deletions(-)  [handoff 03 recorded 52 / +4643 / -706 — MATCH]",
+      "docs": "436 files changed, 648293 insertions(+), 58 deletions(-)",
+      "whole_branch_vs_main": "758 files changed, 696488 insertions(+), 3457 deletions(-)",
+      "new_backend_source_files_on_branch_only": 11,
+      "docs_share_of_the_diff": "648293 / 696488 = 93.1% of all inserted lines are docs/. The product change is the remaining 7%.",
+      "largest_added_artifacts": ["23.3 MB docs/evidence/astra-pass-b/iam-authorization-details.json", "0.7 MB docs/evidence/p26-o9-changeset-review-20260719.json", "0.3 MB docs/evidence/astra-pass-a/commands.json"]
+    },
+    "why_a_cherry_pick_failed_before": "Handoff 03 tried 27 files and got 6 mypy errors and 19 test failures: it took billing_handler.py without careervp/payment_providers/. The CI wiring cannot be extracted cleanly because the tests it wires up assert against source and CDK stacks that exist only on this branch. Step 2 hit the same wall from the other side — tests/infra does not exist on main.",
+    "options_with_costs": [
+      {"option": "A — merge tools/proof-harness to main as one PR", "cost": "One review of 758 files / +696k lines, 93% of it docs. Unreviewable in practice. Carries the 23 MB IAM dump and the live AKIA key onto main.", "risk": "Rubber-stamp review; the 7% that is product code gets no real scrutiny."},
+      {"option": "B — split into product PR + docs PR", "cost": "Two PRs. The product PR is ~109 files (57 backend + 52 infra), +8141/-1382 — genuinely reviewable. The docs PR is 436 files but is inert. Requires deciding what to do with the 23 MB dump first, because it is in the docs half.", "risk": "The two halves are not independent: docs/evidence files are asserted against by the Evidence Integrity Gate, so merge order matters."},
+      {"option": "C — land CI-only changes first, product later", "cost": "Already partly done: PR #222 is exactly this, and it worked because .github/ has no dependency on careervp/ or infra/. Everything else on the branch does.", "risk": "Does not reduce the remaining 109-file product diff at all; it only removes the CI files from it."},
+      {"option": "D — rebuild a clean branch from main, replaying only product commits", "cost": "Highest effort. Requires identifying which of the branch's commits are product vs evidence vs CI, then replaying with the payment_providers/ dependency intact.", "risk": "Re-derives work already done; the 11 new source files and their tests must move together or mypy --strict breaks, as handoff 03 measured."}
+    ],
+    "the_question_that_must_be_answered_first": "What happens to the 436 docs/ files and the 23.3 MB IAM dump. That file contains an AWS Access Key ID, it is on a PUBLIC remote via origin/tools/proof-harness (repo visibility confirmed PUBLIC this session), and the key is still not rotated. It is NOT on main — `git ls-tree origin/main -- docs/evidence/astra-pass-b/iam-authorization-details.json` returns nothing. Every option above except leaving the branch unmerged puts it there permanently."
+  },
+
+  "step4_never_awaited_coroutines": {
+    "status": "ENUMERATED AND DIAGNOSED. No code change made, because the behavioural consequence the handoff hypothesised does not exist — and the handoff's own instruction was to prove it BEFORE changing code.",
+    "command": "uv run pytest -q -p no:cacheprovider -p no:randomly -W error::RuntimeWarning 2>&1 | grep -i 'never awaited'",
+    "the_named_list": [
+      {"coroutine": "generate_gap_questions", "occurrences": 6, "sources": ["tests/unit/test_gap_handler_persistence_required.py (3)", "tests/integration/test_gap_read_after_write_roundtrip.py (3)"], "mechanism": "Both files call patch('asyncio.run'). gap_handler.py:185 does asyncio.run(generate_gap_questions(...)); with asyncio.run replaced by a MagicMock the coroutine argument is constructed, handed to the mock, and never awaited."},
+      {"coroutine": "_async_process_record", "occurrences": 1, "sources": ["tests/unit/test_company_research_worker_handler.py:451"], "mechanism": "patch('careervp.handlers.company_research_worker_handler.asyncio') replaces the whole module, so company_research_worker_handler.py:443's asyncio.run(_async_process_record(...)) hands its coroutine to mock_asyncio.run, which never awaits it. The test then asserts mock_asyncio.run.assert_called_once()."},
+      {"coroutine": "AsyncMockMixin._execute_mock_call", "occurrences": 1, "sources": ["surfaces at GC time against whichever test is running; same root cause"], "mechanism": "unittest.mock.patch autodetects `async def` and substitutes AsyncMock. Calling it returns a coroutine; with asyncio.run mocked out nothing awaits it."}
+    ],
+    "THE_HYPOTHESIS_IS_FALSIFIED": {
+      "handoff_04_asked": "A coroutine created and never awaited does nothing and raises nothing — it fails silently. If generate_gap_questions is one, that is journey step J4 quietly not running.",
+      "finding": "It is not one. Both product call sites await correctly via asyncio.run: careervp/handlers/gap_handler.py:185 and careervp/handlers/company_research_worker_handler.py:443. These are the ONLY non-definition references to either coroutine in careervp/. J4 is not silently skipped.",
+      "positive_control": "Files that exercise the same handler WITHOUT mocking asyncio.run emit zero never-awaited warnings: test_l0_gap_analysis_generation.py -> 0, test_gap_analysis_handler.py -> 0. Files that DO mock asyncio.run emit exactly 3 each. The warning count tracks the mocking, not the product code.",
+      "existing_behavioural_coverage": "tests/unit/test_l0_gap_analysis_generation.py::test_handler_returns_questions_from_llm_generation already pins the real path: it patches generate_gap_questions (which patch() resolves to an AsyncMock because the target is `async def`), leaves asyncio.run real, and asserts the handler returns the generated questions. If the coroutine were dropped this test would fail. No new test was needed to prove the consequence; a test that would have caught it already exists and passes."
+    },
+    "what_is_actually_wrong_and_what_it_costs": "patch('asyncio.run') is a process-wide patch of a stdlib entry point used to stub one call. It is the reason RuntimeWarning cannot be promoted into pyproject's filterwarnings = [\"error\"]. Fixing it means rewriting 3 test files to patch the coroutine function itself (as the other 7 gap test files already do) instead of patching asyncio.run. Behaviour-preserving, ~10 call sites, no product change. Not done here: this handoff's Step 4 instruction was to prove the behavioural consequence before changing code, and the consequence is absent, so a code change would be unjustified.",
+    "the_other_warning_population": "The ~126 powertools 'No application metrics to publish' warnings named in the handoff are unrelated to the coroutine question and were left alone; suppressing them narrowly is still open."
+  },
+
+  "step5_two_red_gates_costed": {
+    "python_security": {
+      "command": "cd src/backend && uvx --python 3.13 pip-audit -r lambda_requirements.txt",
+      "observed": "Found 23 known vulnerabilities in 4 packages — matches the handoff exactly",
+      "breakdown": [
+        {"package": "anyio", "current": "4.12.1", "cves": 2, "fix": "4.14.2", "character": "minor bump within 4.x"},
+        {"package": "soupsieve", "current": "2.8.4", "cves": 2, "fix": "2.9.0", "character": "minor bump"},
+        {"package": "pypdf", "current": "6.14.2", "cves": 8, "fix": "6.15.0 clears 3; 6.16.0 clears 1 more; 6.16.1 clears all 8", "character": "minor bumps, all within 6.x"},
+        {"package": "cryptography", "current": "46.0.5", "cves": 9, "fix": "46.0.6 and 46.0.7 clear 4; GHSA-537c-gmf6-5ccf needs 48.0.1; PYSEC-2026-3553/3554 need 49.0.0; PYSEC-2026-3552 needs 50.0.0", "character": "FOUR major versions. This is the whole cost."}
+      ],
+      "the_shape_of_the_decision": "10 of 23 CVEs (anyio + soupsieve + the 46.0.x cryptography patches) clear with patch/minor bumps. 8 more clear with pypdf within 6.x. The remaining 5 cryptography CVEs require 46 -> 50, which crosses four majors and is the only part that can plausibly break the suite. Splitting the bump in two — everything-but-cryptography-major first — would take the gate from 23 to 5 with low risk, and isolate the risky change. Not done here: the handoff forbids bumping uv.lock as a side effect of other work, and this is other work.",
+      "not_measured": "Whether cryptography 50.0.0 passes the suite. That needs its own branch and its own run."
+    },
+    "infra_spec_consistency": {
+      "failure": "FileNotFoundError: 'infra/careervp/dynamodb_stack.py'",
+      "confirmed": "The file does not exist. infra/careervp/ contains 18 .py files and none is dynamodb_stack.py. The gate has been failing on structure, not findings — it has never evaluated a single constant.",
+      "the_other_half_does_exist": "infra/careervp/specs/dynamodb_spec.yaml is present and declares 4 tables: CVS_TABLE_NAME, APPLICATIONS_TABLE_NAME, GAP_RESPONSES_TABLE_NAME, KNOWLEDGE_TABLE_NAME.",
+      "repoint_is_cheap_and_would_pass_today": "All 4 spec constants are referenced as `constants.<NAME>` somewhere under infra/careervp/ (measured: 4/4, none missing). Changing the script to read every .py under infra/careervp/ instead of one hard-coded filename makes the gate evaluate and pass immediately. That is a few lines inside .github/workflows/refactoring-validation.yml:132.",
+      "the_counter_argument_to_repointing": "A gate that passes because it greps a whole directory for a constant name is a weak gate — it proves the string appears, not that the table is declared correctly. Deleting it and relying on tests/infrastructure (82 passing tests) may be more honest than repairing it. Both options are cheap; neither is chosen here.",
+      "third_option": "Delete it. A gate that cannot evaluate is not a gate."
+    },
+    "a_third_red_gate_not_in_any_prior_handoff": {
+      "workflow": "cdk-diff / CDK Diff Comment",
+      "failure": "Validation Failed: {\"resource\":\"IssueComment\",\"code\":\"unprocessable\",\"field\":\"data\",\"message\":\"Body is too long (maximum is 65536 characters)\"}",
+      "reading": "The CDK diff itself succeeds. The job fails posting the result as a PR comment because the diff exceeds GitHub's comment size limit. It has therefore never delivered its output on a large PR — precisely when its output would matter most.",
+      "separate_concern": "It runs with real AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY on the pull_request event."
+    }
+  },
+
+  "proof_obligations_declared_in_the_handoff": [
+    {"claim": "Suite is hermetic", "before_declared": "3 failed", "before_observed": "23 failed under a true no-credential condition; the handoff's own command showed 0 failed because it does not neutralise ~/.aws/credentials", "after_target": "0 failed", "after_observed": "0 failed (1429 passed, 16 skipped, 4 xfailed)", "verdict": "MET, and the declared before-value was itself wrong"},
+    {"claim": "The gate goes green in CI", "before": "Pytest: failure", "after_target": "Pytest: success", "after_observed": "Pytest: success on run 35527733635, and again on 35528608346", "verdict": "MET"},
+    {"claim": "The gate exists on main", "command": "git show origin/main:.github/workflows/pr-validation.yml | grep -c 'tests/regression'", "before": 0, "observed_before": 0, "after_target": 1, "after_observed": "1 on branch ci/gate-on-main; still 0 on origin/main until PR #222 is merged", "verdict": "PARTIALLY MET — blocked on a human merge, per the plan's 'Blocked on a human' row. PR #222 is open, MERGEABLE, and every gate job is green against main's code."},
+    {"claim": "No regression on the branch", "command": "uv run pytest -q --tb=no -p no:cacheprovider | tail -1", "before": "2058 passed, 0 failed", "after_observed": "2058 passed, 48 skipped, 12 xfailed, 0 failed", "verdict": "MET"},
+    {"claim": "Churn stays fixed", "command": "git status --short docs/beta/ src/frontend/ after the checks", "expected": "empty", "observed": "empty", "verdict": "MET"},
+    {"claim": "Coroutine sites enumerated", "before": "unmeasured", "after_target": "a named list", "after_observed": "3 named coroutines, 8 occurrences, each mapped to the exact test file and line that causes it, plus the falsification of the J4 hypothesis", "verdict": "MET"}
+  ],
+
+  "new_findings_not_in_any_prior_handoff": [
+    "The '3 failing tests' number is order-dependent, not a property of the code. pr-validation.yml does not pass -p no:randomly, so pytest-randomly reshuffles every run; 3, 22 and 23 are three samples of one defect. Any handoff that targets a fixed count of named tests is targeting a moving number.",
+    "One autouse fixture (test_cv_upload_handler.py) caused all 23 failures by os.environ.pop()-ing the session-wide AWS credential baseline set by tests/conftest.py at import. This is the carried-forward 'os.environ without monkeypatch' risk firing for real.",
+    "The handoff's prescribed fix (wrap the 2 named tests in mock_aws) would have made CI green while leaving the defect in place.",
+    "The handoff's own reproduction command cannot reproduce: `env -u` does not neutralise ~/.aws/credentials. Any future no-credential proof must set AWS_SHARED_CREDENTIALS_FILE and AWS_CONFIG_FILE too.",
+    "tests/infra/ does not exist on main, and pytest exits 4 (not 5) for a missing directory — so the ported gate would have been red on every PR. 'One file, take it, PR it' was false.",
+    "The branch's pr-validation.yml silently drops main's `CV Tailoring Delete Observability` job. A verbatim copy would have deleted an existing gate as a side effect of adding others.",
+    "main's frontend had never been measured against the gate being ported. Measured here for the first time: jest 21+17 suites / 128+83 tests, vitest 66 files / 735 tests, all green.",
+    "cdk-diff is a third permanently-red gate, failing on GitHub's 65536-character comment limit rather than on any diff content, and it runs with real AWS credentials on pull_request.",
+    "main still produces working-tree churn (docs/beta/evidence/I1-I4, infra/service_cdk.egg-info, src/frontend/dist/tsconfig.tsbuildinfo). Handoff 03's churn fixes exist only on tools/proof-harness. Running the suite in a clean main worktree dirtied 7 tracked files.",
+    "docs/ is 93.1% of the branch's diff by inserted lines (648293 of 696488). The product change is the other 7%.",
+    "`gh api repos/:owner/:repo/...` silently depends on the current directory's git remote; run from elsewhere it fails with 'unable to expand placeholder in path'."
+  ],
+
+  "deviations_from_the_handoff": [
+    {"deviation": "Did not fix the two test_l3_state_recovery tests with mock_aws as instructed.", "reason": "Measurement falsified the premise: they pass with zero credentials in isolation. The prescribed fix would have masked the real defect. Fixed the actual cause instead and recorded the correction prominently rather than adapting quietly."},
+    {"deviation": "Did not port pr-validation.yml to main verbatim.", "reason": "Verbatim would be red on every PR (tests/infra absent) and would delete main's CV Tailoring job. Both changes are documented in the PR body and in the commit message; neither is silent."},
+    {"deviation": "Made no code change in Step 4.", "reason": "The handoff required proving the behavioural consequence before changing code. There is no consequence — both product sites await correctly — so the precondition for a change was never met. Enumeration and falsification delivered instead."},
+    {"deviation": "Added -rs to pr-validation.yml, which was not requested.", "reason": "The handoff required that any skip introduced 'must be visible'. Without -rs the new P-03 skip renders as a bare 's' with no reason. This grew the Step 2 diff from the handoff's measured 71/16 to 95/6."}
+  ],
+
+  "carried_forward_not_fixed": [
+    "OPERATOR: the AWS Access Key ID in docs/evidence/astra-pass-b/iam-authorization-details.json is still not rotated and is on a PUBLIC remote via origin/tools/proof-harness. Confirmed present this session; repo visibility confirmed PUBLIC. NOT on main.",
+    "The remaining test files that mutate os.environ directly instead of via monkeypatch. Measured after the fix: 10 files assign os.environ[...] directly, and 4 of those also delete it manually (tests/integration/conftest.py, tests/integration/p05_seeding.py, tests/unit/test_llm_client.py, tests/unit/test_vpr_handler.py) — that combination is the exact defect that fired. One of them is a conftest, so its teardown applies to a whole directory. Note handoff 02's carried-forward figure of '8 test files' does NOT reproduce; the measured values are 10 and 4.",
+    "The 3 test files that patch('asyncio.run'), which block promoting RuntimeWarning to an error in filterwarnings.",
+    "~126 powertools 'No application metrics to publish' warnings.",
+    "python-security: 23 CVEs in 4 packages. Costed above, not bumped.",
+    "Infra Spec Consistency: references a file that has never existed. Costed above, not touched.",
+    "cdk-diff: fails on comment size. Newly found, untouched.",
+    "P-03's AC-P03-2 is now an explicit UNKNOWN in CI rather than a failure. Wiring cdk.out from the CDK Synth job as an artifact converts it to a real gate.",
+    "The four feature-branch workflows still deploying via the ungated `dev` environment — explicitly accepted by the operator in handoff 03.",
+    "vpr_handler.py dead code; CVTailoringRequest.vpr_id default; DynamoDalHandler API mismatch; 48+7 files with freezegun available but unused; the eviction dance; preflight.py:366 GlobalTable mismatch; 31 of 32 devx Lambdas at 1-day log retention; knowledge_base_handler.py routed to nothing; CLAUDE.md's naming-check command using `python`."
+  ],
+
+  "what_success_looked_like_vs_what_happened": {
+    "expected": "Fix 3 named tests with mock_aws and a skip, then copy one workflow file to main. Two small, mechanical steps.",
+    "happened": "Both steps rested on false premises, and measurement caught both before either shipped. Step 1's three named tests were symptoms of one fixture in a fourth file; the prescribed fix would have hidden it. Step 2's one file would have been red on arrival and would have deleted an existing job. The gate is now green in CI on the branch (proven twice) and green against main's code on PR #222, and Step 4's silent-J4 hypothesis is falsified rather than inherited.",
+    "the_pattern_worth_keeping": "Three of this handoff's five steps contained a stated cause that measurement contradicted. In every case the instruction was specific enough to be checked, which is why the error was catchable. A vaguer handoff would have produced a green gate hiding the same bug."
+  }
+}
