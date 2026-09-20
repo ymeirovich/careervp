@@ -76,3 +76,8 @@ state/
 # Playwright run artifacts — regenerated every run, never source.
 src/frontend/playwright-report/
 src/frontend/test-results/
+
+# TypeScript incremental build artifact — `npm run typecheck` rewrites it on
+# every run, so a committed copy makes `git_dirty: false` unreachable after the
+# mandatory checks (sweep-00 finding #2, closed by handoff 03 Step 3).
+src/frontend/dist/
