@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 try:
-    from .e2e_helpers import E2EClient, create_job, register_and_login, unwrap, upload_cv
+    from .e2e_helpers import E2EClient, create_job, register_and_login, requires_live_api, unwrap, upload_cv
 except ImportError:  # pragma: no cover
-    from e2e_helpers import E2EClient, create_job, register_and_login, unwrap, upload_cv  # type: ignore
+    from e2e_helpers import E2EClient, create_job, register_and_login, requires_live_api, unwrap, upload_cv  # type: ignore
+
+# handoff-01 Step 5: this file calls E2EClient.from_env(), which needs a real
+# deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
 def test_e2e_unauthorized_access_returns_401() -> None:

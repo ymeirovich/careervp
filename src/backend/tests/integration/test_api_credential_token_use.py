@@ -12,9 +12,13 @@ No token value is ever logged, asserted on, or written to evidence — only the 
 from __future__ import annotations
 
 try:
-    from .integration_helpers import IntegrationApiClient, create_authenticated_user, decode_token_claims
+    from .integration_helpers import IntegrationApiClient, create_authenticated_user, decode_token_claims, requires_live_api
 except ImportError:  # pragma: no cover
-    from integration_helpers import IntegrationApiClient, create_authenticated_user, decode_token_claims  # type: ignore
+    from integration_helpers import IntegrationApiClient, create_authenticated_user, decode_token_claims, requires_live_api  # type: ignore
+
+# handoff-01 Step 5: this file calls IntegrationApiClient.from_env(), which needs a
+# real deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
 def test_integration_api_credential_is_an_id_token() -> None:

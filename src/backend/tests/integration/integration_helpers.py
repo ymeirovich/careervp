@@ -16,6 +16,16 @@ requests = pytest.importorskip('requests')
 TERMINAL_STATUSES = {'completed', 'failed'}
 IN_FLIGHT_STATUSES = {'pending', 'processing', 'queued', 'in_progress', 'running'}
 
+# These tests exercise a real deployed API, not a mock — API_BASE is a
+# genuinely optional environment (handoff-01, Step 5). Apply as a module-level
+# `pytestmark = requires_live_api` in any file that calls
+# IntegrationApiClient.from_env(), so the skip is visible at collection time
+# instead of hiding inside the client constructor.
+requires_live_api = pytest.mark.skipif(
+    not os.getenv('API_BASE', '').strip(),
+    reason='API_BASE is not set; this test exercises a real deployed API, not a mock',
+)
+
 
 @dataclass
 class HTTPResponse:
@@ -97,7 +107,11 @@ class IntegrationApiClient:
     def from_env(cls) -> 'IntegrationApiClient':
         base_url = os.getenv('API_BASE', '').strip().rstrip('/')
         if not base_url:
-            pytest.skip('API_BASE is not set. Skipping integration tests.')
+            # Callers must guard with `pytestmark = requires_live_api` so the
+            # skip is visible at collection time. Reaching this means a test
+            # calls from_env() without that guard — fail loudly rather than
+            # silently skip (handoff-01, Step 5).
+            raise RuntimeError('API_BASE is not set and this call site has no requires_live_api skipif guard.')
         timeout_seconds = int(os.getenv('INTEGRATION_HTTP_TIMEOUT_SECONDS', '30'))
         return cls(base_url=base_url, timeout_seconds=timeout_seconds)
 

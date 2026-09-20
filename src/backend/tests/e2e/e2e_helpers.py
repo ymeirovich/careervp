@@ -12,6 +12,16 @@ import pytest
 
 requests = pytest.importorskip('requests')
 
+# These tests exercise a real deployed API, not a mock — API_BASE is a
+# genuinely optional environment (handoff-01, Step 5). Apply as a module-level
+# `pytestmark = requires_live_api` in any file that calls E2EClient.from_env(),
+# so the skip is visible at collection time instead of hiding inside the
+# client constructor.
+requires_live_api = pytest.mark.skipif(
+    not os.getenv('API_BASE', '').strip(),
+    reason='API_BASE is not set; this test exercises a real deployed API, not a mock',
+)
+
 BANNED_WORDS = [
     'leverage',
     'delve',
@@ -97,7 +107,11 @@ class E2EClient:
     def from_env(cls) -> 'E2EClient':
         api_base = os.getenv('API_BASE', '').strip().rstrip('/')
         if not api_base:
-            pytest.skip('API_BASE not set; skipping E2E tests.')
+            # Callers must guard with `pytestmark = requires_live_api` so the
+            # skip is visible at collection time. Reaching this means a test
+            # calls from_env() without that guard — fail loudly rather than
+            # silently skip (handoff-01, Step 5).
+            raise RuntimeError('API_BASE is not set and this call site has no requires_live_api skipif guard.')
         return cls(api_base, int(os.getenv('E2E_HTTP_TIMEOUT_SECONDS', '30')))
 
     def request(

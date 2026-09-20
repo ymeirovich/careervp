@@ -25,9 +25,6 @@ def load_payload_contracts() -> dict[tuple[str, str], dict]:
     """Load all payload contracts and extract method/path pairs."""
     contracts = {}
 
-    if not PAYLOADS_DIR.exists():
-        pytest.skip(f'Payloads directory not found: {PAYLOADS_DIR}')
-
     for payload_file in PAYLOADS_DIR.glob('*.json'):
         try:
             with open(payload_file) as f:
@@ -51,9 +48,6 @@ def load_payload_contracts() -> dict[tuple[str, str], dict]:
 def load_auth_spec() -> dict:
     """Load auth_and_authorizer_spec.yaml."""
     spec_path = SPECS_DIR / 'auth_and_authorizer_spec.yaml'
-    if not spec_path.exists():
-        pytest.skip(f'Auth spec not found: {spec_path}')
-
     with open(spec_path) as f:
         return yaml.safe_load(f)
 
@@ -67,6 +61,10 @@ EXPECTED_PUBLIC_ROUTES = {
 }
 
 
+@pytest.mark.skipif(
+    not PAYLOADS_DIR.exists() or not (SPECS_DIR / 'auth_and_authorizer_spec.yaml').exists(),
+    reason=f'Fixture data missing: {PAYLOADS_DIR} and/or {SPECS_DIR / "auth_and_authorizer_spec.yaml"}',
+)
 class TestRouteAuthorizerPolicy:
     """Tests for route authorization policy invariants."""
 

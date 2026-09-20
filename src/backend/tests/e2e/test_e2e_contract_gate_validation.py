@@ -27,9 +27,13 @@ import base64
 from typing import Any
 
 try:
-    from .e2e_helpers import E2E_CV_TEXT, E2E_JOB_URL, E2EClient, Resp, create_job, register_and_login, unwrap
+    from .e2e_helpers import E2E_CV_TEXT, E2E_JOB_URL, E2EClient, Resp, create_job, register_and_login, requires_live_api, unwrap
 except ImportError:  # pragma: no cover
-    from e2e_helpers import E2E_CV_TEXT, E2E_JOB_URL, E2EClient, Resp, create_job, register_and_login, unwrap  # type: ignore
+    from e2e_helpers import E2E_CV_TEXT, E2E_JOB_URL, E2EClient, Resp, create_job, register_and_login, requires_live_api, unwrap  # type: ignore
+
+# handoff-01 Step 5: this file calls E2EClient.from_env(), which needs a real
+# deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 AUTHENTICATED_OK = 'authenticated_ok'
 PUBLIC_OK = 'public_ok'

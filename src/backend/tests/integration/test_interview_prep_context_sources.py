@@ -43,15 +43,26 @@ def _make_full_context() -> dict[str, Any]:
     }
 
 
+_INTERVIEW_PREP_PROMPT_XFAIL_REASON = (
+    'STALE TEST, not fixed here (handoff-01 Step 5 converted a silent '
+    "pytest.skip('...module not available') to a real import, and this is what it "
+    'found): careervp.logic.prompts.interview_prep_prompt.build_interview_prep_prompt '
+    'no longer exists — it was split into build_system_prompt() (no args) and '
+    'build_user_prompt(vpr_data, ..., cv_facts=, job_requirements=, '
+    'vpr_differentiators=, gap_responses=, company_research=, language=). This test '
+    'was silently skipping on every run since that rename, reporting green for a '
+    'test that never executed. Needs a rewrite against the new signature, not a '
+    'CI-wiring fix.'
+)
+
+
 class TestInterviewPrepContextSectionPresence:
     """AC-IP-303: Architecture-required context sections always present in generation."""
 
+    @pytest.mark.xfail(strict=True, reason=_INTERVIEW_PREP_PROMPT_XFAIL_REASON)
     def test_prompt_render_includes_all_required_sections(self):
         """Prompt renderer must include all 6 required context sections."""
-        try:
-            from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
-        except ImportError:
-            pytest.skip('interview_prep_prompt module not available')
+        from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
 
         context = _make_full_context()
         prompt = build_interview_prep_prompt(context)
@@ -61,12 +72,10 @@ class TestInterviewPrepContextSectionPresence:
             normalized = section.lower().replace('_', ' ')
             assert section.lower() in prompt_str or normalized in prompt_str, f'Required context section "{section}" missing from rendered prompt'
 
+    @pytest.mark.xfail(strict=True, reason=_INTERVIEW_PREP_PROMPT_XFAIL_REASON)
     def test_missing_optional_sections_degrade_gracefully(self):
         """Optional context (gap_responses, company_research) absent does not crash generation."""
-        try:
-            from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
-        except ImportError:
-            pytest.skip('interview_prep_prompt module not available')
+        from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
 
         # Minimal context - only required fields
         minimal_context = {
@@ -88,12 +97,18 @@ class TestInterviewPrepContextSectionPresence:
 class TestInterviewPrepContextFallback:
     """Context source fallback paths must yield valid generation inputs."""
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            'STALE TEST, not fixed here (handoff-01 Step 5): '
+            'careervp.logic.interview_prep.generate_interview_prep_questions no longer '
+            'exists (renamed to the async generate_interview_prep). Silently skipped '
+            'on every run before this; needs a rewrite, not a CI-wiring fix.'
+        ),
+    )
     def test_missing_cv_does_not_produce_empty_questions(self):
         """When CV is unavailable, generation must still return >=1 question or fail gracefully."""
-        try:
-            from careervp.logic.interview_prep import generate_interview_prep_questions
-        except ImportError:
-            pytest.skip('interview_prep logic module not available')
+        from careervp.logic.interview_prep import generate_interview_prep_questions
 
         mock_result = MagicMock()
         mock_result.success = True
@@ -115,21 +130,18 @@ class TestInterviewPrepContextFallback:
         assert isinstance(context['gap_responses'], list), 'gap_responses must be a list'
         assert context['language'] == 'en', 'language must be present'
 
+    @pytest.mark.xfail(strict=True, reason=_INTERVIEW_PREP_PROMPT_XFAIL_REASON)
     def test_company_research_none_is_tolerated(self):
         """None company_research must not cause key errors in context resolution."""
         context = _make_full_context()
         context['company_research'] = None
 
-        # If prompt builder is available, test it handles None
-        try:
-            from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
+        from careervp.logic.prompts.interview_prep_prompt import build_interview_prep_prompt
 
-            try:
-                build_interview_prep_prompt(context)
-            except (TypeError, KeyError, AttributeError) as exc:
-                pytest.fail(f'Prompt builder crashed on None company_research: {exc}')
-        except ImportError:
-            pass  # Module not available, skip gracefully
+        try:
+            build_interview_prep_prompt(context)
+        except (TypeError, KeyError, AttributeError) as exc:
+            pytest.fail(f'Prompt builder crashed on None company_research: {exc}')
 
 
 class TestInterviewPrepQualityConstraints:

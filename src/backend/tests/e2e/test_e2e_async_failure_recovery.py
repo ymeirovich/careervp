@@ -6,15 +6,21 @@ import os
 import pytest
 
 try:
-    from .e2e_helpers import E2EClient, create_job, poll_completed, register_and_login, require, upload_cv
+    from .e2e_helpers import E2EClient, create_job, poll_completed, register_and_login, require, requires_live_api, upload_cv
 except ImportError:  # pragma: no cover
-    from e2e_helpers import E2EClient, create_job, poll_completed, register_and_login, require, upload_cv  # type: ignore
+    from e2e_helpers import E2EClient, create_job, poll_completed, register_and_login, require, requires_live_api, upload_cv  # type: ignore
+
+# handoff-01 Step 5: this file calls E2EClient.from_env(), which needs a real
+# deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
+@pytest.mark.skipif(
+    not os.getenv('E2E_VPR_FAILURE_OVERRIDES', '').strip(),
+    reason='Set E2E_VPR_FAILURE_OVERRIDES to trigger deterministic worker failure.',
+)
 def test_e2e_async_failure_and_recovery() -> None:
     fail_overrides_raw = os.getenv('E2E_VPR_FAILURE_OVERRIDES', '').strip()
-    if not fail_overrides_raw:
-        pytest.skip('Set E2E_VPR_FAILURE_OVERRIDES to trigger deterministic worker failure.')
     fail_overrides = json.loads(fail_overrides_raw)
     if not isinstance(fail_overrides, dict):
         raise AssertionError('E2E_VPR_FAILURE_OVERRIDES must be a JSON object.')

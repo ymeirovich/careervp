@@ -12,10 +12,10 @@ def _load_dal_handler() -> Any:
     handler_class = getattr(module, 'DynamoDalHandler', None)
     if handler_class is None:
         raise AssertionError('DynamoDalHandler class not found in careervp.dal.dynamo_dal_handler')
-    try:
-        return handler_class()
-    except TypeError as exc:
-        pytest.skip(f'DynamoDalHandler constructor requires runtime-specific args: {exc}')
+    # No swallowing TypeError into a skip here (handoff-01, Step 5): this class
+    # requires a table_name argument, so the bare `handler_class()` below always
+    # raised, and all 3 tests in this file always skipped silently. Let it fail.
+    return handler_class()
 
 
 def _assert_result_success(result: Any) -> None:
@@ -37,6 +37,19 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+_DAL_MIGRATION_XFAIL_REASON = (
+    'CONTAMINATION-ADJACENT FINDING, not fixed here (handoff-01 Step 5 converted a '
+    'silent pytest.skip to a real failure and this is what it found): '
+    'DynamoDalHandler() requires a table_name positional arg the bare no-arg call '
+    'here never provided, so this whole file always skipped. Even fixing that, '
+    'DynamoDalHandler has no save_gap_analysis/get_gap_analysis/save_interview_prep '
+    'methods (only save_tailored_cv and save_cover_letter exist) — this file tests a '
+    'removed/renamed DAL API surface (W2 table-normalization territory), not a '
+    'wiring problem. Needs its own investigation, not a CI-wiring fix.'
+)
+
+
+@pytest.mark.xfail(strict=True, reason=_DAL_MIGRATION_XFAIL_REASON)
 def test_dal_save_and_get_gap_analysis_integration() -> None:
     dal = _load_dal_handler()
     user_id = f'int-user-{uuid.uuid4().hex[:10]}'
@@ -54,6 +67,7 @@ def test_dal_save_and_get_gap_analysis_integration() -> None:
     assert getattr(get_result, 'data', None) is not None
 
 
+@pytest.mark.xfail(strict=True, reason=_DAL_MIGRATION_XFAIL_REASON)
 def test_dal_save_tailored_cv_cover_letter_and_interview_prep_integration() -> None:
     dal = _load_dal_handler()
     user_id = f'int-user-{uuid.uuid4().hex[:10]}'
@@ -80,6 +94,7 @@ def test_dal_save_tailored_cv_cover_letter_and_interview_prep_integration() -> N
     _assert_result_success(dal.save_interview_prep(user_id, interview_prep))
 
 
+@pytest.mark.xfail(strict=True, reason=_DAL_MIGRATION_XFAIL_REASON)
 def test_dal_ttl_and_backward_compatibility_integration() -> None:
     dal = _load_dal_handler()
     user_id = f'int-user-{uuid.uuid4().hex[:10]}'

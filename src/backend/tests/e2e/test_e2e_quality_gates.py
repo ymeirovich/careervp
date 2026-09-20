@@ -10,6 +10,7 @@ try:
         poll_completed,
         register_and_login,
         require,
+        requires_live_api,
         upload_cv,
     )
 except ImportError:  # pragma: no cover
@@ -22,8 +23,13 @@ except ImportError:  # pragma: no cover
         poll_completed,
         register_and_login,
         require,
+        requires_live_api,
         upload_cv,
     )
+
+# handoff-01 Step 5: this file calls E2EClient.from_env(), which needs a real
+# deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
 def test_e2e_quality_gates() -> None:

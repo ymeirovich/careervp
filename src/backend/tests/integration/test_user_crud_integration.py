@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 try:
-    from .integration_helpers import IntegrationApiClient, create_authenticated_user, unwrap_payload
+    from .integration_helpers import IntegrationApiClient, create_authenticated_user, requires_live_api, unwrap_payload
 except ImportError:  # pragma: no cover
-    from integration_helpers import IntegrationApiClient, create_authenticated_user, unwrap_payload
+    from integration_helpers import IntegrationApiClient, create_authenticated_user, requires_live_api, unwrap_payload
+
+# handoff-01 Step 5: this file calls IntegrationApiClient.from_env(), which needs a
+# real deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
 def test_user_crud_integration() -> None:
