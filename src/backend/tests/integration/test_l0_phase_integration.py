@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -45,7 +46,14 @@ TEMPLATE_PATTERNS = (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I1_generators/generator-output-audit.json'
+# sweep-00 finding #2: these writers targeted the working tree, so running the
+# mandatory checks always left tracked files modified and `git_dirty: false` was
+# unreachable for every proof in this chain. Nothing reads prior content — each
+# test writes and then asserts on what it just wrote — so the default target is a
+# temp dir. Set CAREERVP_BETA_EVIDENCE_DIR=<repo>/docs/beta/evidence to refresh
+# the committed artifacts deliberately.
+BETA_EVIDENCE_ROOT = Path(os.environ.get('CAREERVP_BETA_EVIDENCE_DIR', tempfile.gettempdir()))
+EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I1_generators/generator-output-audit.json'
 
 
 def _sample_user_cv() -> UserCV:

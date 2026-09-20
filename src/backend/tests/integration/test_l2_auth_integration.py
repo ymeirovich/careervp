@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,8 +16,15 @@ from careervp.handlers.auth_utils import extract_user_id
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 PAYLOAD_PATH = REPO_ROOT / 'docs/refactor/payloads/beta_l2_auth_scenarios_test.json'
-I3_EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I3_auth/auth-abuse-matrix.json'
-I4_EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I4_identity/identity-extraction-audit.txt'
+# sweep-00 finding #2: these writers targeted the working tree, so running the
+# mandatory checks always left tracked files modified and `git_dirty: false` was
+# unreachable for every proof in this chain. Nothing reads prior content — each
+# test writes and then asserts on what it just wrote — so the default target is a
+# temp dir. Set CAREERVP_BETA_EVIDENCE_DIR=<repo>/docs/beta/evidence to refresh
+# the committed artifacts deliberately.
+BETA_EVIDENCE_ROOT = Path(os.environ.get('CAREERVP_BETA_EVIDENCE_DIR', tempfile.gettempdir()))
+I3_EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I3_auth/auth-abuse-matrix.json'
+I4_EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I4_identity/identity-extraction-audit.txt'
 
 SCENARIOS = ('no_token', 'expired_token', 'wrong_user_token', 'valid_token')
 
