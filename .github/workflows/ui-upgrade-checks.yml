@@ -90,10 +90,15 @@ jobs:
           CI: true
 
   # ── Backend deploy to dev ───────────────────────────────────────────────────
+  # W5 (handoff 03): the `dev` GitHub environment has protection_rules: [], so a
+  # push to `ui-upgrade` deployed with no human approval. `devx` carries
+  # required_reviewers and no deployment branch policy, so it gates this without
+  # blocking the branch. The environment is the APPROVAL GATE, not the target
+  # stack: this job still runs `make deploy` → CareerVpCrudDev.
   deploy-backend-dev:
     name: Deploy backend → dev
     runs-on: ubuntu-latest
-    environment: dev
+    environment: devx
     steps:
       - uses: actions/checkout@v4
 

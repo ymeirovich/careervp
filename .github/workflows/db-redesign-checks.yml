@@ -163,11 +163,17 @@ jobs:
         env:
           CI: true
 
-  # ── Backend deploy to dev ───────────────────────────────────────────────────
+  # ── Backend deploy to devx ──────────────────────────────────────────────────
+  # W5 (handoff 03): the `dev` GitHub environment has protection_rules: [], so a
+  # push to `db-redesign` deployed CareerVpCrudDevx — the stack `make journey`
+  # measures — with no human approval. `devx` carries required_reviewers and no
+  # deployment branch policy, so it gates this without blocking the branch.
+  # The environment is the APPROVAL GATE, not the target stack: this job runs
+  # `make deploy-devx` → CareerVpCrudDevx.
   deploy-backend-dev:
-    name: Deploy backend → dev
+    name: Deploy backend → devx
     runs-on: ubuntu-latest
-    environment: dev
+    environment: devx
     needs: [ruff-lint, mypy, pytest-unit]
     steps:
       - uses: actions/checkout@v4
