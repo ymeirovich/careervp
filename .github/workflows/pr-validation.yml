@@ -51,34 +51,44 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
-      - name: Run pytest
+      # Per-directory, not a single `uv run pytest`: the combined run is
+      # 606-red from cross-test contamination (sys.modules/sys.path pollution
+      # between files — test_job_handler.py passes 7/7 alone, ModuleNotFoundError
+      # combined). Isolating by directory sidesteps it entirely: ~1792 passed,
+      # 14 failed when the plan measured this. Root cause is unfixed and is
+      # handoff 02's scope (docs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md,
+      # docs/handoff/2026-09-19-PRODUCTION-PROGRAM.md W4.00/W4.01). Do not
+      # "simplify" this back into one bare pytest call without fixing that
+      # first — it will silently drop to 4-of-250 files effectively validated,
+      # which is the exact problem this step exists to close.
+      #
+      # The loop does not stop at the first failing directory — collect all,
+      # fail once — so a broken PR shows every failing directory, not just
+      # the first one alphabetically.
+      - name: Run pytest (per backend test directory)
         working-directory: src/backend
         env:
           AWS_REGION: us-east-1
           AWS_DEFAULT_REGION: us-east-1
           PYTHONPATH: ${{ github.workspace }}/src/backend
         run: |
-          uv run pytest -q \
-            tests/unit/test_auth_handler.py \
-            tests/unit/test_health_handler.py \
-            tests/unit/test_billing_service.py \
-            tests/integration/test_cv_tailoring_delete_roundtrip.py
-
-  cv-tailoring-delete-observability:
-    name: CV Tailoring Delete Observability
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: "latest"
-          enable-cache: true
-      - name: Run delete roundtrip integration tests
-        working-directory: src/backend
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+          fail=0
+          DIRS=(
+            tests/unit
+            tests/integration
+            tests/infrastructure
+            tests/e2e
+            tests/models
+            tests/regression
+            tests/security
+            tests/infra
+          )
+          for d in "${DIRS[@]}"; do
+            echo "::group::$d"
+            uv run pytest "$d" -q --tb=short || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
 
   deployed-parity:
     name: Deployed Parity Gate (pre_merge)
