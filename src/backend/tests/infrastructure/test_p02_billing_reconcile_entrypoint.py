@@ -65,7 +65,15 @@ def _import_configured_module(module_name: str, handler: str) -> ModuleType:
 
 
 @pytest.mark.xfail(
-    strict=True,
+    # NOT strict (handoff-01 Step 6b finding): whether this fails depends on
+    # random test ORDER within the directory (does test_k9_artifact_cleanup_env
+    # run first and evict backend's careervp from sys.modules, or not).
+    # pytest-randomly (added this same step) proved it both ways across a
+    # handful of runs. strict=True assumes a deterministically-broken test;
+    # this one legitimately passes when the polluting test happens to run
+    # after it, and xfail_strict=true (Step 6a) would turn that pass into a
+    # hard XPASS failure — a global-default gate flake, not a real regression.
+    strict=False,
     reason=(
         'CONTAMINATION, not a product or test bug (found handoff-01, Step 1b; scope '
         'is handoff-02). Root cause identified: test_k9_artifact_cleanup_env.py:39-41 '
