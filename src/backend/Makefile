@@ -143,12 +143,19 @@ STACK_NAME ?= CareerVpCrudDev
 AWS_REGION ?= us-east-1
 CHANGESET_NAME ?= careervp-changeset-$(shell date -u +%Y%m%d%H%M%S)
 
+# git_sha is passed here for the same reason deploy-devx passes it: without it
+# service_stack.py falls back to the literal string "unstamped" for the
+# DeployedGitSha output, so `make journey` cannot prove which commit it
+# measured and preflight records a permanent UNKNOWN. Measured 2026-09-20:
+# none of CareerVpCrudDev / Devx / Staging currently exposes the output at all.
+# Setting an output value is a metadata-only stack update -- it replaces nothing.
 create-changeset: build
 	npx cdk acknowledge 34892
 	npx cdk deploy $(STACK_NAME) --app="$(PYTHON) ../../infra/app.py" \
 		--require-approval=never --method=change-set --no-execute \
 		--change-set-name "$(CHANGESET_NAME)" \
-		--context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+		--context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" \
+		--context "git_sha=$(GIT_STAMP)"
 	@echo "$(CHANGESET_NAME)" | tee /tmp/careervp-changeset-name.txt
 
 execute-changeset:
