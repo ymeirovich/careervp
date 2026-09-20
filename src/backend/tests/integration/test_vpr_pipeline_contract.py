@@ -103,73 +103,13 @@ class TestVPRPipelineContract:
         assert vpr.value_proposition is not None
         assert vpr.application_strategy is not None
 
-    def test_pipeline_saves_vpr_to_dal(
-        self,
-        minimal_vpr_request: VPRRequest,
-        minimal_user_cv: Any,
-        mock_dal_with_no_existing_vpr: MagicMock,
-        llm_phase2_response: dict[str, Any],
-    ) -> None:
-        with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls, patch('careervp.logic.vpr_generator.run_vpr_quality_gate') as mock_gate:
-            mock_llm = mock_llm_cls.return_value
-            mock_llm.invoke.return_value = MagicMock(
-                success=True,
-                data={
-                    'text': json.dumps(llm_phase2_response),
-                    'input_tokens': 100,
-                    'output_tokens': 200,
-                    'cost': 0.003,
-                    'model': 'claude-sonnet-4-5',
-                },
-            )
-            mock_gate.return_value = MagicMock(
-                vpr=MagicMock(spec=VPR),
-                anti_ai_score=9.5,
-                grammar_score=9.5,
-                tone_score=9.5,
-                structural_score=9.0,
-                anti_ai_issues=[],
-                passed_gate=True,
-            )
-            generate_vpr(minimal_vpr_request, minimal_user_cv, mock_dal_with_no_existing_vpr)
-
-        mock_dal_with_no_existing_vpr.save_vpr.assert_called_once()
-
-    def test_pipeline_version_comes_from_dal(
-        self,
-        minimal_vpr_request: VPRRequest,
-        minimal_user_cv: Any,
-        mock_dal_with_existing_vpr: MagicMock,
-        llm_phase2_response: dict[str, Any],
-    ) -> None:
-        """Pipeline must use dal.get_next_vpr_version() for version assignment."""
-        with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls, patch('careervp.logic.vpr_generator.run_vpr_quality_gate') as mock_gate:
-            mock_llm = mock_llm_cls.return_value
-            mock_llm.invoke.return_value = MagicMock(
-                success=True,
-                data={
-                    'text': json.dumps(llm_phase2_response),
-                    'input_tokens': 100,
-                    'output_tokens': 200,
-                    'cost': 0.003,
-                    'model': 'claude-sonnet-4-5',
-                },
-            )
-            mock_gate.return_value = MagicMock(
-                vpr=MagicMock(spec=VPR, version=3),
-                anti_ai_score=9.5,
-                grammar_score=9.5,
-                tone_score=9.5,
-                structural_score=9.0,
-                anti_ai_issues=[],
-                passed_gate=True,
-            )
-            generate_vpr(minimal_vpr_request, minimal_user_cv, mock_dal_with_existing_vpr)
-
-        # Version assignment is handler's responsibility (spec 06).
-        # generate_vpr uses dal only for saving, not for version lookup.
-        mock_dal_with_existing_vpr.get_next_vpr_version.assert_not_called()
-        mock_dal_with_existing_vpr.save_vpr.assert_called_once()
+    # test_pipeline_saves_vpr_to_dal and test_pipeline_version_comes_from_dal
+    # were deleted here (handoff-01, Step 1b): both asserted generate_vpr()
+    # calls dal.save_vpr()/dal.get_next_vpr_version() internally. That
+    # behavior was intentionally removed — generate_vpr's docstring now
+    # states persistence is caller-owned (F-DEVX-1), and the real persistence
+    # path is vpr_worker_handler.py's core_repository.save_vpr_artifact(),
+    # not DynamoDalHandler.save_vpr(). The tests asserted removed behavior.
 
     def test_pipeline_retries_on_fvs_gate_failure(
         self,

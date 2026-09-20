@@ -98,12 +98,41 @@ def dynamodb_table(aws_env: None) -> Iterator[Table]:
             env_patcher.undo()
 
 
+@pytest.fixture(scope='function')
+def cv_table(dynamodb_table: Table) -> Table:
+    """Provision the CVs table (userId/cvId) inside the same moto session.
+
+    ``resolve_cv_table_name()`` reads ``CVS_TABLE_NAME`` — a table distinct from
+    the artifacts table above. conftest.py sets that env var to
+    'test-cvs-table' at import time; nothing in this file ever created a table
+    with that name, so every CV lookup 404'd against moto before this fixture
+    existed. Schema matches infra/careervp/api_db_construct.py's CVs table.
+    """
+    _ = dynamodb_table  # ensures the moto_aws context is active
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table_name = 'test-cvs-table'
+    table = dynamodb.create_table(
+        TableName=table_name,
+        KeySchema=[
+            {'AttributeName': 'userId', 'KeyType': 'HASH'},
+            {'AttributeName': 'cvId', 'KeyType': 'RANGE'},
+        ],
+        AttributeDefinitions=[
+            {'AttributeName': 'userId', 'AttributeType': 'S'},
+            {'AttributeName': 'cvId', 'AttributeType': 'S'},
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+    table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
+    return table
+
+
 def _seed_user_cv(table: Table, user_id: str) -> None:
     """Insert a parsed CV record required for VPR handler lookup."""
     table.put_item(
         Item={
-            'pk': user_id,
-            'sk': 'CV',
+            'userId': user_id,
+            'cvId': 'cv-1',
             'user_id': user_id,
             'full_name': 'Test User',
             'language': 'en',
@@ -535,9 +564,10 @@ class TestVPRGenerationFlow:
         self,
         mock_llm_cls: MagicMock,
         dynamodb_table: Table,
+        cv_table: Table,
     ) -> None:
         """Test successful VPR generation with FVS validation passing."""
-        _seed_user_cv(dynamodb_table, 'user-123')
+        _seed_user_cv(cv_table, 'user-123')
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = Result(
             success=True,
@@ -555,8 +585,12 @@ class TestVPRGenerationFlow:
         assert body['vpr'] is not None
         assert body['vpr']['applicationId'] == 'app-456'
 
-        saved = dynamodb_table.get_item(Key={'pk': 'app-456', 'sk': 'ARTIFACT#VPR#v1'})
-        assert 'Item' in saved
+        # No persistence assertion here: generate_vpr() no longer persists (the
+        # caller owns persistence, F-DEVX-1 — see vpr_generator.py docstring).
+        # This synchronous handler's own persistence call was removed when the
+        # async VPR architecture landed (infra/careervp/api_construct.py:
+        # "Original synchronous VPR generator removed"); the real persistence
+        # path is vpr_worker_handler.py's core_repository.save_vpr_artifact().
 
     @pytest.mark.skip(reason='FVS disabled for VPR generation - see vpr_generator.py')
     @patch('careervp.logic.vpr_generator.LLMClient')
@@ -590,8 +624,10 @@ class TestVPRGenerationFlow:
         self,
         mock_llm_cls: MagicMock,
         dynamodb_table: Table,
+        cv_table: Table,
     ) -> None:
         """Test 404 when user CV is not found."""
+        _ = cv_table  # table must exist (empty) so the lookup 404s cleanly, not with a moto ResourceNotFoundException
         mock_llm = MagicMock()
         mock_llm_cls.return_value = mock_llm
 
@@ -607,9 +643,10 @@ class TestVPRGenerationFlow:
         self,
         mock_llm_cls: MagicMock,
         dynamodb_table: Table,
+        cv_table: Table,
     ) -> None:
         """Test 502 when LLM API fails."""
-        _seed_user_cv(dynamodb_table, 'user-123')
+        _seed_user_cv(cv_table, 'user-123')
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = Result(
             success=False,
@@ -639,10 +676,11 @@ class TestCompanyResearchVPRIntegration:
         mock_research_router: MagicMock,
         mock_scrape: AsyncMock,
         dynamodb_table: Table,
+        cv_table: Table,
         mock_company_research_enqueue: MagicMock,
     ) -> None:
         """Test complete flow: research company then generate VPR using company data."""
-        _seed_user_cv(dynamodb_table, 'user-123')
+        _seed_user_cv(cv_table, 'user-123')
 
         mock_scrape.return_value = Result(
             success=True,
@@ -749,9 +787,10 @@ class TestCompanyResearchVPRIntegration:
         self,
         mock_llm_cls: MagicMock,
         dynamodb_table: Table,
+        cv_table: Table,
     ) -> None:
         """Verify VPR response contains all expected fields."""
-        _seed_user_cv(dynamodb_table, 'user-123')
+        _seed_user_cv(cv_table, 'user-123')
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = Result(
             success=True,

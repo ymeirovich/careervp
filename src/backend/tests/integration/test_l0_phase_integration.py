@@ -335,7 +335,8 @@ def _run_vpr(run_number: int) -> str:
     assert result.success is True
     assert result.data is not None
     assert result.data.vpr is not None
-    mock_dal.save_vpr.assert_called_once()
+    # No save_vpr assertion here: generate_vpr() no longer persists — the
+    # caller owns persistence (F-DEVX-1; see vpr_generator.py docstring).
     assert mock_llm_instance.invoke.call_count == 1
     return json.dumps(result.data.vpr.model_dump(mode='json'))
 
