@@ -1,0 +1,893 @@
+{
+  "aws_account": "788159322332",
+  "aws_region": "us-east-1",
+  "code_changed": false,
+  "counts": {
+    "FAIL": 12,
+    "PARTIAL": 1,
+    "PASS": 22,
+    "UNKNOWN": 0,
+    "total": 35
+  },
+  "dirty_paths": [],
+  "git_branch": "tools/proof-harness",
+  "git_dirty": false,
+  "git_sha": "b58712740369811ac060c2886704feae91aca9f9",
+  "git_short": "b587127",
+  "handoff": "docs/handoff/2026-09-20-HANDOFF-00-measurement-sweep.md",
+  "headline": [
+    "The \"10 of 10 devx tables unmanaged by CloudFormation\" fact is FALSE - all 11 are CFN-managed as GlobalTable; preflight.py:366 is a one-line false positive",
+    "The P-28 replacement gate cannot protect any table here - changeset_replacement_report.py protects AWS::DynamoDB::Table, every table is AWS::DynamoDB::GlobalTable",
+    "cdk diff CareerVpCrudDevx is clean: zero stateful changes; handoff 03 B11 blocker does not exist",
+    "All four committed fixes have tests that genuinely fail without the fix (4 of 4 RED)",
+    "Log retention is 1 day on 31 of 32 devx Lambdas, not just gap-api",
+    "The purchase path is mock end to end: PAYMENT_PROVIDER=mock, placeholder price IDs, no Stripe key, 43 tautological assertions"
+  ],
+  "incidental_findings": [
+    {
+      "consequence": "structural cause of the 09-14 journey proof git_dirty: true, not carelessness",
+      "detail": "tests/integration/test_l2_auth_integration.py and test_l1_phase_integration.py rewrite tracked docs/beta/evidence/*.json (timestamp only); npm run typecheck rewrites the committed build artifact src/frontend/dist/tsconfig.tsbuildinfo",
+      "finding": "Running the mandatory checks dirties the tree, so an admissible (git_dirty: false) proof cannot be recorded after them",
+      "id": "I1",
+      "suggested_fix": "gitignore dist/tsconfig.tsbuildinfo; point the two evidence writers at a temp path"
+    },
+    {
+      "detail": "dirty_paths[0] == \"ocs/beta/evidence/I2_persistence/persistence-roundtrip-report.json\" - leading d is missing",
+      "finding": "preflight.py truncates the first character of the first dirty path",
+      "id": "I2"
+    },
+    {
+      "detail": "not urgent, but it is the ceiling W2 table work will push against",
+      "finding": "cdk synth reports 493 of 600 resources on CareerVpCrudDev; preflight reports 553 across 6 stacks on devx",
+      "id": "I3"
+    },
+    {
+      "detail": "documented as a known pre-existing mismatch at src/backend/Makefile:122-128; recorded here so it is visible outside a Makefile comment",
+      "finding": "deploy-staging.yml declares STACK_NAME=CareerVpCrudStaging but the make deploy path hardcodes CareerVpCrudDev",
+      "id": "I4"
+    },
+    {
+      "detail": "python src/backend/scripts/validate_naming.py exits 127 (command not found: python); only python3 exists on PATH",
+      "finding": "CLAUDE.md's naming-check command is broken",
+      "id": "I5"
+    }
+  ],
+  "kind": "sweep-00",
+  "prediction_ledger": {
+    "combined": {
+      "held": 25,
+      "missed": 6,
+      "rate": 0.806,
+      "recommendation": "Do not re-ground the plan - 81% is above the ~70% bar and all 12 test-estate predictions held exactly. But every miss is in the deploy-safety layer, and two of them share one root cause: the AWS::DynamoDB::GlobalTable vs ::Table type name defeats both preflight.py:366 and changeset_replacement_report.py, producing one false alarm and one silent hole. Add a fourth W0 item - fix both type-name blind spots - and land it before handoff 03 step 4, whose entire safety argument rests on a gate that cannot currently fire.",
+      "total": 31
+    },
+    "explicit_predictions": {
+      "held": 12,
+      "missed": 0,
+      "rate": 1.0,
+      "rows": [
+        {
+          "id": "B1",
+          "observed": "identical",
+          "predicted": "606 failed, 1100 passed, 54 skipped, 4 xfailed, 100 errors",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.unit",
+          "observed": "1430 passed, 0 failed",
+          "predicted": "1430p/0f",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.integration",
+          "observed": "185 passed, 11 failed",
+          "predicted": "185p/11f",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.infrastructure",
+          "observed": "81 passed, 1 failed",
+          "predicted": "81p/1f",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.regression",
+          "observed": "37 passed, 2 failed",
+          "predicted": "37p/2f",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.e2e",
+          "observed": "4 passed, 21 skipped",
+          "predicted": "4p/21s",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.models",
+          "observed": "18 passed",
+          "predicted": "18p",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.security",
+          "observed": "3 passed",
+          "predicted": "3p",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B2.infra",
+          "observed": "34 passed",
+          "predicted": "34p",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B3",
+          "observed": "identical",
+          "predicted": "85 suites, 429 passed, 26 skipped, 0 failed",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B4",
+          "observed": "identical",
+          "predicted": "67 files, 739 passed, 0 failed",
+          "verdict": "HELD"
+        },
+        {
+          "id": "B10",
+          "observed": "7 PASS / 1 UNKNOWN / 1 FAIL",
+          "predicted": "7 PASS / 1 UNKNOWN / 1 FAIL",
+          "verdict": "HELD"
+        }
+      ]
+    },
+    "structural_premises": {
+      "held": 13,
+      "missed": 6,
+      "rate": 0.684,
+      "rows": [
+        {
+          "premise": "deploy-dev env + reviewer",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "staging env + reviewer",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "both branch-restricted",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "careervp-review-readonly exists",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "policy is read-only",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "harness Cognito account",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "harness subscription active",
+          "verdict": "HELD"
+        },
+        {
+          "observed": "blind to GlobalTable",
+          "premise": "replacement report flags protected types",
+          "verdict": "MISSED"
+        },
+        {
+          "observed": "4 of 4 RED",
+          "premise": "four fixes have failing-without tests",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "P-05 attacks as a real tenant",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "no production stack",
+          "verdict": "HELD"
+        },
+        {
+          "premise": "no production GitHub env",
+          "verdict": "HELD"
+        },
+        {
+          "observed": "frozen 2026-04-12, 7 Lambdas missing",
+          "premise": "staging ~5 months stale",
+          "verdict": "HELD"
+        },
+        {
+          "observed": "6 reachable, 5 auto-deploy ungated",
+          "premise": "9 workflows run ungated make deploy",
+          "verdict": "MISSED"
+        },
+        {
+          "observed": "11 of 11 ARE managed",
+          "premise": "10 of 10 devx tables unmanaged by CFN",
+          "verdict": "MISSED"
+        },
+        {
+          "observed": "zero table changes",
+          "premise": "cdk diff may try to create 10 tables",
+          "verdict": "MISSED"
+        },
+        {
+          "observed": "10 of 11 ENABLED, 1 DISABLED",
+          "premise": "PITR spot-checked on 2 of 10",
+          "verdict": "MISSED"
+        },
+        {
+          "observed": "31 of 32 Lambdas at 1 day",
+          "premise": "gap-api log retention is 1 day",
+          "verdict": "MISSED"
+        },
+        {
+          "premise": "no ToS / Privacy pages",
+          "verdict": "HELD"
+        }
+      ]
+    }
+  },
+  "repo": "ymeirovich/careervp",
+  "report": "docs/evidence/sweep-00-20260920T082517-b587127.md",
+  "sections": {
+    "A": [
+      {
+        "claim": "GitHub env deploy-dev exists with ymeirovich as required reviewer",
+        "command": "gh api repos/:owner/:repo/environments/deploy-dev",
+        "detail": "required_reviewers -> ymeirovich; branch_policy present; created 2026-09-14T09:57:29Z",
+        "id": "A1",
+        "observed": {
+          "reviewers": [
+            "ymeirovich"
+          ],
+          "rules": [
+            "required_reviewers",
+            "branch_policy"
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "GitHub env staging exists with required reviewer",
+        "command": "gh api repos/:owner/:repo/environments/staging",
+        "detail": "required_reviewers -> ymeirovich; created 2026-01-25T08:12:08Z",
+        "id": "A2",
+        "observed": {
+          "reviewers": [
+            "ymeirovich"
+          ],
+          "rules": [
+            "required_reviewers",
+            "branch_policy"
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "both environments are branch-restricted",
+        "command": "gh api .../environments/{name}/deployment-branch-policies",
+        "detail": "deploy-dev restricted to [main]; staging restricted to [develop, main]",
+        "id": "A3",
+        "observed": {
+          "deploy-dev": [
+            "main"
+          ],
+          "staging": [
+            "develop",
+            "main"
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "IAM user careervp-review-readonly exists",
+        "command": "aws iam get-user --user-name careervp-review-readonly",
+        "detail": "arn:aws:iam::788159322332:user/careervp-review-readonly, created 2026-09-14T09:59:00Z",
+        "id": "A4",
+        "observed": {
+          "active_access_keys": 1,
+          "tags": {
+            "CreatedBy": "claude-code-session-2026-09-14",
+            "Purpose": "P-28-audit-readonly"
+          }
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "policy CareerVpReviewReadOnly is genuinely read-only",
+        "command": "aws iam get-policy-version --policy-arn .../CareerVpReviewReadOnly --version-id v1",
+        "detail": "single Allow of 46 actions, all Describe*/Get*/List* plus dynamodb:Scan/Query, apigateway:GET, logs:FilterLogEvents/StartQuery; no write verb present",
+        "id": "A5",
+        "observed": {
+          "notes": [
+            "Sid is named DenyAllMutatingByDefault but the statement is an Allow; relies on implicit deny",
+            "s3:Get* + dynamodb:Scan on Resource:* permits reading all customer artifacts"
+          ],
+          "resource_scope": "*",
+          "write_verbs_found": []
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "harness account exists in pool us-east-1_bAZ6jb6HP",
+        "command": "aws cognito-idp admin-get-user --user-pool-id us-east-1_bAZ6jb6HP --username harness-d2892d12d4@careervp.com",
+        "detail": "Enabled=true, UserStatus=CONFIRMED, sub=8428d4e8-d071-7088-a9c3-9e630806436b",
+        "id": "A6",
+        "observed": {
+          "email_verified": "false",
+          "enabled": true,
+          "status": "CONFIRMED"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "harness account has an active subscription",
+        "command": "aws dynamodb get-item --table-name careervp-users-table-devx --key '{\"pk\":{\"S\":\"USER#8428d4e8-...\"},\"sk\":{\"S\":\"SUBSCRIPTION#CURRENT\"}}'",
+        "detail": "status=active, plan=monthly, updated_at=2026-09-14T08:03:34.591505+00:00",
+        "id": "A7",
+        "observed": {
+          "plan": "monthly",
+          "status": "active"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "changeset_replacement_report.py flags protected types",
+        "command": "read scripts/ci/changeset_replacement_report.py; aws cloudformation list-stack-resources",
+        "detail": "PROTECTED_TYPES lists AWS::DynamoDB::Table; the stack contains 11 x AWS::DynamoDB::GlobalTable and 0 x AWS::DynamoDB::Table, so the DynamoDB auto-fail can never trigger",
+        "id": "A8",
+        "observed": {
+          "actual_table_type": "AWS::DynamoDB::GlobalTable",
+          "protected_types": [
+            "AWS::ApiGateway::RestApi",
+            "AWS::DynamoDB::Table",
+            "AWS::S3::Bucket",
+            "AWS::Cognito::UserPool"
+          ],
+          "tables_unprotected": 11
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "the four committed fixes have tests that fail without the fix",
+        "command": "git show <commit> -- <source> | git apply -R; uv run pytest <test>; git apply <patch>",
+        "detail": "4 of 4 RED when the source hunk is reverse-applied; tests untouched; tree restored and verified clean",
+        "id": "A9",
+        "observed": {
+          "results": [
+            {
+              "commit": "10de867",
+              "failing_test": "test_vpr_export_denies_cross_tenant_access",
+              "fix": "S0a",
+              "note": "fails via TypeError (MagicMock not JSON serializable) on the unscoped read path, not a clean assertion",
+              "source": "src/backend/careervp/handlers/export_handler.py",
+              "test": "tests/unit/test_export_handler.py",
+              "without_fix": "1 failed, 30 passed"
+            },
+            {
+              "assertion": "assert 200 == 404",
+              "commit": "ebe6af7",
+              "failing_test": "test_job_row_absent_denies_attacker_via_s3_fallback",
+              "fix": "S0b",
+              "source": "src/backend/careervp/handlers/vpr_status_handler.py",
+              "test": "tests/integration/test_s0b_vpr_status_s3_fallback_ownership.py",
+              "without_fix": "1 failed, 2 passed"
+            },
+            {
+              "commit": "f8b5321",
+              "failing_test": "test_k9_artifact_cleanup_lambda_has_jobs_table_env_var, test_k9_artifact_cleanup_lambda_can_read_write_jobs_table",
+              "fix": "K9",
+              "source": "infra/careervp/api_construct.py",
+              "test": "tests/infrastructure/test_k9_artifact_cleanup_env.py",
+              "without_fix": "2 failed"
+            },
+            {
+              "assertion": "assert 403 == 201",
+              "commit": "ce850d5",
+              "failing_test": "test_active_subscription_bypasses_exhausted_trial_on_create_job",
+              "fix": "quota",
+              "source": "src/backend/careervp/handlers/job_handler.py",
+              "test": "tests/unit/test_job_handler.py",
+              "without_fix": "1 failed, 28 passed"
+            }
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "P-05 suite attacks as a real authenticated tenant",
+        "command": "read src/backend/tests/integration/test_p05_cross_tenant_idor.py and p05_owner_check_registry.py",
+        "detail": "12 cases x 3 parametrized tests; owner-positive control present for every case; attacker uses distinct Cognito claims via seeding.authed_event",
+        "id": "A10",
+        "observed": {
+          "cases": 12,
+          "notes": [
+            "post-authorizer moto event, not a live Cognito login - correct unit for per-route ownership but not evidence about the authorizer",
+            "2 of 12 cases (gap.questions.get, company-research.get) accept 200 as a denial; documented partition-scoped defense, guarded only by the leaked_markers check"
+          ],
+          "owner_positive_control": "per case"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "NEW: devx tables are unmanaged by CloudFormation",
+        "command": "aws cloudformation list-stack-resources (root + 5 nested); grep AWS::DynamoDB infra/cdk.out/CareerVpCrudDevx.template.json",
+        "detail": "FALSE. All 11 devx tables are CFN-managed as AWS::DynamoDB::GlobalTable. preflight.py:366 queries of_type(\"AWS::DynamoDB::Table\") while the same file STATEFUL_TYPES (l.62-63) correctly lists both types. The single preflight FAIL is a false positive.",
+        "id": "A11",
+        "observed": {
+          "instrument_bug": "src/backend/scripts/preflight.py:366",
+          "review_change_py": "correct - STATEFUL_TYPES includes GlobalTable",
+          "tables_cfn_managed": 11,
+          "tables_total": 11,
+          "tables_unmanaged": 0
+        },
+        "status": "FAIL"
+      }
+    ],
+    "B": [
+      {
+        "claim": "backend suite, combined",
+        "command": "cd src/backend && uv run pytest -q --tb=no -p no:cacheprovider",
+        "detail": "606 failed, 1100 passed, 54 skipped, 4 xfailed, 53 warnings, 100 errors in 144.61s",
+        "id": "B1",
+        "observed": {
+          "errors": 100,
+          "failed": 606,
+          "passed": 1100,
+          "prediction": "HELD",
+          "seconds": 144.61,
+          "skipped": 54,
+          "xfailed": 4
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "backend suite, per directory",
+        "command": "per-directory loop from HANDOFF-01 Step 1",
+        "detail": "~1792 passed, 14 failed; reproduces the recorded baseline in all 8 directories",
+        "id": "B2",
+        "observed": {
+          "directories": {
+            "tests/e2e": {
+              "failed": 0,
+              "passed": 4,
+              "skipped": 21
+            },
+            "tests/infra": {
+              "failed": 0,
+              "passed": 34
+            },
+            "tests/infrastructure": {
+              "failed": 1,
+              "passed": 81,
+              "skipped": 1
+            },
+            "tests/integration": {
+              "failed": 11,
+              "passed": 185,
+              "skipped": 17
+            },
+            "tests/models": {
+              "failed": 0,
+              "passed": 18
+            },
+            "tests/regression": {
+              "failed": 2,
+              "passed": 37
+            },
+            "tests/security": {
+              "failed": 0,
+              "passed": 3
+            },
+            "tests/unit": {
+              "failed": 0,
+              "passed": 1430,
+              "skipped": 15,
+              "xfailed": 4
+            }
+          },
+          "prediction": "HELD"
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "frontend jest",
+        "command": "cd src/frontend && npx jest --config jest.config.ts",
+        "detail": "Test Suites: 85 passed, 85 total; Tests: 26 skipped, 429 passed, 455 total",
+        "id": "B3",
+        "observed": {
+          "failed": 0,
+          "passed": 429,
+          "prediction": "HELD",
+          "skipped": 26,
+          "suites": 85
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "frontend vitest",
+        "command": "npx vitest run --config vitest.config.ts",
+        "detail": "Test Files 67 passed (67); Tests 739 passed (739)",
+        "id": "B4",
+        "observed": {
+          "failed": 0,
+          "files": 67,
+          "passed": 739,
+          "prediction": "HELD"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "backend mypy --strict",
+        "command": "cd src/backend && uv run mypy careervp --strict",
+        "detail": "Success: no issues found in 137 source files",
+        "id": "B5",
+        "observed": {
+          "errors": 0,
+          "files": 137,
+          "prediction": "none recorded"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "backend ruff check",
+        "command": "cd src/backend && uv run ruff check .",
+        "detail": "All checks passed!",
+        "id": "B6",
+        "observed": {
+          "prediction": "none recorded",
+          "violations": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "frontend typecheck",
+        "command": "cd src/frontend && npm run typecheck",
+        "detail": "tsc --noEmit, no output, exit 0",
+        "id": "B7",
+        "observed": {
+          "errors": 0,
+          "prediction": "none recorded",
+          "side_effect": "rewrites tracked src/frontend/dist/tsconfig.tsbuildinfo"
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "cdk synth",
+        "command": "cd infra && uv sync && cdk synth",
+        "detail": "Successfully synthesized to infra/cdk.out; 1 AwsSolutions-COG2 MFA warning; 493/600 resources on CareerVpCrudDev",
+        "id": "B8",
+        "observed": {
+          "limit": 600,
+          "prediction": "none recorded",
+          "resources": 493,
+          "warnings": [
+            "AwsSolutions-COG2 user pool does not require MFA"
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "naming validation",
+        "command": "python src/backend/scripts/validate_naming.py --path infra --strict",
+        "detail": "validation passes, but the documented command does not run",
+        "id": "B9",
+        "observed": {
+          "documented_command_error": "command not found: python",
+          "documented_command_exit": 127,
+          "prediction": "none recorded",
+          "python3_exit": 0,
+          "python3_output_lines": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "preflight, current",
+        "command": "cd src/backend && make preflight",
+        "detail": "7 pass / 1 unknown / 1 fail (553 resources across 6 stacks)",
+        "id": "B10",
+        "observed": {
+          "correction": "that FAIL is the A11 false positive; true position is 8 PASS / 1 UNKNOWN / 0 FAIL",
+          "fail": 1,
+          "fail_premise": "tables exist and are managed",
+          "pass": 7,
+          "prediction": "HELD",
+          "unknown": 1,
+          "unknown_premise": "deployed commit is known (no DeployedGitSha output)"
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "cdk diff devx - what would a deploy change?",
+        "command": "cd infra && ENVIRONMENT=devx cdk diff CareerVpCrudDevx --context p26_rehome_features=true",
+        "detail": "No DynamoDB / S3 / Cognito / RestApi change of any kind. 31 Lambda code updates, 19 version-alias rotations, 5 nested TemplateURL updates, 1 IAM policy (the K9 fix), 1 new DeployedGitSha output.",
+        "id": "B11",
+        "observed": {
+          "changes": {
+            "AWS::CloudFormation::Stack": 5,
+            "AWS::IAM::Policy": 1,
+            "AWS::Lambda::Alias": 19,
+            "AWS::Lambda::Function": 31,
+            "AWS::Lambda::Version_added": 19,
+            "AWS::Lambda::Version_removed": 19
+          },
+          "conclusion": "handoff 03 B11 blocker is cleared",
+          "deletion_protection_on_all_tables": true,
+          "handoff_command_failed": "cdk diff CareerVpCrudDevx -> No stacks match the name(s); infra/app.py only instantiates devx under ENVIRONMENT=devx",
+          "method": "CDK created a real read-only change set, so Replacement data is CloudFormation-authoritative",
+          "new_outputs": {
+            "DeployedGitSha": "unstamped"
+          },
+          "note": "the unstamped output directly confirms W0.2 - create-changeset does not pass --context git_sha",
+          "stateful_changes": 0
+        },
+        "status": "PASS"
+      }
+    ],
+    "C": [
+      {
+        "claim": "which CareerVp stacks exist, status, last-updated",
+        "command": "aws cloudformation list-stacks filtered to CareerVp",
+        "detail": "3 root stacks + 10 nested",
+        "id": "C1",
+        "observed": {
+          "CareerVpCrudDev": {
+            "status": "UPDATE_COMPLETE",
+            "updated": "2026-07-30T10:26:55Z"
+          },
+          "CareerVpCrudDevx": {
+            "status": "UPDATE_COMPLETE",
+            "updated": "2026-08-08T08:20:44Z"
+          },
+          "CareerVpCrudStaging": {
+            "status": "UPDATE_COMPLETE",
+            "updated": "2026-04-12T17:07:51Z"
+          },
+          "CareerVpFrontend-Dev": {
+            "status": "UPDATE_COMPLETE",
+            "updated": "2026-06-28T20:19:12Z"
+          }
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "is CareerVpCrudStaging current or abandoned?",
+        "command": "aws cloudformation describe-stacks; aws lambda list-functions",
+        "detail": "ABANDONED. Every staging Lambda LastModified = 2026-04-12T17:0x. No DeployedGitSha output. 24 Lambdas vs devx 31.",
+        "id": "C2",
+        "observed": {
+          "both_runtime": "python3.13",
+          "devx_lambdas": 31,
+          "missing_from_staging": [
+            "careervp-ai-assist-lambda",
+            "careervp-artifact-cleanup-lambda",
+            "careervp-artifact-failure-handler-lambda",
+            "careervp-company-research-worker-lambda",
+            "careervp-cr-failure-handler-lambda",
+            "careervp-error-report-lambda",
+            "careervp-export-lambda"
+          ],
+          "note": "export-lambda is journey step J9; artifact-cleanup is the K9 fix target",
+          "staging_lambdas": 24
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "does a production stack exist?",
+        "command": "aws cloudformation list-stacks filtered to CareerVp",
+        "detail": "No. Expected: no.",
+        "id": "C3",
+        "observed": {
+          "production_stack": false
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "does GitHub environment production exist?",
+        "command": "gh api repos/:owner/:repo/environments/production",
+        "detail": "404 Not Found. Expected: 404.",
+        "id": "C4",
+        "observed": {
+          "environments_present": [
+            "deploy-dev",
+            "dev",
+            "devx",
+            "staging"
+          ],
+          "http_status": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "which make deploy workflows actually deploy vs no-op",
+        "command": "read each workflow; gh api repos/:owner/:repo/environments",
+        "detail": "6 of 10 reach a real deploy; 5 of those auto-deploy on a branch push with no human gate. The dev GitHub environment has protection_rules: [] and deployment_branch_policy: null, so environment: dev is not a gate.",
+        "id": "C5",
+        "observed": {
+          "auto_deploy_ungated": [
+            "company-research.yml",
+            "cover-letter.yml",
+            "cv-tailoring.yml",
+            "gap-analysis.yml",
+            "ui-upgrade-checks.yml",
+            "db-redesign-checks.yml"
+          ],
+          "dev_env_protection_rules": [],
+          "dispatch_only": [
+            "gap-remediation.yml",
+            "pr-serverless-service.yml",
+            "main-serverless-service.yml"
+          ],
+          "extra_findings": [
+            "main-serverless-service.yml declares environment: production, which does not exist; GitHub auto-creates a missing environment with no protection rules, so the only production path in the repo is ungated by construction (workflow_dispatch only)",
+            "gap-remediation.yml declares environment: gap-remediation, which also does not exist",
+            "db-redesign-checks.yml deploys to devx - the same stack make journey measures"
+          ],
+          "no_op": [
+            "deploy-staging.yml"
+          ]
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "do the devx tables have PITR?",
+        "command": "aws dynamodb describe-continuous-backups + describe-table per table",
+        "detail": "10 of 11 ENABLED. careervp-llm-cache-devx is DISABLED. All 11 have DeletionProtectionEnabled: true.",
+        "id": "C6",
+        "observed": {
+          "deletion_protection_all": true,
+          "note": "the plan says 10 tables; there are 11. llm-cache is not reached by a TABLE-suffixed env var so it never enters preflight wanted set.",
+          "pitr_disabled": [
+            "careervp-llm-cache-devx"
+          ],
+          "pitr_enabled": 10,
+          "tables": 11
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "log retention across Lambdas",
+        "command": "aws logs describe-log-groups per Lambda; grep retention= infra/careervp/",
+        "detail": "31 of 32 devx Lambdas have retentionInDays = 1. Only the CDK-internal BucketNotificationsHandler differs (None).",
+        "id": "C7",
+        "observed": {
+          "cdk_one_day_declarations": 34,
+          "cdk_one_week_declarations": 2,
+          "lambdas": 32,
+          "preflight_gap": "MIN_LOG_RETENTION_DAYS=7 is checked only against the API Gateway access log group (7d, passes); Lambda retention is not a preflight premise",
+          "premise_was": "gap-api is 1 day",
+          "reality": "every application Lambda is 1 day",
+          "retention_1_day": 31,
+          "retention_none": 1
+        },
+        "status": "FAIL"
+      }
+    ],
+    "D": [
+      {
+        "claim": "is Company Research reachable in the UI and covered by any test?",
+        "command": "find app -name page.tsx; grep router.push; grep -rln CompanyResearch tests/",
+        "detail": "Page exists and is reachable; 9 frontend unit/integration test files reference it. No e2e spec.",
+        "id": "D1",
+        "observed": {
+          "e2e_spec": false,
+          "nav": "app/applications/[id]/page.tsx:243 router.push(/applications/${jobId}/company-research)",
+          "page": "app/applications/[id]/company-research/page.tsx",
+          "unit_tests": [
+            "tests/ui/unit/CompanyResearchPage.test.tsx",
+            "tests/ui/integration/HubLayout.test.tsx"
+          ]
+        },
+        "status": "PASS"
+      },
+      {
+        "claim": "is Knowledge Base reachable and covered?",
+        "command": "grep -rln 'knowledge|Knowledge' --include='*.tsx' --include='*.ts' app components lib hooks; grep -rn knowledge_base infra/careervp/",
+        "detail": "Zero frontend presence: no route, page, component or test. knowledge_base_handler.py is referenced by nothing in infra/ - dead code. The only /knowledge-base route is GET -> company_research_func.",
+        "id": "D2",
+        "observed": {
+          "frontend_references": 0,
+          "handler_file": "src/backend/careervp/handlers/knowledge_base_handler.py",
+          "handler_routed": false,
+          "post_path_reachable": false,
+          "route": "api_construct.py:3512 (\"/knowledge-base\", \"GET\", self.company_research_func)"
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "is Hebrew/RTL functional?",
+        "command": "grep -rln \"detectLocale|locale === 'he'\" app; grep -i i18n package.json; grep lang= app/layout.tsx",
+        "detail": "A real hand-rolled implementation exists on 6 of 24 pages (?locale=he -> per-page TEXT tables + dir=rtl). No i18n dependency. app/layout.tsx:17 hardcodes lang=\"en\". Unit tests cover the he path; the only e2e case is a TODO stub.",
+        "id": "D3",
+        "observed": {
+          "e2e": "cv-center.spec.ts:179 test_hebrew_strings_rendered_when_locale_is_he - navigates, asserts nothing",
+          "html_lang": "en (hardcoded, never switches)",
+          "i18n_dependency": false,
+          "pages": [
+            "tailored-cvs",
+            "applications/new",
+            "gap-analysis",
+            "cv-center",
+            "cover-letters",
+            "billing"
+          ],
+          "pages_total": 24,
+          "pages_with_locale": 6,
+          "unit_test_files_covering_he": 10
+        },
+        "status": "PARTIAL"
+      },
+      {
+        "claim": "is the billing/trial/subscription flow covered end to end anywhere?",
+        "command": "npm run test:e2e = jest --selectProjects e2e; read tests/e2e/*.e2e.test.ts",
+        "detail": "No. The 5 jest e2e billing files carry 43 assertions, and every one asserts a value the same test stubbed via mockApi/mockStripe mockResolvedValue. No product code executes; DEV_API_BASE is never dialled.",
+        "id": "D4",
+        "observed": {
+          "files": {
+            "checkout-to-active.e2e.test.ts": {
+              "expects": 11,
+              "tests": 2
+            },
+            "invoice-past-due.e2e.test.ts": {
+              "expects": 6,
+              "tests": 2
+            },
+            "invoice-recovery.e2e.test.ts": {
+              "expects": 6,
+              "tests": 2
+            },
+            "subscription-cancellation.e2e.test.ts": {
+              "expects": 9,
+              "tests": 2
+            },
+            "upgrade-flow.e2e.test.ts": {
+              "expects": 11,
+              "tests": 2
+            }
+          },
+          "note": "a worse hollowness class than the Playwright specs - these read as finished and would score as the best-covered area by assertion count",
+          "tautological": true,
+          "total_assertions": 43
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "do Terms of Service / Privacy Policy pages exist?",
+        "command": "find src/frontend -type f | grep -iE 'terms|privacy|legal|tos'",
+        "detail": "Neither. No file under src/frontend matches terms|privacy|legal|tos (the 4 hits are ArtifactAutosave*).",
+        "id": "D5",
+        "observed": {
+          "privacy": false,
+          "terms": false
+        },
+        "status": "FAIL"
+      },
+      {
+        "claim": "is STRIPE_SECRET_KEY from a secret store, and is there a live/test guard?",
+        "command": "aws lambda get-function-configuration --function-name careervp-billing-lambda-devx; grep -rn STRIPE infra/ .github/",
+        "detail": "Neither. STRIPE_SECRET_KEY is set nowhere - not in the Lambda env, not in infra/, not in any workflow. No live/test guard exists anywhere. Deployed devx billing runs PAYMENT_PROVIDER=mock with placeholder price IDs.",
+        "id": "D6",
+        "observed": {
+          "deployed_payment_provider": "mock",
+          "failure_mode": "stripe_provider.py:223 raises PAYMENT_PROVIDER_CONFIGURATION_ERROR - fails closed",
+          "from_secret_store": false,
+          "live_test_guard": false,
+          "price_ids": {
+            "monthly": "price_placeholder_monthly",
+            "quarterly": "price_placeholder_quarterly"
+          },
+          "stripe_secret_key_set": false,
+          "webhook_secret_source": "/careervp/devx/payment-provider-webhook-secret (SSM - the pattern exists, it was just not applied to the API key)"
+        },
+        "status": "FAIL"
+      }
+    ]
+  },
+  "stack": "CareerVpCrudDevx",
+  "timestamp": "2026-09-20T08:25:17Z"
+}

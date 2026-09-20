@@ -336,3 +336,143 @@ contain:
    say so plainly — it means journey step J5 is broken *and already proven
    broken by tests nobody was running*, which is a materially different starting
    position for the deploy track than the program plan currently assumes.
+
+---
+
+# Appended 2026-09-20 by handoff 00 — what the sweep already settled
+
+Handoff 00 (`docs/handoff/2026-09-20-HANDOFF-00-measurement-sweep.md`) ran after
+this document was written. Proof:
+`docs/evidence/sweep-00-20260920T082517-b587127.md` / `.json`,
+`tools/proof-harness` @ `b587127`, `git_dirty: false`.
+
+**Nothing in this handoff's premise is refuted. Its scope stands unchanged.**
+The work below is already done — do not repeat it.
+
+## Step 0 rows the sweep already confirmed
+
+| # | Predicted | Sweep observed | Do you still need to run it? |
+|---|---|---|---|
+| 0.6 | `10` files reference `make deploy` | **10** — confirmed, and each one adjudicated (see below) | **No** |
+
+## Step 1 — reproduced in full. Do not re-run it.
+
+The sweep ran both the combined and the per-directory baselines and reproduced
+your recorded numbers **exactly, to the digit**, in all eight directories:
+
+```
+uv run pytest -q --tb=no -p no:cacheprovider
+→ 606 failed, 1100 passed, 54 skipped, 4 xfailed, 53 warnings, 100 errors in 144.61s
+
+tests/unit               1430 passed, 15 skipped, 4 xfailed, 0 failed
+tests/integration        11 failed, 185 passed, 17 skipped
+tests/infrastructure     1 failed, 81 passed, 1 skipped
+tests/e2e                4 passed, 21 skipped
+tests/models             18 passed
+tests/regression         2 failed, 37 passed
+tests/security           3 passed
+tests/infra              34 passed
+```
+
+**606 combined → 14 isolated, confirmed.** Start at Step 1b (classifying the 14).
+Your proof obligation "combined-run baseline reproduces" is discharged — cite
+this sweep rather than re-running 144 seconds of it.
+
+## Rows the sweep did NOT cover — still yours
+
+**0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8 were not run.** They are collection-time and
+config-time measurements specific to your task and remain in scope. In
+particular 0.1 and 0.5 are still the two that can change the shape of your work.
+
+## Four things the sweep found that change your working assumptions
+
+**1. `mypy --strict`, `ruff`, `tsc --noEmit` and `cdk synth` all pass — today.**
+
+```
+uv run mypy careervp --strict  → Success: no issues found in 137 source files
+uv run ruff check .            → All checks passed!
+npm run typecheck              → exit 0, no output
+cdk synth                      → Successfully synthesized
+```
+
+Nobody had ever run these. They are clean, which means **Step 6 is working
+against a green baseline** — any redness `filterwarnings` or `pytest-randomly`
+produces is genuinely theirs, not pre-existing noise. It also means your
+per-directory CI job in Step 3 can safely add mypy/ruff/typecheck steps without
+importing a backlog.
+
+**2. You cannot produce a `git_dirty: false` proof after running the checks.**
+
+This is new, structural, and it will bite you at commit time:
+
+```
+M docs/beta/evidence/I2_persistence/persistence-roundtrip-report.json
+M docs/beta/evidence/I3_auth/auth-abuse-matrix.json
+M src/frontend/dist/tsconfig.tsbuildinfo
+```
+
+`tests/integration/test_l2_auth_integration.py` and `test_l1_phase_integration.py`
+rewrite tracked evidence files; `npm run typecheck` rewrites a **committed build
+artifact**. So the sequence "run the mandatory checks → write the proof" always
+yields `git_dirty: true`, which `HARNESS.md` calls non-reproducible.
+
+This is why the 09-14 journey proof was dirty. It is not carelessness.
+
+**Suggested — cheap, in scope, and it unblocks your own proof obligation:**
+gitignore `src/frontend/dist/tsconfig.tsbuildinfo`, and point the two evidence
+writers at a temp path. Otherwise: run checks, `git checkout --` those three
+paths, then write the proof.
+
+**3. Your Step 5 premise is correct but understated.** The sweep did not
+enumerate the skips, but it did find the same pathology one level up: five jest
+"e2e" billing files (`tests/e2e/*.e2e.test.ts`, 43 assertions) are **pure
+tautologies** — `mockApi.post.mockResolvedValue({status: 200})` followed by
+`expect(response.status).toBe(200)`. No product code runs.
+
+Relevant to you because **`npm run test:e2e` is what runs them**
+(`jest --selectProjects e2e`), and Step 4 adds frontend jobs to PR validation.
+Wiring `test:e2e` into the gate would add 43 green assertions that prove
+nothing — the exact hazard your own plan warns about for Playwright.
+**Recommendation: wire `test:unit`, `test:integration` and vitest in Step 4;
+leave `test:e2e` out and hand the tautology cluster to handoff 02.**
+
+Note also that the two orphaned files you un-orphan in Step 2
+(`application-hub-flow.e2e.test.ts`, `artifact-viewers.e2e.test.ts`) live in that
+same directory and are picked up by that same `--selectProjects e2e` project.
+Check whether un-orphaning them changes what `npm run test:e2e` collects.
+
+**4. `CLAUDE.md`'s naming-check command does not run.**
+
+```
+$ python src/backend/scripts/validate_naming.py --path infra --strict
+command not found: python          (exit 127)
+$ python3 src/backend/scripts/validate_naming.py --path infra --strict
+                                   (exit 0, no output — passes)
+```
+
+There is no `python` on this machine, only `python3`. If you add this to CI or a
+pre-commit chain, use `uv run python` or `python3`. In a `&&` chain the current
+form is a hard stop; in a `;` chain it is a silently skipped check.
+
+## For your handoff-02 draft — carry these forward
+
+The sweep found these and deliberately did not fix them. They are not yours
+either, but handoff 02 should not rediscover them:
+
+- **`preflight.py:366` queries `AWS::DynamoDB::Table` while every table in this
+  project is `AWS::DynamoDB::GlobalTable`.** The "10 of 10 tables unmanaged by
+  CloudFormation" FAIL is a **false positive** — all 11 devx tables are
+  CFN-managed, retained and deletion-protected. The same file's own
+  `STATEFUL_TYPES` constant (l.62-63) has both types; only line 366 is wrong.
+- **`scripts/ci/changeset_replacement_report.py` has the identical blind spot**,
+  and it is load-bearing for the deploy gate — the DynamoDB auto-fail can never
+  trigger.
+- **31 of 32 devx Lambdas have 1-day log retention** (34 `ONE_DAY` declarations
+  in `api_construct.py`, 2 `ONE_WEEK` in the whole tree).
+- **`src/backend/careervp/handlers/knowledge_base_handler.py` is routed to
+  nothing** — dead code; `/knowledge-base GET` is served by
+  `company_research_func`.
+- Five of the ten `make deploy` workflows **auto-deploy on a branch push with no
+  human gate**, because the `dev` GitHub environment has
+  `protection_rules: []`. `db-redesign-checks.yml` auto-deploys to **devx** —
+  the stack `make journey` measures.
