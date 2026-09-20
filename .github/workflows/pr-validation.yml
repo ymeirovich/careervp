@@ -90,6 +90,51 @@ jobs:
           done
           exit $fail
 
+  jest-frontend:
+    name: Jest (unit + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+      - name: Run Jest unit
+        run: cd src/frontend && npm run test:unit
+        env:
+          CI: true
+      - name: Run Jest integration
+        run: cd src/frontend && npm run test:integration
+        env:
+          CI: true
+      # test:e2e (jest --selectProjects e2e) is deliberately not run here: it's
+      # 5 billing files that are pure tautologies (mockApi.post.mockResolvedValue
+      # -> expect(response.status).toBe(200), no product code runs) plus the two
+      # real Playwright specs handoff-01 Step 2 renamed out of this project.
+      # Wiring it in would add assertions that prove nothing to the gate — see
+      # docs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md and the sweep-00
+      # evidence it cites. Left for handoff 02.
+
+  vitest-frontend:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+      - name: Run Vitest
+        run: cd src/frontend && npx vitest run --config vitest.config.ts --reporter verbose
+        env:
+          CI: true
+
   deployed-parity:
     name: Deployed Parity Gate (pre_merge)
     runs-on: ubuntu-latest

@@ -48,10 +48,10 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests
-        run: npm run test:unit -- --passWithNoTests
+        run: npm run test:unit
 
       - name: Integration tests
-        run: npm run test:integration -- --passWithNoTests
+        run: npm run test:integration
 
       - name: Build Next.js SSR bundle for Amplify
         run: npm run build
