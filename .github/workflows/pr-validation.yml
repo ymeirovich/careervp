@@ -83,13 +83,28 @@ jobs:
             tests/security
             tests/infra
           )
+          # A directory can be absent (pytest exits 4) or present but empty
+          # (pytest exits 5). Neither is a test failure, but neither is a pass
+          # either — both are UNKNOWN (docs/HARNESS.md) and are annotated so
+          # coverage can never silently shrink. tests/infra, for example, does
+          # not exist on main; without this the whole gate would exit non-zero
+          # on every PR for a reason unrelated to the code under review.
           for d in "${DIRS[@]}"; do
+            if [ ! -d "$d" ]; then
+              echo "::warning title=Test directory absent::$d is not present in this checkout - 0 tests ran from it"
+              continue
+            fi
             echo "::group::$d"
-            # -rs prints the reason for every skip. A skipped check is an
-            # UNKNOWN, not a PASS (docs/HARNESS.md), so it must be readable in
-            # the log rather than collapsing to a bare 's'.
-            uv run pytest "$d" -q --tb=short -rs || fail=1
+            # -rs prints the reason for every skip, so an UNKNOWN cannot read
+            # as a PASS in the log.
+            rc=0
+            uv run pytest "$d" -q --tb=short -rs || rc=$?
             echo "::endgroup::"
+            if [ "$rc" -eq 5 ]; then
+              echo "::warning title=No tests collected::$d exists but collected 0 tests"
+            elif [ "$rc" -ne 0 ]; then
+              fail=1
+            fi
           done
           exit $fail
 
