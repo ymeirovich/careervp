@@ -3,7 +3,6 @@ LLM Router unit tests per docs/specs/00-llm-router.md:14 test coverage.
 """
 
 import json
-import os
 from time import monotonic
 from unittest.mock import MagicMock, patch
 
@@ -94,31 +93,26 @@ class TestTaskMode:
 class TestLLMRouter:
     """Test LLMRouter core functionality with mocked Anthropic client."""
 
-    def setup_method(self):
-        """Reset singleton before each test."""
-        llm_client_module._llm_router = None
-        # Clear env vars that might interfere
-        env_to_clear = ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY_SSM_PARAM']
-        self.original_env = {k: os.environ.get(k) for k in env_to_clear}
-        for k in env_to_clear:
-            os.environ.pop(k, None)
+    @pytest.fixture(autouse=True)
+    def _isolate_router_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Reset the singleton and clear the API-key env vars for each test.
 
-    def teardown_method(self):
-        """Restore env vars after each test."""
-        for k, v in self.original_env.items():
-            if v is not None:
-                os.environ[k] = v
-            else:
-                os.environ.pop(k, None)
+        monkeypatch.delenv restores the prior value on teardown, so this cannot
+        leak a deletion into the rest of the session the way an unconditional
+        os.environ.pop() cleanup can.
+        """
+        llm_client_module._llm_router = None
+        monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+        monkeypatch.delenv('ANTHROPIC_API_KEY_SSM_PARAM', raising=False)
 
     def test_init_with_explicit_api_key(self):
         """Router should use explicit API key."""
         router = LLMRouter(api_key='explicit-key')
         assert router._api_key == 'explicit-key'
 
-    def test_init_with_env_var(self):
+    def test_init_with_env_var(self, monkeypatch: pytest.MonkeyPatch):
         """Router should fall back to environment variable."""
-        os.environ['ANTHROPIC_API_KEY'] = 'env-key'
+        monkeypatch.setenv('ANTHROPIC_API_KEY', 'env-key')
         router = LLMRouter()
         assert router._api_key == 'env-key'
 
@@ -219,9 +213,9 @@ class TestLLMRouter:
             assert result.success is False
             assert result.code == ResultCode.INTERNAL_ERROR
 
-    def test_singleton_pattern(self):
+    def test_singleton_pattern(self, monkeypatch: pytest.MonkeyPatch):
         """get_llm_router should return singleton instance."""
-        os.environ['ANTHROPIC_API_KEY'] = 'test-key'
+        monkeypatch.setenv('ANTHROPIC_API_KEY', 'test-key')
 
         with patch.object(Anthropic, '__init__', return_value=None):
             with patch.object(Anthropic, 'messages', create=MagicMock()):

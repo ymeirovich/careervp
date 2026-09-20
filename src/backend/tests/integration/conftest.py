@@ -31,39 +31,22 @@ def _safe_stack_output(output_name: str, env_key: str, default_value: str) -> st
 
 @pytest.fixture(scope='module', autouse=True)
 def init():
-    keys = [
-        POWERTOOLS_SERVICE_NAME,
-        POWER_TOOLS_LOG_LEVEL,
-        'REST_API',
-        'ROLE_ARN',
-        'CONFIGURATION_APP',
-        'CONFIGURATION_ENV',
-        'CONFIGURATION_NAME',
-        'CONFIGURATION_MAX_AGE_MINUTES',
-        'AWS_DEFAULT_REGION',
-        'TABLE_NAME',
-        'IDEMPOTENCY_TABLE_NAME',
-    ]
-    previous = {key: os.environ.get(key) for key in keys}
-    os.environ[POWERTOOLS_SERVICE_NAME] = SERVICE_NAME
-    os.environ[POWER_TOOLS_LOG_LEVEL] = 'DEBUG'
-    os.environ['REST_API'] = 'https://www.ranthebuilder.cloud/api'
-    os.environ['ROLE_ARN'] = 'arn:partition:service:region:account-id:resource-type:resource-id'
-    os.environ['CONFIGURATION_APP'] = SERVICE_NAME
-    os.environ['CONFIGURATION_ENV'] = ENVIRONMENT
-    os.environ['CONFIGURATION_NAME'] = CONFIGURATION_NAME
-    os.environ['CONFIGURATION_MAX_AGE_MINUTES'] = '5'
-    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'  # used for appconfig mocked boto calls
-    os.environ['TABLE_NAME'] = _safe_stack_output(TABLE_NAME_OUTPUT, 'TABLE_NAME', 'local-careervp-users')
-    os.environ['IDEMPOTENCY_TABLE_NAME'] = _safe_stack_output(IDEMPOTENCY_TABLE_NAME_OUTPUT, 'IDEMPOTENCY_TABLE_NAME', 'local-careervp-idempotency')
-    try:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv(POWERTOOLS_SERVICE_NAME, SERVICE_NAME)
+        mp.setenv(POWER_TOOLS_LOG_LEVEL, 'DEBUG')
+        mp.setenv('REST_API', 'https://www.ranthebuilder.cloud/api')
+        mp.setenv('ROLE_ARN', 'arn:partition:service:region:account-id:resource-type:resource-id')
+        mp.setenv('CONFIGURATION_APP', SERVICE_NAME)
+        mp.setenv('CONFIGURATION_ENV', ENVIRONMENT)
+        mp.setenv('CONFIGURATION_NAME', CONFIGURATION_NAME)
+        mp.setenv('CONFIGURATION_MAX_AGE_MINUTES', '5')
+        mp.setenv('AWS_DEFAULT_REGION', 'us-east-1')  # used for appconfig mocked boto calls
+        mp.setenv('TABLE_NAME', _safe_stack_output(TABLE_NAME_OUTPUT, 'TABLE_NAME', 'local-careervp-users'))
+        mp.setenv(
+            'IDEMPOTENCY_TABLE_NAME',
+            _safe_stack_output(IDEMPOTENCY_TABLE_NAME_OUTPUT, 'IDEMPOTENCY_TABLE_NAME', 'local-careervp-idempotency'),
+        )
         yield
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
 
 
 @pytest.fixture(scope='module', autouse=True)

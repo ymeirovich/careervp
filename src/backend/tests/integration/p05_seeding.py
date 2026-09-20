@@ -15,12 +15,12 @@ Schemas verified against the working tree 2026-07-24:
 from __future__ import annotations
 
 import contextlib
-import os
 import uuid
 from typing import Any, Generator
 from unittest.mock import MagicMock
 
 import boto3
+import pytest
 
 MAIN_TABLE = 'p05-main-table'
 ARTIFACTS_TABLE = 'p05-artifacts-table'
@@ -64,16 +64,16 @@ def table_env() -> dict[str, str]:
 
 @contextlib.contextmanager
 def patched_env(env: dict[str, str]) -> Generator[None, None, None]:
-    previous = {k: os.environ.get(k) for k in env}
-    os.environ.update(env)
-    try:
+    """Apply ``env`` for the duration of the block, restoring prior values on exit.
+
+    Uses pytest's MonkeyPatch so a failure partway through the setenv loop still
+    unwinds the keys already applied; the previous hand-rolled snapshot/restore
+    only unwound once the whole block had been entered.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        for key, value in env.items():
+            mp.setenv(key, value)
         yield
-    finally:
-        for key, old in previous.items():
-            if old is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = old
 
 
 def _pk_sk_table(ddb: Any, name: str, pk: str, sk: str) -> Any:
