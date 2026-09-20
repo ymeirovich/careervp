@@ -7,7 +7,6 @@ Per docs/specs/01-cv-parser.md and CLAUDE.md patterns.
 
 import base64
 import json
-import os
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -25,31 +24,27 @@ _VALID_CV_TEXT = (
 
 
 @pytest.fixture(scope='function', autouse=True)
-def aws_env_vars():
-    """Set up environment variables for moto and Lambda Powertools."""
-    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
-    os.environ['AWS_SECURITY_TOKEN'] = 'testing'
-    os.environ['AWS_SESSION_TOKEN'] = 'testing'
-    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
-    os.environ['POWERTOOLS_SERVICE_NAME'] = 'careervp-test'
-    os.environ['LOG_LEVEL'] = 'DEBUG'
-    os.environ['POWERTOOLS_TRACE_DISABLED'] = 'true'
-    os.environ['TABLE_NAME'] = 'test-users-table'
-    os.environ['CV_BUCKET_NAME'] = 'test-cv-bucket'
-    os.environ['IDEMPOTENCY_TABLE_NAME'] = 'test-idempotency-table'
-    yield
-    # Cleanup
-    for key in [
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY',
-        'AWS_SECURITY_TOKEN',
-        'AWS_SESSION_TOKEN',
-        'TABLE_NAME',
-        'CV_BUCKET_NAME',
-        'IDEMPOTENCY_TABLE_NAME',
-    ]:
-        os.environ.pop(key, None)
+def aws_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set up environment variables for moto and Lambda Powertools.
+
+    Uses monkeypatch so every key is restored to its prior value on teardown.
+    A plain ``os.environ.pop()`` cleanup here deleted the baseline AWS
+    credentials that tests/conftest.py sets at import time, leaving them unset
+    for the remainder of the session — which made 23 later tests in tests/unit
+    reach real AWS and fail with NoCredentialsError on any machine without
+    ambient credentials. See docs/handoff/2026-09-20-HANDOFF-04-*.md.
+    """
+    monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'testing')
+    monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'testing')
+    monkeypatch.setenv('AWS_SECURITY_TOKEN', 'testing')
+    monkeypatch.setenv('AWS_SESSION_TOKEN', 'testing')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+    monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
+    monkeypatch.setenv('LOG_LEVEL', 'DEBUG')
+    monkeypatch.setenv('POWERTOOLS_TRACE_DISABLED', 'true')
+    monkeypatch.setenv('TABLE_NAME', 'test-users-table')
+    monkeypatch.setenv('CV_BUCKET_NAME', 'test-cv-bucket')
+    monkeypatch.setenv('IDEMPOTENCY_TABLE_NAME', 'test-idempotency-table')
 
 
 @pytest.fixture
