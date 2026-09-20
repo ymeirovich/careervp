@@ -85,7 +85,10 @@ jobs:
           )
           for d in "${DIRS[@]}"; do
             echo "::group::$d"
-            uv run pytest "$d" -q --tb=short || fail=1
+            # -rs prints the reason for every skip. A skipped check is an
+            # UNKNOWN, not a PASS (docs/HARNESS.md), so it must be readable in
+            # the log rather than collapsing to a bare 's'.
+            uv run pytest "$d" -q --tb=short -rs || fail=1
             echo "::endgroup::"
           done
           exit $fail
