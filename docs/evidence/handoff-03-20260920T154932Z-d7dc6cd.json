@@ -105,7 +105,7 @@
     "no_drift": "0.1 and 0.7 were expected to drift if anyone had added tests. Neither drifted; nothing landed on the branch between 9134ff8 and 8e8c9cf except the handoff-03 document itself."
   },
   "step1_real_actions_run": {
-    "status": "PARTIALLY PAID — a real Actions run was observed for the first time in this chain, but NOT the one the handoff asked for. The reason is measured, not guessed.",
+    "status": "PAID. After the proof file's first draft, the operator authorised clearing the blocker a second way: PR #221 was retargeted onto a pinned base branch (`ci/proof-base` at 8013618, the merge-base with main). Base is a strict ancestor of HEAD, so the PR became MERGEABLE by construction, GitHub built the merge ref, and pr-validation.yml ran for the first time in this chain.",
     "step1a_push_blocker": {
       "resolution_chosen_by_user": "Allow via GitHub's unblock URL (the web flow). Rewrite-history was offered and declined.",
       "blocker_reproduced": "Identical to handoff 02's record: GH013, Amazon AWS Access Key ID, commit 51129b1c3bcf1c15457d617a1807ed5823db5269, path docs/evidence/astra-pass-b/iam-authorization-details.json:15.",
@@ -160,6 +160,131 @@
       },
       "failure_captured_verbatim": "Found 23 known vulnerabilities in 4 packages — anyio 4.12.1 (CVE-2026-63374, CVE-2026-64847 -> 4.14.2); cryptography 46.0.5 (PYSEC-2026-35 -> 46.0.6, PYSEC-2026-36 -> 46.0.7, PYSEC-2026-3552 -> 50.0.0, PYSEC-2026-3553 -> 49.0.0, PYSEC-2026-3554 -> 49.0.0, GHSA-537c-gmf6-5ccf -> 48.0.1); pypdf 6.14.2 (PYSEC-2026-3655/3656 -> 6.15.0, PYSEC-2026-3910/3911 -> 6.16.1, PYSEC-2026-3912 -> 6.15.0, PYSEC-2026-3913 -> 6.16.0); soupsieve 2.8.4 (CVE-2026-85999, CVE-2026-86000 -> 2.9.0). ##[error]Process completed with exit code 1.",
       "note": "NEW finding. No prior handoff or sweep recorded that the only workflow which runs on a branch push is red. This is a real observed CI result and it is unrelated to the pytest gate."
+    },
+    "the_fix_that_paid_it": [
+      {
+        "insight": "The handoff said `gh pr create --base main`, which conflated two goals: (a) observe the gate run, (b) get the gate into production. Goal (a) never required main. A PR needs a buildable merge ref, not a particular base.",
+        "method": [
+          "git push origin 8013618f8b730c70ba0102954a91ed7ea50af95b:refs/heads/ci/proof-base",
+          "gh pr edit 221 --base ci/proof-base   -> mergeable flipped CONFLICTING -> MERGEABLE, files 768",
+          "Retargeting alone did NOT fire the workflow: it emits `pull_request` action `edited`, and pr-validation.yml listens on types [opened, synchronize, reopened].",
+          "gh pr close 221 && gh pr reopen 221   -> `reopened` -> PR Validation run 35524435480 started."
+        ],
+        "cost": "Under five minutes. No merge, no rebase, no SHA rewrite, no main contamination, nothing merged."
+      }
+    ],
+    "observed_pr_validation_run": {
+      "run_id": 35524435480,
+      "workflow": "PR Validation (pr-validation.yml)",
+      "event": "pull_request (reopened)",
+      "conclusion": "failure",
+      "jobs": {
+        "Ruff Lint": "success",
+        "Mypy Type Check": "success",
+        "Jest (unit + integration)": "success",
+        "Vitest": "success",
+        "CDK Synth": "success",
+        "Evidence Integrity Gate (pre_merge)": "success",
+        "Deployed Parity Gate (pre_merge)": "success",
+        "Pytest": "FAILURE — 3 tests, all in tests/unit"
+      },
+      "group_marker_count": {
+        "obligation": "gh run view <id> --log | grep -c '::group::tests/'  -> expect 8",
+        "observed": 8,
+        "note": "The raw job log renders the marker as `##[group]tests/...`, not the literal `::group::`. The obligation's exact grep returns 0 against an API-fetched log; grep -c '##\\[group\\]tests/' returns 8. The obligation is MET — the command in the handoff needed adjusting for how GitHub renders the log, which is itself worth recording for handoff 04.",
+        "directories_seen": [
+          "tests/unit",
+          "tests/integration",
+          "tests/infrastructure",
+          "tests/e2e",
+          "tests/models",
+          "tests/regression",
+          "tests/security",
+          "tests/infra"
+        ]
+      },
+      "frontend_counts": {
+        "obligation": "real collected test counts, not '0 tests found'",
+        "jest_unit": "Test Suites: 23 passed, 23 total | Tests: 149 passed, 149 total",
+        "jest_integration": "Test Suites: 18 passed, 18 total | Tests: 87 passed, 87 total",
+        "vitest": "Test Files 67 passed (67) | Tests 739 passed (739)",
+        "verdict": "MET"
+      },
+      "per_directory_ci_vs_local": [
+        {
+          "dir": "tests/unit",
+          "ci": "3 failed, 1427 passed, 15 skipped, 4 xfailed",
+          "local": "1430 passed, 15 skipped, 4 xfailed",
+          "match": false
+        },
+        {
+          "dir": "tests/integration",
+          "ci": "193 passed, 11 skipped, 7 xfailed",
+          "local": "193 passed, 11 skipped, 7 xfailed",
+          "match": true
+        },
+        {
+          "dir": "tests/infrastructure",
+          "ci": "82 passed, 1 skipped",
+          "local": "82 passed, 1 skipped",
+          "match": true
+        },
+        {
+          "dir": "tests/e2e",
+          "ci": "4 passed, 21 skipped",
+          "local": "4 passed, 21 skipped",
+          "match": true
+        },
+        {
+          "dir": "tests/models",
+          "ci": "18 passed",
+          "local": "18 passed",
+          "match": true
+        },
+        {
+          "dir": "tests/regression",
+          "ci": "294 passed, 1 xfailed",
+          "local": "294 passed, 1 xfailed",
+          "match": true
+        },
+        {
+          "dir": "tests/security",
+          "ci": "3 passed",
+          "local": "3 passed",
+          "match": true
+        },
+        {
+          "dir": "tests/infra",
+          "ci": "34 passed",
+          "local": "34 passed",
+          "match": true
+        }
+      ]
+    },
+    "THE_FINDING_THE_SUITE_IS_NOT_HERMETIC": {
+      "headline": "Handoff 02's 0 failed / 0 errors is REAL but MACHINE-DEPENDENT. Seven of eight directories match CI exactly. tests/unit does not: 3 tests pass locally only because the developer machine supplies state CI does not.",
+      "failures_verbatim": [
+        "FAILED tests/unit/infra/test_p03_api_surface.py::test_cdk_synth_has_no_api_gateway_resource_named_api - AssertionError: P-03: infra/cdk.out not found at /home/runner/work/car...",
+        "FAILED tests/unit/test_l3_state_recovery.py::TestArtifactsCompletedRecovery::test_artifacts_completed_recovery - botocore.exceptions.NoCredentialsError: Unable to locate credentials",
+        "FAILED tests/unit/test_l3_state_recovery.py::TestArtifactsGeneratingRecovery::test_artifacts_generating_recovery - botocore.exceptions.NoCredentialsError: Unable to locate credentials"
+      ],
+      "two_distinct_causes": {
+        "ambient_aws_credentials": "test_l3_state_recovery.py makes real boto3 calls with no moto/mock. It passes on any machine with credentials configured and fails anywhere else. This is a unit test reaching the network.",
+        "local_build_artifact": "test_p03_api_surface.py asserts on infra/cdk.out, a directory produced by a prior `cdk synth`. It is not in git and CI never creates it, so the test is effectively skipped-by-failure in CI and passes locally only as a side effect of someone having synthesised."
+      },
+      "why_this_matters": "The chain's headline number — 0 failed / 0 errors — has been quoted across three handoffs as though it were a property of the code. It is a property of the code PLUS this laptop. Any CI gate, any new contributor, and any fresh clone sees 3 failures. This was invisible until the gate actually ran, which is the entire argument for reading the run rather than the YAML.",
+      "corroborated_independently": "refactoring-validation.yml's Backend Tests job (run 35524435461) ran `uv run pytest tests/unit/ -v` with NO AWS env at all and reported 22 failed, 1408 passed — a superset, with NoCredentialsError again the dominant cause. pr-validation.yml sets AWS_REGION/AWS_DEFAULT_REGION but supplies no credentials, which is why it sees 3 rather than 22."
+    },
+    "other_workflows_observed_on_the_pr": {
+      "CDK Diff Comment": "success",
+      "Infra Tests": "success",
+      "Security Audit": "failure — the 23 dependency CVEs recorded above",
+      "Refactoring Validation": {
+        "conclusion": "failure",
+        "Backend Tests": "22 failed, 1408 passed, 15 skipped, 4 xfailed — no AWS env configured in this job at all",
+        "Infra Spec Consistency": "FileNotFoundError: [Errno 2] No such file or directory: 'infra/careervp/dynamodb_stack.py' — this gate references a file that does not exist, so it has been failing on structure, not on findings. NEW finding.",
+        "Phase Spec Consistency / CDK Validation / Spec Validation": "success"
+      }
     }
   },
   "step2_w5_deploy_gating": {
@@ -386,21 +511,21 @@
       "command": "gh run view <id> --log | grep -c '::group::tests/'",
       "before": "never run",
       "target": "8",
-      "result": "NOT MET — and the reason is measured. pr-validation.yml produced zero runs because PR #221 is CONFLICTING and GitHub cannot build its merge ref. Locally the same 8-directory loop runs 0 failed / 0 errors (Step 0.7)."
+      "result": "MET. PR Validation run 35524435480 emitted all 8 directory groups. NOTE: the log renders them as `##[group]tests/...`; the handoff's literal `::group::` grep returns 0 against an API-fetched log."
     },
     {
       "claim": "CI ran the frontend suites",
       "command": "the Jest/Vitest job log",
       "before": "never run",
       "target": "real collected counts",
-      "result": "NOT MET — same single cause."
+      "result": "MET. Jest unit 23 suites/149 tests, Jest integration 18 suites/87 tests, Vitest 67 files/739 tests. All passing, all real counts."
     },
     {
       "claim": "The PR gate is green",
       "command": "gh pr checks",
       "before": "unknown",
       "target": "all required checks pass, or the failure captured verbatim",
-      "result": "MEASURED AND CAPTURED. Five checks reported, all from security.yml via the push event: auth-enforcement/code-security/iac-security/node-security pass, python-security FAILS on 23 dependency CVEs (verbatim output recorded above). Zero pr-validation checks exist to be green or red."
+      "result": "NOT GREEN, captured verbatim. 7 of 8 pr-validation jobs pass; Pytest fails on exactly 3 tests/unit tests, all of which pass locally. Causes identified: 2x NoCredentialsError (real AWS calls in a unit test) and 1x missing infra/cdk.out (local build artifact). See THE_FINDING_THE_SUITE_IS_NOT_HERMETIC."
     },
     {
       "claim": "dev environment gating",
@@ -472,8 +597,34 @@
   },
   "what_success_looked_like_vs_what_happened": {
     "predicted": "Clear push protection, push, open a PR, read 8 ::group:: markers and real Jest/Vitest counts out of a green pr-validation run.",
-    "happened": "Push protection was cleared and the push succeeded. The PR opened. pr-validation.yml did not run at all — not red, not green, absent — because a single conflicting markdown file prevents GitHub from building the PR's merge ref. The only workflow that did run, security.yml, was red on dependency CVEs that no prior handoff had recorded.",
-    "the_gap_is_the_finding": "The plan's rule says a prediction that misses means the model of the system was wrong. It was: 'the CI gate is unverified' was treated as 'nobody has pushed yet'. It was actually 'the gate cannot fire on this PR'. Those need different fixes, and only reading the run distinguished them.",
-    "honest_scope": "No product code was touched. Three commits, each one concern. The backend suite is unchanged at 2118 tests, 0 failed / 0 errors. Two of the three deferred items from this handoff are fully paid (W5 gating, evidence churn); the CI observation is paid down from 'blocked, cause unknown' to 'blocked, cause measured and one file wide'."
+    "happened": "Push protection was cleared and the push succeeded. The PR opened against main and CONFLICTED, so pr-validation.yml did not run at all. Retargeting the PR onto a pinned ancestor base made it MERGEABLE by construction and a close/reopen fired the gate. It then ran: 8 directory groups, real Jest and Vitest counts, and a Pytest failure on exactly 3 tests that pass on this laptop and cannot pass anywhere else.",
+    "the_gap_is_the_finding": "Two model errors, not one. First: 'the CI gate is unverified' was read as 'nobody has pushed yet' when it was actually 'the gate cannot fire on this PR'. Second, and larger: '0 failed / 0 errors' was read as a property of the code when it is a property of the code plus this machine's AWS credentials and a stale infra/cdk.out. Both were invisible from the YAML and both surfaced within minutes of the gate actually running.",
+    "honest_scope": "No product code was touched. Four commits, each one concern. All three of the handoff's steps are now paid: Step 1 observed a real run, Step 2 closed the two ungated auto-deployers, Step 3 removed both sources of working-tree churn. The attempt to land the gate on main was abandoned on measurement rather than shipped on hope."
+  },
+  "task_b_clean_integration_branch": {
+    "goal": "Land the CI gate and test-isolation work on main as a small reviewable PR, so the gate protects every future PR rather than only this branch.",
+    "attempt": "Built branch ci/gate-and-isolation off origin/main in a worktree and applied the 40-path load-bearing set from the 10 CI/isolation/gating commits. Diff vs main: 27 files, +1894/-149, zero docs/ files — so main would never receive the AWS key.",
+    "result": "ABANDONED BEFORE OPENING THE PR. Verification failed: mypy 6 errors in 2 files (126 source files vs 137 on the branch); tests/unit 3 failed; tests/integration 1 failed; tests/infrastructure 15 failed, 11 passed; tests/infra collected nothing.",
+    "root_cause": "The set pulled billing_handler.py and billing_reconcile_handler.py from the branch without their dependencies. Measured: the branch is ahead of main by 57 files under src/backend/careervp/ (+3498/-676) including 11 NEW source files (a whole careervp/payment_providers package, careervp/logic/utils/secret_provider.py), and by 52 files under infra/ (+4643/-706).",
+    "the_real_finding": "tools/proof-harness is NOT a CI-only branch. It carries a feature's worth of unmerged backend product code and unmerged CDK infrastructure. The CI wiring cannot be cherry-picked out of it cleanly, because the tests it wires up assert against source and stacks that exist only on this branch. Any 'just land the gate on main' plan has to reckon with that first.",
+    "not_committed": "The worktree branch ci/gate-and-isolation was never committed or pushed. No PR was opened.",
+    "pristine_main_baseline": {
+      "why": "Measured to answer the real production question: can the gate simply be put on main? It can only be green there if main is green.",
+      "method": "git worktree off origin/main, uv sync, the same 8-directory loop CI runs, plus mypy --strict.",
+      "result": "MAIN IS GREEN LOCALLY.",
+      "loop": {
+        "tests/unit": "1288 passed, 15 skipped, 4 xfailed, 1 xpassed",
+        "tests/integration": "154 passed, 15 skipped",
+        "tests/infrastructure": "11 passed",
+        "tests/e2e": "4 passed, 19 skipped",
+        "tests/models": "18 passed",
+        "tests/regression": "39 passed",
+        "tests/security": "3 passed",
+        "tests/infra": "no tests ran"
+      },
+      "mypy": "Success: no issues found in 126 source files",
+      "scale_gap": "main carries roughly 1517 tests to the branch's 2058 — the branch adds ~540, concentrated in tests/regression (39 -> 294), tests/infrastructure (11 -> 82) and tests/infra (0 -> 34).",
+      "the_production_consequence": "main's copy of pr-validation.yml has NO 8-directory loop (git show origin/main:.github/workflows/pr-validation.yml | grep -c tests/regression -> 0). Because a pull_request workflow runs from the merge ref, NO PR from any branch other than tools/proof-harness is gated today. The single highest-value production change in this repo is therefore one file: pr-validation.yml, 71 insertions, onto a main that is already green — gated on first fixing the 3 non-hermetic tests, or it blocks every PR."
+    }
   }
 }
