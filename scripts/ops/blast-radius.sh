@@ -51,7 +51,8 @@ for f in sorted(pathlib.Path(wfdir).glob('*.y*ml')):
     if trig is None and event not in on: continue
     brs = (trig or {}).get('branches') if isinstance(trig, dict) else None
     if brs is not None and not any(fnmatch.fnmatch(ref, b) for b in brs): continue
-    fires.append(f.name)
+    paths = (trig or {}).get('paths') if isinstance(trig, dict) else None
+    fires.append((f.name, paths))
     for jname, j in (d.get('jobs') or {}).items():
         if not isinstance(j, dict): continue
         runs = ' '.join(str(s.get('run','')) for s in (j.get('steps') or []) if isinstance(s, dict))
@@ -61,7 +62,11 @@ for f in sorted(pathlib.Path(wfdir).glob('*.y*ml')):
                             (j.get('env') or {}).get('STACK_NAME') or (d.get('env') or {}).get('STACK_NAME')))
 
 print(f"  workflows that fire: {len(fires)}")
-for n in fires: print(f"    - {n}")
+for n, paths in fires:
+    if paths:
+        print(f"    - {n}   \033[33mONLY IF changed paths match:\033[0m {', '.join(paths)}")
+    else:
+        print(f"    - {n}")
 print()
 if not deploys:
     print("  DEPLOY JOBS: none. This event changes no AWS infrastructure.")
@@ -77,6 +82,15 @@ else:
             open('/tmp/.br-envs','a').write(f"environment={env}\n")
         print(f"        action: {kind}")
 PY
+
+echo
+echo "  Workflow enabled-state (a disabled workflow does not fire at all):"
+if command -v gh >/dev/null 2>&1; then
+  gh workflow list --all --json name,state,path --jq \
+    '.[] | select(.state != "active") | "    DISABLED: \(.name)  (\(.path))"' 2>/dev/null || true
+  gh workflow list --all --json state --jq '[.[]|select(.state!="active")]|length' 2>/dev/null \
+    | grep -q '^0$' && echo "    (all workflows active)"
+fi
 
 echo
 echo "  Are those environment gates REAL? (live check — an environment with 0"
