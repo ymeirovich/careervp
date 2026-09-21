@@ -26,6 +26,7 @@ from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.logic.utils.env import resource_env
 from careervp.models.result import Result, ResultCode
 
 # ─── SK constants (DB_SK_PREFIX_PATTERN) ─────────────────────────────────────
@@ -495,8 +496,7 @@ class SubscriptionRepository:
         env_val = os.environ.get(env_var, '').strip()
         if env_val:
             return env_val
-        environment = os.environ.get('ENVIRONMENT', 'dev')
-        return f'careervp-{feature}-table-{environment}'
+        return f'careervp-{feature}-table-{resource_env()}'
 
 
 __all__ = [

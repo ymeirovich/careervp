@@ -80,6 +80,7 @@ class ErrorReportNestedStack(NestedStack):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
             environment={
+                "ENVIRONMENT": naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-client-errors",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "ALLOWED_ORIGINS": allowed_origins,

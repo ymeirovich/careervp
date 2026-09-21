@@ -35,6 +35,7 @@ from . import constants
 from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
 from .crud_features_nested_stack import CrudFeaturesNestedStack
+from .environments import profile
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
 from .rehome_map import rehome_cfn
@@ -340,7 +341,10 @@ class ApiConstruct(Construct):
                 cw_actions.SnsAction(self.monitoring.notification_topic)
             )
 
-        if self.naming.environment == "dev":
+        # Scratch environments are dynamically named (rto-<region>-<date>[-suffix]) and
+        # never declared in environments.py — they are ephemeral by construction, not a
+        # persistent environment a capability profile should know about.
+        if not self.scratch_mode and profile(self.naming.environment).api_custom_domain:
             self._build_api_custom_domain()
 
         # P-11: WAF must exist in every environment; rule content is owned by
@@ -1198,6 +1202,7 @@ class ApiConstruct(Construct):
         """Build shared table-name environment variables for Lambda portability."""
         return {
             # LAMBDA_CONFIG_008: inject table names from CDK (no hardcoded names).
+            "ENVIRONMENT": self.naming.environment,
             "CVS_TABLE_NAME": self.api_db.cvs_table.table_name,
             "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
             "GAP_RESPONSES_TABLE_NAME": self.api_db.gap_responses_table.table_name,
@@ -2326,6 +2331,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.health_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-health-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "DYNAMODB_TABLE_NAME": self.api_db.users_table.table_name,
@@ -2701,8 +2707,13 @@ class ApiConstruct(Construct):
         )
 
     def _artifact_chain_enabled(self) -> str:
-        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
-        default = "true" if self.naming.environment == "dev" else "false"
+        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off).
+
+        Scratch environments are dynamically named and never declared in
+        environments.py (see _build_api_custom_domain) — default off for them
+        without consulting the capability profile.
+        """
+        default = "true" if not self.scratch_mode and profile(self.naming.environment).artifact_chain else "false"
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", default)
 
     def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
@@ -3095,6 +3106,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.billing_handler.handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 "ALLOWED_ORIGINS": self.allowed_origins,
@@ -3174,6 +3186,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.export_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
@@ -3214,6 +3227,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.billing_reconcile_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "PAYMENT_PROVIDER": self._billing_payment_provider_name(),
             },
