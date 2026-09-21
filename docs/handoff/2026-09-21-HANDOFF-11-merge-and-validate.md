@@ -98,8 +98,16 @@ BASE_URL=https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com make journey
 make state
 ```
 
-**Reading `preflight` honestly:** the premise `deployed commit is known` will
-**FAIL**. Every CI deploy stamps `DeployedGitSha` with `-dirty`
+**Reading `preflight` honestly:** two things, not one.
+
+First, `premise_tables` changed behaviour in `0c04fc9` — it previously matched
+only `AWS::DynamoDB::Table`, so every real `GlobalTable` was reported
+*unmanaged* regardless of stack ownership. Your baseline runs the fixed script.
+**Do not compare this run's table premise against any preflight proof recorded
+before `0c04fc9`** — it will differ for reasons that have nothing to do with
+your deploy.
+
+Second, the premise `deployed commit is known` will **FAIL**. Every CI deploy stamps `DeployedGitSha` with `-dirty`
 (`src/backend/Makefile:28`, handoff 08 Step 2, still undecided). That failure is
 pre-existing and unrelated to your change. Read the other seven premises
 individually. Do not let one permanently-red check train you to skim the report.
@@ -207,11 +215,14 @@ the 2026-09-20 nested-stack dissolution.
   ceiling. A jump toward 491 means the nesting flag was lost.
 - any nested stack being removed. `make review` **cannot** detect this; it looks
   like an ordinary refactor. You must look yourself.
-- any **replacement** of a stateful resource (table, bucket, user pool). Note
-  the automated data-loss check cannot help: `preflight.py:366` and
-  `scripts/ci/changeset_replacement_report.py` query `AWS::DynamoDB::Table`
-  while every table here is `AWS::DynamoDB::GlobalTable`, so that auto-fail can
-  never fire.
+- any **replacement** of a stateful resource (table, bucket, user pool). The
+  automated data-loss check was blind to this until `0c04fc9`, which is *in
+  this merge*: `changeset_replacement_report.py` listed only
+  `AWS::DynamoDB::Table` in `PROTECTED_TYPES` while every table here is an
+  `AWS::DynamoDB::GlobalTable`, so its AUTO-FAIL could never fire — the same
+  gap that let the 2026-09-20 incident through. Both types now match. **Until
+  this merge lands, that gate has never once protected a deploy, so do not
+  treat its silence on the PR as evidence.** Read the diff yourself.
 
 **Stop and ask** on a nested-stack removal or any stateful replacement.
 
