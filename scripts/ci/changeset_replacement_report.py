@@ -4,8 +4,9 @@
 Parses the JSON output of `aws cloudformation describe-change-set` and produces a
 per-resource Replacement report. AUTO-FAILS (exit 1) when CloudFormation's own
 `Replacement` computation is `True` for any protected stateful resource type
-(RestApi / DynamoDB Table / S3 Bucket / Cognito UserPool). This is the approval artifact
-the human reviewer reads BEFORE approving the human-gated execute-change-set job.
+(RestApi / DynamoDB Table or GlobalTable / S3 Bucket / Cognito UserPool). This is
+the approval artifact the human reviewer reads BEFORE approving the human-gated
+execute-change-set job.
 
 CFN's `Replacement` field is stronger than a `cdk diff` string heuristic — it is the
 authoritative determination of whether an update recreates (and thus can data-loss) a
@@ -29,6 +30,7 @@ PROTECTED_TYPES = frozenset(
     {
         "AWS::ApiGateway::RestApi",
         "AWS::DynamoDB::Table",
+        "AWS::DynamoDB::GlobalTable",
         "AWS::S3::Bucket",
         "AWS::Cognito::UserPool",
     }
@@ -69,7 +71,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
     if report["auto_fail"]:
         lines.append(
             "**AUTO-FAIL:** `Replacement:True` on a protected stateful type "
-            "(RestApi / DynamoDB Table / S3 Bucket / Cognito UserPool). "
+            "(RestApi / DynamoDB Table or GlobalTable / S3 Bucket / Cognito UserPool). "
             "The execute-change-set job MUST NOT run."
         )
     else:

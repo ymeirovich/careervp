@@ -363,7 +363,10 @@ def premise_tables(inventory: Inventory) -> Premise:
         detail = 'no TABLE env vars found on any Lambda' + (f' ({unreadable} unreadable)' if unreadable else '')
         return Premise('tables exist and are managed', UNKNOWN, detail, command)
 
-    managed = {r['physical_id'] for r in inventory.of_type('AWS::DynamoDB::Table')}
+    managed = {
+        r['physical_id']
+        for r in inventory.of_types(('AWS::DynamoDB::Table', 'AWS::DynamoDB::GlobalTable'))
+    }
     missing, inactive, unmanaged = _classify_tables(sorted(wanted), managed)
     observed = {'wanted': sorted(wanted), 'missing': missing, 'inactive': inactive, 'unmanaged': unmanaged}
 
