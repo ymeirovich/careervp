@@ -7,7 +7,10 @@ import { api } from '../../../../api/methods';
 import { ErrorBoundary } from '../../../../components/ErrorBoundary/ErrorBoundary';
 import { GapQuestionCard } from '../../../../components/GapQuestionCard/GapQuestionCard';
 import { ProgressBar } from '../../../../components/ui/ProgressBar';
-import type { GapQuestion } from '../../../../lib/types';
+import type { ArtifactStatus, GapQuestion } from '../../../../lib/types';
+
+const POLL_INTERVAL_MS = 3000;
+const IN_PROGRESS_STATUSES: ArtifactStatus[] = ['pending', 'processing'];
 
 type Locale = 'en' | 'he';
 
@@ -26,6 +29,8 @@ type Copy = {
   guardContinue: string;
   submitAll: string;
   submitting: string;
+  generatingMsg: string;
+  failedMsg: string;
 };
 
 const TEXT: Record<Locale, Copy> = {
@@ -44,6 +49,8 @@ const TEXT: Record<Locale, Copy> = {
     guardContinue: 'Continue Editing',
     submitAll: 'Submit Gap Analysis',
     submitting: 'Submitting…',
+    generatingMsg: 'Generating your gap analysis questions… this can take up to a minute.',
+    failedMsg: 'Generating your gap analysis questions failed.',
   },
   he: {
     title: 'שאלות ניתוח פערים',
@@ -60,6 +67,8 @@ const TEXT: Record<Locale, Copy> = {
     guardContinue: 'המשך עריכה',
     submitAll: 'שלח ניתוח פערים',
     submitting: 'שולח…',
+    generatingMsg: 'מייצר את שאלות ניתוח הפערים… זה עשוי לקחת עד דקה.',
+    failedMsg: 'יצירת שאלות ניתוח הפערים נכשלה.',
   },
 };
 
@@ -99,6 +108,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
   const router = useRouter();
 
   const [questions, setQuestions] = useState<GapQuestion[]>([]);
+  const [generationStatus, setGenerationStatus] = useState<ArtifactStatus | null>(null);
   const [responses, setResponses] = useState<Record<string, LocalResponse>>({});
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [currentDraft, setCurrentDraft] = useState<string>('');
@@ -107,24 +117,27 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
   const [fetchError, setFetchError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Generation is async (submit → SQS worker), so a freshly-created application
+  // may still be "pending"/"processing" when this page loads — poll until it
+  // leaves that state instead of treating zero questions as an empty result.
   const fetchQuestions = useCallback(async () => {
-    setLoading(true);
     setFetchError(false);
 
-    const [questionsResult, hubResult] = await Promise.allSettled([
-      api.getGapQuestions(jobId),
+    const [statusResult, hubResult] = await Promise.allSettled([
+      api.getGapQuestionsStatus(jobId),
       api.getApplication(jobId),
     ]);
 
-    if (questionsResult.status === 'rejected') {
+    if (statusResult.status === 'rejected') {
       setFetchError(true);
       setLoading(false);
       return;
     }
 
-    const qs = questionsResult.value;
+    const { status, questions: qs } = statusResult.value;
     const hub = hubResult.status === 'fulfilled' ? hubResult.value : null;
 
+    setGenerationStatus(status);
     setQuestions(qs);
 
     const map: Record<string, LocalResponse> = {};
@@ -140,8 +153,18 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
   }, [jobId]);
 
   useEffect(() => {
+    setLoading(true);
     void fetchQuestions();
   }, [fetchQuestions]);
+
+  useEffect(() => {
+    if (!generationStatus || !IN_PROGRESS_STATUSES.includes(generationStatus)) return;
+    const timer = setTimeout(() => void fetchQuestions(), POLL_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [generationStatus, fetchQuestions]);
+
+  const isGenerating = generationStatus !== null && IN_PROGRESS_STATUSES.includes(generationStatus);
+  const generationFailed = generationStatus === 'failed';
 
   const handleRequestEdit = (questionId: string) => {
     if (editingQuestionId !== null && editingQuestionId !== questionId) {
@@ -293,7 +316,35 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
         </div>
       )}
 
-      {!loading && !fetchError && questions.length === 0 && (
+      {!loading && !fetchError && isGenerating && (
+        <div className="flex flex-col gap-4" data-testid="generating-state">
+          <p className="text-sm text-text-muted" data-testid="generating-message">
+            {copy.generatingMsg}
+          </p>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
+
+      {!loading && !fetchError && generationFailed && (
+        <div
+          className="rounded-md bg-state-error/10 border border-state-error px-4 py-3 flex items-center justify-between gap-4"
+          role="alert"
+          data-testid="generation-failed-banner"
+        >
+          <span className="text-sm text-state-error">{copy.failedMsg}</span>
+          <button
+            onClick={() => void fetchQuestions()}
+            className="text-sm font-medium text-state-error underline hover:no-underline shrink-0"
+            data-testid="retry-button"
+          >
+            {copy.retry}
+          </button>
+        </div>
+      )}
+
+      {!loading && !fetchError && !isGenerating && !generationFailed && questions.length === 0 && (
         <div
           className="rounded-xl border border-border-default bg-card px-6 py-12 text-center"
           data-testid="empty-state"
@@ -311,7 +362,7 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
         </div>
       )}
 
-      {!loading && !fetchError && questions.length > 0 && (
+      {!loading && !fetchError && !isGenerating && !generationFailed && questions.length > 0 && (
         <>
           <div className="flex flex-col gap-1" data-testid="progress-section">
             <span className="text-sm text-text-secondary" data-testid="progress-label">

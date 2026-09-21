@@ -40,6 +40,7 @@ from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.company_research import ConfidentCompanyResearch, load_confident_company_research_artifact
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
+from careervp.logic.utils.env import resource_env
 from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.result import ResultCode
 from careervp.models.vpr import VPRRequest
@@ -61,8 +62,7 @@ def _get_results_bucket() -> str:
     bucket_name = os.environ.get('VPR_RESULTS_BUCKET_NAME')
     if bucket_name:
         return bucket_name
-    env = os.environ.get('ENVIRONMENT', 'dev')
-    return f'careervp-{env}-vpr-results-us-east-1'
+    return f'careervp-{resource_env()}-vpr-results-us-east-1'
 
 
 def _completed_result_missing(job: dict[str, Any]) -> bool:

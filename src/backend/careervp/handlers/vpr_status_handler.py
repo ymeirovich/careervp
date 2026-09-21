@@ -27,6 +27,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
+from careervp.logic.utils.env import resource_env
 
 
 def _json_headers() -> dict[str, str]:
@@ -47,8 +48,7 @@ def _get_results_bucket() -> str:
     if bucket_name:
         return bucket_name
     # Fallback to naming convention
-    env = os.environ.get('ENVIRONMENT', 'dev')
-    return f'careervp-{env}-vpr-results-us-east-1'
+    return f'careervp-{resource_env()}-vpr-results-us-east-1'
 
 
 # STS temporary credentials (Lambda execution role) expire in ~6h, so pre-signed

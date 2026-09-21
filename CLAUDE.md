@@ -124,6 +124,31 @@ Measured 2026-09-21. Re-verify rather than trusting this table if it looks stale
 `CareerVpCrudDev` and `CareerVpCrudStaging` are **not** the working
 environments. `production` and `gap-remediation` environments do not exist.
 
+### What actually fires — measured 2026-09-21
+
+`blast-radius.sh` reads workflows from `origin/<branch>`, not your working tree.
+
+| Push to | Workflows | Deploy jobs | Gate |
+|---|---|---|---|
+| `tools/proof-harness` | **0** | none — changes no AWS infrastructure | n/a |
+| `db-redesign` | `db-redesign-checks.yml` | `deploy-backend-dev` → `CareerVpCrudDevx`, `CREATE+EXECUTE` | `environment: devx` — 1 rule, 1 reviewer (real) |
+
+**The path filter is the trap.** `db-redesign-checks.yml` fires only when the
+changed paths match `src/frontend/**`, `src/backend/**` or `infra/**` — and
+that match is on the *path*, never on the *intent*. A **test-only** change to
+`src/frontend/tests/e2e/*.spec.ts` matches `src/frontend/**` and therefore
+triggers a full CloudFormation deploy of `CareerVpCrudDevx`. So does a
+comment-only edit to any file under those three trees. A change confined to
+`docs/**` or `scripts/**` fires nothing.
+
+Never reason that "it is only a test" or "only a comment" makes a push inert —
+**the trigger does not read the diff.** That is the same mistake as the
+2026-09-20 one-file workflow PR that deleted ~70 resources.
+
+Pushing to `db-redesign` *also* rebuilds the Amplify branch `db-redesign`
+(auto-build, `DEVELOPMENT`) — a frontend deploy carrying no gate at all. The
+`devx` reviewer gate covers the backend job only.
+
 ## Git Workflow Rules
 - **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
 - **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main

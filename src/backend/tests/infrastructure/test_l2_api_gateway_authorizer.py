@@ -47,7 +47,7 @@ def _template() -> Template:
     from careervp.service_stack import ServiceStack  # type: ignore[import-not-found]
 
     app = App()
-    naming = NamingUtils(environment='test', region='us-east-1', account_id='123456789012')
+    naming = NamingUtils(environment='dev', region='us-east-1', account_id='123456789012')
     stack = ServiceStack(
         scope=app,
         id=naming.stack_id('crud'),

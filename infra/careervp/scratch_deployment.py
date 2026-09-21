@@ -91,7 +91,14 @@ class ScratchDeploymentSettings:
         """Resolve an explicitly flagged scratch path or the pinned live default."""
         raw_flag = os.environ.get("CAREERVP_SCRATCH_MODE")
         if raw_flag is None:
-            live_environment = os.environ.get("ENVIRONMENT", "dev")
+            # Never guess: an unset ENVIRONMENT must fail the synth, not silently
+            # target the "dev" stack when the caller meant "devx" (or any other
+            # live tier) and forgot to export it.
+            live_environment = os.environ.get("ENVIRONMENT", "").strip()
+            if not live_environment:
+                raise ValueError(
+                    "ENVIRONMENT unset; refusing to guess which stack to synth/deploy"
+                )
             return cls(
                 account=live_account,
                 region=live_region,

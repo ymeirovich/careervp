@@ -39,6 +39,13 @@ def _normalize_environment(value: str) -> str:
     return slug
 
 
+# allow-env-literal: local-dev-only fallback. get_resource_name()/get_table_name()/
+# get_bucket_name()/get_lambda_name() below have no consumer outside this module, and
+# every derived constant that matters at Lambda runtime is already gated behind an
+# explicit CDK-injected env var checked first (see VPR_JOBS_QUEUE_NAME etc. below).
+# resource_env() can't be used here: it raises on a missing ENVIRONMENT, and this is a
+# module-level constant evaluated at import time with no conftest setting ENVIRONMENT
+# for local/test runs — raising here would break collection for the whole suite.
 ENVIRONMENT: Final[str] = _normalize_environment(os.environ.get('ENVIRONMENT', 'dev'))
 
 # =============================================================================
@@ -207,6 +214,12 @@ COVER_LETTER_JOBS_QUEUE_NAME: Final[str] = os.environ.get(
 INTERVIEW_PREP_JOBS_QUEUE_NAME: Final[str] = os.environ.get(
     'INTERVIEW_PREP_JOBS_QUEUE_NAME',
     get_resource_name('interview-prep-jobs', 'queue'),
+)
+
+# Queue name for gap-question generation async submit -> worker flow
+GAP_ANALYSIS_QUEUE_NAME: Final[str] = os.environ.get(
+    'GAP_ANALYSIS_QUEUE_NAME',
+    get_resource_name('gap-analysis', 'queue'),
 )
 
 # Jobs table for async job tracking

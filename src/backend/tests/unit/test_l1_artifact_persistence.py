@@ -327,16 +327,12 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
 def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> None:
     from careervp.handlers.gap_handler import lambda_handler
 
-    generated_questions = [
-        {'question_id': f'q-{idx}', 'question': 'Describe measurable impact.', 'impact': 'HIGH', 'probability': 'MEDIUM', 'tags': ['[CV IMPACT]']}
-        for idx in range(10)
-    ]
-
     with (
-        patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
         patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+        patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch('careervp.handlers.gap_handler.sqs'),
         patch(
             'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
             return_value={
@@ -350,7 +346,6 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
         dal = MagicMock()
         dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
         mock_get_dal.return_value = dal
-        mock_generate.return_value = Result(success=True, data=generated_questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
         trial_service = MagicMock()
         trial_service.check_trial_status.return_value = {'is_active': True}
         trial_service.consume_credit.return_value = None
@@ -358,7 +353,7 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
         mock_application_repository.return_value = MagicMock()
         response = lambda_handler(_gap_event(), MagicMock())
 
-    assert response['statusCode'] in [200, 201]
+    assert response['statusCode'] in [200, 201, 202]
     dal.save_gap_questions.assert_called_once()
     call_args = dal.save_gap_questions.call_args
     assert call_args is not None

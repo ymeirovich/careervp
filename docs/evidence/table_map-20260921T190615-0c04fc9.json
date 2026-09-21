@@ -1,0 +1,360 @@
+{
+  "alias_groups": {
+    "APPLICATIONS_TABLE_NAME": [
+      "APPLICATIONS_TABLE_NAME"
+    ],
+    "ARTIFACTS_TABLE_NAME": [
+      "ARTIFACTS_TABLE_NAME",
+      "COMPANY_RESEARCH_TABLE_NAME",
+      "DYNAMODB_TABLE_NAME"
+    ],
+    "COMPANY_RESEARCH_CACHE_TABLE_NAME": [
+      "COMPANY_RESEARCH_CACHE_TABLE_NAME"
+    ],
+    "CVS_TABLE_NAME": [
+      "CVS_TABLE_NAME",
+      "TABLE_NAME"
+    ],
+    "GAP_RESPONSES_TABLE_NAME": [
+      "GAP_RESPONSES_TABLE_NAME"
+    ],
+    "IDEMPOTENCY_TABLE_NAME": [
+      "IDEMPOTENCY_TABLE_NAME",
+      "TOKEN_BLACKLIST_TABLE_NAME"
+    ],
+    "IDENTITY_MAP_TABLE_NAME": [
+      "IDENTITY_MAP_TABLE_NAME"
+    ],
+    "JOBS_TABLE_NAME": [
+      "JOBS_TABLE_NAME",
+      "VPR_JOBS_TABLE_NAME"
+    ],
+    "KNOWLEDGE_TABLE_NAME": [
+      "KNOWLEDGE_TABLE_NAME"
+    ],
+    "LLM_CACHE_TABLE_NAME": [
+      "LLM_CACHE_TABLE_NAME"
+    ],
+    "USERS_TABLE_NAME": [
+      "ARTIFACTS_TABLE_NAME",
+      "DYNAMODB_TABLE_NAME",
+      "GAP_QUESTIONS_TABLE_NAME",
+      "TABLE_NAME",
+      "USERS_TABLE_NAME",
+      "VPR_TABLE_NAME"
+    ]
+  },
+  "consumed_not_produced": [
+    "JOBS_TABLE",
+    "JOB_TABLE_NAME",
+    "SESSIONS_TABLE_NAME"
+  ],
+  "consumers": [
+    {
+      "env_vars": [
+        "IDEMPOTENCY_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/dal/idempotency_repository.py",
+      "read_ops": 0,
+      "write_ops": 2
+    },
+    {
+      "env_vars": [
+        "IDENTITY_MAP_TABLE_NAME",
+        "TABLE_NAME",
+        "USERS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/dal/identity_map_repository.py",
+      "read_ops": 2,
+      "write_ops": 1
+    },
+    {
+      "env_vars": [
+        "JOBS_TABLE_NAME",
+        "VPR_JOBS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/dal/jobs_repository.py",
+      "read_ops": 5,
+      "write_ops": 3
+    },
+    {
+      "env_vars": [
+        "TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/dal/user_repository.py",
+      "read_ops": 2,
+      "write_ops": 2
+    },
+    {
+      "env_vars": [
+        "CVS_TABLE_NAME",
+        "GAP_RESPONSES_TABLE_NAME",
+        "LLM_CACHE_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/ai_assist_handler.py",
+      "read_ops": 1,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "IDENTITY_MAP_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/api_gateway_authorizer.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME",
+        "TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/artifact_dependency_utils.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/artifact_failure_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/company_research_handler.py",
+      "read_ops": 2,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "JOBS_TABLE_NAME",
+        "VPR_JOBS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/company_research_worker_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME",
+        "JOBS_TABLE",
+        "JOBS_TABLE_NAME",
+        "JOB_TABLE_NAME",
+        "VPR_JOBS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/cover_letter_handler.py",
+      "read_ops": 2,
+      "write_ops": 4
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/cr_failure_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+      "read_ops": 5,
+      "write_ops": 3
+    },
+    {
+      "env_vars": [
+        "CVS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/cv_upload_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "ARTIFACTS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/export_handler.py",
+      "read_ops": 3,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME",
+        "JOBS_TABLE_NAME",
+        "VPR_JOBS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/interview_prep_handler.py",
+      "read_ops": 8,
+      "write_ops": 4
+    },
+    {
+      "env_vars": [
+        "KNOWLEDGE_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/knowledge_base_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "DYNAMODB_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/vpr_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/vpr_status_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/vpr_submit_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME",
+        "DYNAMODB_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/handlers/vpr_worker_handler.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "TABLE_NAME",
+        "USERS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/logic/auth_service.py",
+      "read_ops": 1,
+      "write_ops": 1
+    },
+    {
+      "env_vars": [
+        "COMPANY_RESEARCH_CACHE_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/logic/company_intel_cache.py",
+      "read_ops": 1,
+      "write_ops": 3
+    },
+    {
+      "env_vars": [
+        "IDEMPOTENCY_TABLE_NAME",
+        "JOBS_TABLE_NAME",
+        "LLM_CACHE_TABLE_NAME",
+        "SESSIONS_TABLE_NAME",
+        "USERS_TABLE_NAME",
+        "VPR_JOBS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/logic/utils/constants.py",
+      "read_ops": 0,
+      "write_ops": 0
+    },
+    {
+      "env_vars": [
+        "APPLICATIONS_TABLE_NAME"
+      ],
+      "module": "src/backend/careervp/logic/utils/llm_metering.py",
+      "read_ops": 0,
+      "write_ops": 0
+    }
+  ],
+  "deployed_matches_head": null,
+  "deployed_sha": null,
+  "deployed_sha_detail": "not requested",
+  "dirty_paths": [
+    "ocs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md",
+    "docs/handoff/2026-09-19-PRODUCTION-PROGRAM.md",
+    "docs/handoff/2026-09-20-HANDOFF-00-measurement-sweep.md",
+    "docs/handoff/2026-09-20-HANDOFF-05-merge-the-gate-and-finish-hermeticity.md",
+    "infra/careervp/ai_assist_nested_stack.py",
+    "infra/careervp/api_construct.py",
+    "infra/careervp/error_report_nested_stack.py",
+    "infra/careervp/scratch_deployment.py",
+    "src/backend/careervp/dal/jobs_repository.py",
+    "src/backend/careervp/dal/subscription_repository.py",
+    "src/backend/careervp/handlers/vpr_status_handler.py",
+    "src/backend/careervp/handlers/vpr_submit_handler.py",
+    "src/backend/careervp/handlers/vpr_worker_handler.py",
+    "src/backend/careervp/logic/auth_service.py",
+    "src/backend/careervp/logic/utils/constants.py",
+    "src/backend/tests/unit/test_subscription_repository.py",
+    "src/backend/tests/unit/test_vpr_endpoints.py",
+    "docs/evidence/dead_api-20260921T190615-0c04fc9.json",
+    "docs/evidence/dead_code-20260921T190613-0c04fc9.json",
+    "docs/evidence/dead_code-20260921T190614-0c04fc9.json",
+    "infra/careervp/environments.py",
+    "infra/tests/infrastructure/test_environment_coupling.py",
+    "src/backend/careervp/logic/utils/env.py",
+    "src/backend/scripts/dead_api.py",
+    "src/backend/scripts/dead_code.py",
+    "src/backend/scripts/table_map.py",
+    "src/backend/tests/infra/test_environment_flag_contract.py",
+    "src/backend/tests/infra/test_no_environment_name_branching.py",
+    "src/backend/tests/integration/test_p_environment_scoped_table_reads.py",
+    "src/backend/tests/unit/test_resource_env.py"
+  ],
+  "git_branch": "tools/proof-harness",
+  "git_dirty": true,
+  "git_sha": "0c04fc9b38231cde4e9e88877fb222dea3be1e88",
+  "git_short": "0c04fc9",
+  "inconsistent_env_vars": {
+    "ARTIFACTS_TABLE_NAME": [
+      "ARTIFACTS_TABLE_NAME",
+      "USERS_TABLE_NAME"
+    ],
+    "DYNAMODB_TABLE_NAME": [
+      "ARTIFACTS_TABLE_NAME",
+      "USERS_TABLE_NAME"
+    ],
+    "TABLE_NAME": [
+      "CVS_TABLE_NAME",
+      "USERS_TABLE_NAME"
+    ]
+  },
+  "kind": "table_map",
+  "physical_tables": {
+    "applications_table": "APPLICATIONS_TABLE_NAME",
+    "artifacts_table": "ARTIFACTS_TABLE_NAME",
+    "company_research_cache_table": "COMPANY_RESEARCH_CACHE_TABLE_NAME",
+    "cvs_table": "CVS_TABLE_NAME",
+    "db": "USERS_TABLE_NAME",
+    "gap_responses_table": "GAP_RESPONSES_TABLE_NAME",
+    "idempotency_db": "IDEMPOTENCY_TABLE_NAME",
+    "idempotency_table": "IDEMPOTENCY_TABLE_NAME",
+    "identity_map_table": "IDENTITY_MAP_TABLE_NAME",
+    "jobs_table": "JOBS_TABLE_NAME",
+    "knowledge_table": "KNOWLEDGE_TABLE_NAME",
+    "llm_cache_table": "LLM_CACHE_TABLE_NAME",
+    "users_table": "USERS_TABLE_NAME"
+  },
+  "produced_not_consumed": [
+    "TOKEN_BLACKLIST_TABLE_NAME",
+    "VPR_TABLE_NAME"
+  ],
+  "produced_not_consumed_weak": [
+    "COMPANY_RESEARCH_TABLE_NAME",
+    "GAP_QUESTIONS_TABLE_NAME"
+  ],
+  "stack": "CareerVpCrudDevx",
+  "timestamp": "2026-09-21T19:06:15.855070+00:00",
+  "unresolved": []
+}

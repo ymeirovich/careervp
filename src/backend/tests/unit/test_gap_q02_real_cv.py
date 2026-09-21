@@ -216,7 +216,7 @@ def test_gap_loads_real_cv_moto() -> None:
     generate_gap_questions contains the real candidate name ('Jane Realname') and
     a real experience bullet ('RealCorp'), NOT the stub values.
     """
-    from careervp.handlers.gap_handler import lambda_handler
+    from careervp.handlers.gap_handler import _process_gap_generation_job, lambda_handler
     from careervp.models.result import Result, ResultCode
 
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -268,8 +268,9 @@ def test_gap_loads_real_cv_moto() -> None:
         )
 
     with (
-        patch('careervp.handlers.gap_handler.generate_gap_questions', side_effect=_capture_generate),
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial,
+        patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch('careervp.handlers.gap_handler.sqs'),
     ):
         trial_svc = MagicMock()
         trial_svc.check_trial_status.return_value = {'is_active': True}
@@ -278,7 +279,21 @@ def test_gap_loads_real_cv_moto() -> None:
 
         response = lambda_handler(event, _context())
 
-    assert response['statusCode'] in (200, 201), f'Expected 200/201, got {response["statusCode"]}; body={response["body"]}'
+    assert response['statusCode'] == 202, f'Expected 202, got {response["statusCode"]}; body={response["body"]}'
+
+    # Generation (and the real-CV load it depends on) now runs in the SQS worker,
+    # not inline with the POST (HANDOFF-09).
+    with patch('careervp.handlers.gap_handler.generate_gap_questions', side_effect=_capture_generate):
+        _process_gap_generation_job(
+            {
+                'user_id': 'user-q02',
+                'cv_id': 'cv-real-001',
+                'job_id': 'job-q02-moto',
+                'application_id': 'job-q02-moto',
+                'max_questions': 3,
+                'focus_areas': ['python'],
+            }
+        )
 
     # The prompt dict passed to generate_gap_questions must contain the real name.
     personal = captured_user_cv.get('personal_info', {})

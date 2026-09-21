@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 const mockPush = vi.fn();
 
 const apiMocks = vi.hoisted(() => ({
-  getGapQuestions: vi.fn(),
+  getGapQuestionsStatus: vi.fn(),
   getApplication: vi.fn(),
   getCV: vi.fn(),
   saveGapResponses: vi.fn(),
@@ -39,6 +39,12 @@ const QUESTIONS = [
   { question_id: 'q3', question: 'Describe a leadership situation', impact: 'LOW' as const, probability: 'MEDIUM' as const, gap_score: 3, tags: [] },
 ];
 
+type GapStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+function statusOf(questions: typeof QUESTIONS, status: GapStatus = 'completed') {
+  return { job_id: 'job1', cv_id: 'cv1', status, questions };
+}
+
 const HUB_EMPTY = {
   application: { application_id: 'job1', state: 'active', created_at: '', trial_credit_consumed: false },
   job: { job_id: 'job1', user_id: 'u1', title: 'Engineer', company_name: 'Acme', status: 'active', created_at: '', requirements: [] },
@@ -60,7 +66,7 @@ describe('Gap Analysis page', () => {
   });
 
   it('renders 3 question rows after loading', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS);
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf(QUESTIONS));
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
@@ -72,8 +78,8 @@ describe('Gap Analysis page', () => {
     });
   });
 
-  it('shows empty state when no questions are returned', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue([]);
+  it('shows empty state when generation completed with no questions', async () => {
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([]));
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
@@ -83,8 +89,32 @@ describe('Gap Analysis page', () => {
     });
   });
 
-  it('shows error banner when getGapQuestions rejects', async () => {
-    apiMocks.getGapQuestions.mockRejectedValue(new Error('Network error'));
+  it('shows a generating state (not the empty state) while status is pending', async () => {
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([], 'pending'));
+
+    const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
+    renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('generating-state')).toBeDefined();
+    });
+    expect(screen.queryByTestId('empty-state')).toBeNull();
+  });
+
+  it('shows a failed banner when generation status is failed', async () => {
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([], 'failed'));
+
+    const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
+    renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('generation-failed-banner')).toBeDefined();
+    });
+    expect(screen.queryByTestId('empty-state')).toBeNull();
+  });
+
+  it('shows error banner when getGapQuestionsStatus rejects', async () => {
+    apiMocks.getGapQuestionsStatus.mockRejectedValue(new Error('Network error'));
 
     const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
     renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);

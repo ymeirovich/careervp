@@ -35,6 +35,7 @@ from . import constants
 from .api_db_construct import ApiDbConstruct
 from .artifact_chain_construct import ArtifactChainConstruct
 from .crud_features_nested_stack import CrudFeaturesNestedStack
+from .environments import profile
 from .monitoring import CrudMonitoring
 from .naming_utils import NamingUtils
 from .rehome_map import rehome_cfn
@@ -229,6 +230,7 @@ class ApiConstruct(Construct):
         self.job_api_func = self._add_job_lambda()
         self.application_api_func = self._add_application_lambda()
         self.gap_api_func = self._add_gap_lambda()
+        self.gap_worker_func = self._add_gap_worker_lambda()
         self.cover_letter_api_func = self._add_cover_letter_lambda()
         self.cover_letter_status_func = self._add_cover_letter_status_lambda()
         self.interview_prep_api_func = self._add_interview_prep_lambda()
@@ -340,7 +342,10 @@ class ApiConstruct(Construct):
                 cw_actions.SnsAction(self.monitoring.notification_topic)
             )
 
-        if self.naming.environment == "dev":
+        # Scratch environments are dynamically named (rto-<region>-<date>[-suffix]) and
+        # never declared in environments.py — they are ephemeral by construction, not a
+        # persistent environment a capability profile should know about.
+        if not self.scratch_mode and profile(self.naming.environment).api_custom_domain:
             self._build_api_custom_domain()
 
         # P-11: WAF must exist in every environment; rule content is owned by
@@ -1198,6 +1203,7 @@ class ApiConstruct(Construct):
         """Build shared table-name environment variables for Lambda portability."""
         return {
             # LAMBDA_CONFIG_008: inject table names from CDK (no hardcoded names).
+            "ENVIRONMENT": self.naming.environment,
             "CVS_TABLE_NAME": self.api_db.cvs_table.table_name,
             "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
             "GAP_RESPONSES_TABLE_NAME": self.api_db.gap_responses_table.table_name,
@@ -2326,6 +2332,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.health_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-health-api",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "DYNAMODB_TABLE_NAME": self.api_db.users_table.table_name,
@@ -2506,7 +2513,7 @@ class ApiConstruct(Construct):
             removal_policy=RemovalPolicy.DESTROY,
             encryption_key=self.logs_kms_key,
         )
-        return _lambda.Function(
+        lambda_function = _lambda.Function(
             self._features,
             "GapApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_13,
@@ -2522,6 +2529,9 @@ class ApiConstruct(Construct):
                 "USERS_TABLE_NAME": self.api_db.db.table_name,
                 "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
                 "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                # Submit-only: writes the PENDING row and enqueues the worker, which
+                # runs the LLM call outside the 30s API Gateway budget (HANDOFF-09).
+                "SQS_QUEUE_URL": self.api_db.gap_analysis_queue.queue_url,
                 **self._build_llm_env(),
             },
             timeout=Duration.seconds(30),
@@ -2534,6 +2544,61 @@ class ApiConstruct(Construct):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
         )
+        self.api_db.gap_analysis_queue.grant_send_messages(lambda_function)
+        return lambda_function
+
+    def _add_gap_worker_lambda(self) -> _lambda.Function:
+        """Create gap-worker, SQS-triggered — the LLM call for gap-question
+        generation, split out of gap-api so it is not bound by the API Gateway
+        30s request budget (HANDOFF-09: this call exceeded it under real input).
+        """
+        function_name = self.naming.lambda_name("gap-worker")
+        log_group = logs.LogGroup(
+            self._features,
+            "GapWorkerLogGroup",
+            log_group_name=f"/aws/lambda/{function_name}",
+            retention=logs.RetentionDays.ONE_DAY,
+            removal_policy=RemovalPolicy.DESTROY,
+            encryption_key=self.logs_kms_key,
+        )
+        lambda_function = _lambda.Function(
+            self._features,
+            "GapWorkerLambda",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            code=_lambda.Code.from_asset(constants.BUILD_FOLDER),
+            handler="careervp.handlers.gap_handler.lambda_handler",
+            function_name=function_name,
+            environment={
+                constants.POWERTOOLS_SERVICE_NAME: "careervp-gap-worker",
+                constants.POWER_TOOLS_LOG_LEVEL: "INFO",
+                **self._build_shared_table_env(),
+                "GAP_QUESTIONS_TABLE_NAME": self.api_db.db.table_name,
+                "USERS_TABLE_NAME": self.api_db.db.table_name,
+                "DYNAMODB_TABLE_NAME": self.api_db.db.table_name,
+                "JOBS_TABLE_NAME": self.api_db.jobs_table.table_name,
+                "APPLICATIONS_TABLE_NAME": self.api_db.applications_table.table_name,
+                **self._build_llm_env(),
+            },
+            timeout=Duration.seconds(300),
+            memory_size=512,
+            reserved_concurrent_executions=5,
+            tracing=_lambda.Tracing.ACTIVE,
+            retry_attempts=0,
+            role=self.lambda_role,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.JSON,
+            system_log_level_v2=_lambda.SystemLogLevel.INFO,
+            architecture=_lambda.Architecture.X86_64,
+        )
+        lambda_function.add_event_source(
+            eventsources.SqsEventSource(
+                self.api_db.gap_analysis_queue,
+                batch_size=1,
+                report_batch_item_failures=True,
+            )
+        )
+        self.api_db.gap_analysis_queue.grant_consume_messages(lambda_function)
+        return lambda_function
 
     def _wire_artifact_chain(self, appconfig_app_name: str) -> None:
         """Create the artifact-chain workers, failure handlers, and state machine.
@@ -2701,8 +2766,17 @@ class ApiConstruct(Construct):
         )
 
     def _artifact_chain_enabled(self) -> str:
-        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off)."""
-        default = "true" if self.naming.environment == "dev" else "false"
+        """Resolve the ARTIFACT_CHAIN_ENABLED flag at synth time (default off).
+
+        Scratch environments are dynamically named and never declared in
+        environments.py (see _build_api_custom_domain) — default off for them
+        without consulting the capability profile.
+        """
+        default = (
+            "true"
+            if not self.scratch_mode and profile(self.naming.environment).artifact_chain
+            else "false"
+        )
         return os.environ.get("ARTIFACT_CHAIN_ENABLED", default)
 
     def _add_artifact_cleanup_lambda(self) -> _lambda.Function:
@@ -3095,6 +3169,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.billing_handler.handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "IDEMPOTENCY_TABLE_NAME": self.api_db.idempotency_db.table_name,
                 "ALLOWED_ORIGINS": self.allowed_origins,
@@ -3174,6 +3249,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.export_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "ARTIFACTS_TABLE_NAME": self.api_db.artifacts_table.table_name,
                 "VPR_RESULTS_BUCKET_NAME": self.api_db.vpr_results_bucket.bucket_name,
@@ -3214,6 +3290,7 @@ class ApiConstruct(Construct):
             handler="careervp.handlers.billing_reconcile_handler.lambda_handler",
             function_name=function_name,
             environment={
+                "ENVIRONMENT": self.naming.environment,
                 "TABLE_NAME": self.api_db.db.table_name,
                 "PAYMENT_PROVIDER": self._billing_payment_provider_name(),
             },

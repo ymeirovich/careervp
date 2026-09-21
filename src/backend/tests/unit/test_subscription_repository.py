@@ -451,3 +451,28 @@ class TestScanActiveSubscriptions:
         assert users_table.scan.call_count == 2
         second_kwargs = users_table.scan.call_args_list[1].kwargs
         assert second_kwargs.get('ExclusiveStartKey') == {'pk': 'USER#u1'}
+
+
+class TestTableNameResolution:
+    """HANDOFF-09 Class A: a missing TABLE_NAME must never resolve to another
+    live environment's table. Before the fix this silently returned
+    ``careervp-users-table-dev`` regardless of the real deploy environment —
+    write this test first and watch it fail (Step 3.4)."""
+
+    def test_raises_when_no_explicit_table_name_and_environment_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv('TABLE_NAME', raising=False)
+        monkeypatch.delenv('IDEMPOTENCY_TABLE_NAME', raising=False)
+        monkeypatch.delenv('ENVIRONMENT', raising=False)
+
+        with pytest.raises(RuntimeError, match='ENVIRONMENT unset'):
+            SubscriptionRepository(dynamodb_resource=MagicMock())
+
+    def test_uses_explicit_table_name_env_vars_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv('TABLE_NAME', 'careervp-users-table-devx')
+        monkeypatch.setenv('IDEMPOTENCY_TABLE_NAME', 'careervp-idempotency-table-devx')
+        monkeypatch.delenv('ENVIRONMENT', raising=False)
+
+        repo = SubscriptionRepository(dynamodb_resource=MagicMock())
+
+        assert repo._table_name == 'careervp-users-table-devx'
+        assert repo._idempotency_table_name == 'careervp-idempotency-table-devx'

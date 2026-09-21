@@ -1,0 +1,85 @@
+{
+  "deployed_matches_head": null,
+  "deployed_sha": null,
+  "deployed_sha_detail": "not requested",
+  "dirty_paths": [
+    "ocs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md",
+    "docs/handoff/2026-09-19-PRODUCTION-PROGRAM.md",
+    "docs/handoff/2026-09-20-HANDOFF-00-measurement-sweep.md",
+    "docs/handoff/2026-09-20-HANDOFF-05-merge-the-gate-and-finish-hermeticity.md",
+    "infra/careervp/ai_assist_nested_stack.py",
+    "infra/careervp/api_construct.py",
+    "infra/careervp/error_report_nested_stack.py",
+    "infra/careervp/scratch_deployment.py",
+    "src/backend/careervp/dal/jobs_repository.py",
+    "src/backend/careervp/dal/subscription_repository.py",
+    "src/backend/careervp/handlers/vpr_status_handler.py",
+    "src/backend/careervp/handlers/vpr_submit_handler.py",
+    "src/backend/careervp/handlers/vpr_worker_handler.py",
+    "src/backend/careervp/logic/auth_service.py",
+    "src/backend/careervp/logic/utils/constants.py",
+    "src/backend/tests/unit/test_subscription_repository.py",
+    "src/backend/tests/unit/test_vpr_endpoints.py",
+    "docs/evidence/dead_code-20260921T190613-0c04fc9.json",
+    "docs/evidence/dead_code-20260921T190614-0c04fc9.json",
+    "infra/careervp/environments.py",
+    "infra/tests/infrastructure/test_environment_coupling.py",
+    "src/backend/careervp/logic/utils/env.py",
+    "src/backend/scripts/dead_api.py",
+    "src/backend/scripts/dead_code.py",
+    "src/backend/scripts/table_map.py",
+    "src/backend/tests/infra/test_environment_flag_contract.py",
+    "src/backend/tests/infra/test_no_environment_name_branching.py",
+    "src/backend/tests/integration/test_p_environment_scoped_table_reads.py",
+    "src/backend/tests/unit/test_resource_env.py"
+  ],
+  "explicit_routes": 43,
+  "frontend_calls_no_cdk_route": [],
+  "git_branch": "tools/proof-harness",
+  "git_dirty": true,
+  "git_sha": "0c04fc9b38231cde4e9e88877fb222dea3be1e88",
+  "git_short": "0c04fc9",
+  "kind": "dead_api",
+  "missing_handlers": [],
+  "no_frontend_caller": [
+    {
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "method": "POST",
+      "path": "/users/me/trial/reset"
+    },
+    {
+      "method": "POST",
+      "path": "/jobs/{jobId}/gap-questions"
+    },
+    {
+      "method": "GET",
+      "path": "/vprs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/cv-tailoring/{cvTailoringId}"
+    },
+    {
+      "method": "GET",
+      "path": "/interview-preps"
+    },
+    {
+      "method": "GET",
+      "path": "/knowledge-base"
+    },
+    {
+      "method": "POST",
+      "path": "/errors"
+    }
+  ],
+  "proxy_routes": 4,
+  "stack": "CareerVpCrudDevx",
+  "timestamp": "2026-09-21T19:06:15.453239+00:00",
+  "unresolved": [
+    "POST /ai/assist -> self.<non-attr: Call(func=Attribute(value=Name(id='self', ctx=Load()), attr=>: handler module not resolved",
+    "POST /errors -> self.<non-attr: Call(func=Attribute(value=Name(id='self', ctx=Load()), attr=>: handler module not resolved"
+  ]
+}

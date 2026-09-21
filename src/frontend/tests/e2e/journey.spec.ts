@@ -81,6 +81,56 @@ const GENERATION_TIMEOUT_MS = Number(process.env.JOURNEY_GENERATION_TIMEOUT_MS ?
 const PAGE_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
+// Browser-side diagnostics
+// ---------------------------------------------------------------------------
+//
+// J3's first failure against deployed code (2026-09-21) reported nothing but
+// `waitForURL: Timeout 240000ms exceeded`. What actually happened: the click
+// landed, POST /jobs answered 403 trial_expired, and the form rendered that
+// reason above the fold of a scrolled page. The browser knew the answer the
+// whole time and the report discarded it, so the failure was misdiagnosed as
+// client-side and "no network request is issued".
+//
+// Everything the page says about itself is now recorded into the proof.
+
+const MAX_DIAGNOSTICS = 50;
+const MAX_DIAGNOSTIC_CHARS = 400;
+
+const diagnosticsByStep: Partial<Record<StepId, string[]>> = {};
+let diagnostics: string[] = [];
+let pendingBodies: Promise<unknown>[] = [];
+
+function note(line: string): void {
+  if (diagnostics.length < MAX_DIAGNOSTICS) diagnostics.push(line.slice(0, MAX_DIAGNOSTIC_CHARS));
+}
+
+/** Record console errors, uncaught exceptions, failed requests, and every
+ *  4xx/5xx response together with its body — the body is where the API states
+ *  its reason, and that reason is the thing worth keeping. */
+function attachDiagnostics(page: Page): void {
+  diagnostics = [];
+  pendingBodies = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") note(`console.${msg.type()}: ${msg.text()}`);
+  });
+  page.on("pageerror", (err) => note(`pageerror: ${err.message}`));
+  page.on("requestfailed", (req) =>
+    note(`requestfailed: ${req.method()} ${req.url()} — ${req.failure()?.errorText ?? "unknown"}`),
+  );
+  page.on("response", (res) => {
+    if (res.status() < 400) return;
+    const head = `http ${res.status()}: ${res.request().method()} ${res.url()}`;
+    pendingBodies.push(
+      res.text().then(
+        (body) => note(`${head} — ${body}`),
+        () => note(head),
+      ),
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Proof recording
 // ---------------------------------------------------------------------------
 
@@ -124,13 +174,20 @@ test.afterEach(async ({ page }, testInfo) => {
   const id = testInfo.title.slice(0, 2) as StepId;
   if (!STEP_IDS.includes(id)) return;
 
+  // Response bodies resolve asynchronously; settle them before reporting.
+  await Promise.allSettled(pendingBodies);
+  if (diagnostics.length > 0) diagnosticsByStep[id] = [...diagnostics];
+
   if (testInfo.status === "passed") {
     results[id] = "pass";
   } else if (testInfo.status === "skipped") {
     results[id] = "not reached";
   } else {
     const message = (testInfo.error?.message ?? testInfo.status).split("\n")[0];
-    results[id] = `fail: ${message}`;
+    // Lead with the server's own rejection when there is one — a status line
+    // beats a symptom every time.
+    const httpError = diagnostics.find((d) => d.startsWith("http "));
+    results[id] = httpError ? `fail: ${message} [${httpError}]` : `fail: ${message}`;
   }
 
   // Screenshot every step, pass or fail — the failing frame is the most
@@ -155,6 +212,7 @@ test.afterAll(async () => {
     journey_total: STEP_IDS.length,
     steps,
     step_names: STEP_NAMES,
+    browser_diagnostics: diagnosticsByStep,
     git_sha: GIT_SHA || null,
     git_short: GIT_SHORT,
     git_dirty: GIT_DIRTY,
@@ -181,31 +239,23 @@ test.afterAll(async () => {
 // but never tolerates absence — if nothing matches, the step fails loudly.
 // ---------------------------------------------------------------------------
 
-/** A CV file the parser can actually read; deliberately obviously synthetic. */
-const SYNTHETIC_CV = [
-  "Jane Doe",
-  "Software Engineer",
-  "jane.doe@example.com",
-  "",
-  "Experience",
-  "Acme Corp — Backend Engineer, 2020-2024.",
-  "Built Python services on AWS Lambda and DynamoDB. Led a team of three.",
-  "",
-  "Education",
-  "BSc Computer Science, Example University, 2020.",
-  "",
-  "Skills",
-  "Python, TypeScript, AWS, DynamoDB, REST APIs",
-].join("\n");
-
-const JOB_DESCRIPTION = [
-  "Senior Backend Engineer — Serverless",
-  "",
-  "We are looking for an engineer with strong Python and AWS Lambda experience.",
-  "You will design DynamoDB access patterns, own API contracts, and mentor others.",
-  "Requirements: 5+ years Python, production AWS, event-driven architecture,",
-  "and experience leading technical projects end to end.",
-].join("\n");
+// The operator's own SysAid application, used as the journey's input. A
+// synthetic CV and an "Example Corp" job posting cannot exercise this product:
+// company research has nothing to research, and gap analysis has no real
+// distance between a CV and a role to find. These are the actual artifacts.
+const CV_PATH = path.join(
+  REPO_ROOT,
+  "docs/architecture/careervp_prompts/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx",
+);
+const JOB_DESCRIPTION = fs.readFileSync(
+  path.join(REPO_ROOT, "docs/features/Sysaid Job Description.txt"),
+  "utf8",
+);
+const JOB_TITLE = "Learning Experience Specialist";
+const COMPANY_NAME = "SysAid";
+// A real, reachable company site: the backend probes the URL (domain_validator.py)
+// and company research resolves the company from it.
+const COMPANY_URL = "https://www.sysaid.com";
 
 /** Wait for an artifact page to leave its loading/queued state. */
 async function waitForArtifact(page: Page, bodyPattern: RegExp): Promise<void> {
@@ -263,6 +313,7 @@ let applicationUrl = "";
 test.describe("THE JOURNEY", () => {
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+    attachDiagnostics(page);
   });
 
   test("J1 sign in", async ({ page }) => {
@@ -280,11 +331,9 @@ test.describe("THE JOURNEY", () => {
     const before = await page.getByRole("row").count();
 
     await page.getByRole("button", { name: /upload|add cv|new cv/i }).first().click();
-    await page.setInputFiles('input[type="file"]', {
-      name: "jane-doe-cv.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from(SYNTHETIC_CV, "utf8"),
-    });
+    // The picker accepts .pdf/.doc/.docx and not .txt (ChooseBaseCVModal), so
+    // the previous synthetic text buffer was never a file a customer could pick.
+    await page.setInputFiles('input[type="file"]', CV_PATH);
 
     const confirm = page.getByRole("button", { name: /upload|save|confirm/i }).last();
     if (await confirm.isEnabled().catch(() => false)) await confirm.click();
@@ -297,19 +346,20 @@ test.describe("THE JOURNEY", () => {
   });
 
   test("J3 create application", async ({ page }) => {
-    // Submission chains straight into gap-question generation (an LLM call)
-    // before redirecting — the same generation budget J4-J9 get, not the
-    // default page timeout.
+    // Submission enqueues gap-question generation and redirects immediately
+    // (HANDOFF-09: the LLM call moved to an SQS worker, off the request path)
+    // — this no longer needs the full generation budget, but keeps it as
+    // headroom rather than risking flakiness from an untested tighter bound.
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
     await page.goto("/applications/new");
 
-    await page.getByLabel(/job title|position/i).fill("Senior Backend Engineer");
-    await page.getByLabel(/company/i).fill("Example Corp");
+    await page.getByLabel(/job title|position/i).fill(JOB_TITLE);
+    await page.getByLabel(/company/i).fill(COMPANY_NAME);
     await page.getByLabel(/job description|description/i).fill(JOB_DESCRIPTION);
     // The form's submit button stays disabled until a job URL is present too,
     // and the backend probes the URL for real reachability (domain_validator.py)
     // before accepting it — a synthetic path 404s, so this must be a live page.
-    await page.getByLabel(/job url|url/i).fill("https://example.com/");
+    await page.getByLabel(/job url|url/i).fill(COMPANY_URL);
 
     // Selecting a base CV here is what makes gap-analysis questions exist at
     // all: handleSubmit (applications/new/page.tsx) only calls
@@ -329,37 +379,67 @@ test.describe("THE JOURNEY", () => {
     // matches the starting /applications/new page itself, and waitForURL
     // resolves immediately without waiting for any real navigation — a false
     // pass that never submits anything.
-    await page.waitForURL(/\/applications\/(?!new\/?$)[^/]+(\/gap-analysis)?\/?$/, {
+    // A rejected submit must fail *here*, in the API's own words. On
+    // 2026-09-21 this waited the full 240s and reported a navigation timeout
+    // while the form had been displaying the rejection the whole time — which
+    // is exactly how a plain 403 got misread as a client-side defect. Scoped
+    // to the card because the app shell renders its own role="alert" banners.
+    const rejection = page.getByTestId("new-application-card").getByRole("alert").first();
+    const navigated = page.waitForURL(/\/applications\/(?!new\/?$)[^/]+(\/gap-analysis)?\/?$/, {
       timeout: GENERATION_TIMEOUT_MS,
     });
+    // Each branch carries its own catch: the loser of the race settles later,
+    // and must not surface as an unhandled rejection after the test moves on.
+    const outcome = await Promise.race([
+      navigated.then(() => "navigated" as const).catch(() => "exhausted" as const),
+      rejection
+        .waitFor({ state: "visible", timeout: GENERATION_TIMEOUT_MS })
+        .then(() => "rejected" as const)
+        .catch(() => "exhausted" as const),
+    ]);
+
+    if (outcome === "rejected") {
+      const stated = (await rejection.textContent().catch(() => null))?.trim();
+      throw new Error(`create-application was rejected: ${stated || "(error shown, but it said nothing)"}`);
+    }
+    if (outcome === "exhausted") {
+      throw new Error("create-application neither navigated nor surfaced an error");
+    }
     applicationUrl = page.url().replace(/\/gap-analysis\/?$/, "").replace(/\/$/, "");
     expect(applicationUrl).toMatch(/\/applications\/(?!new$)[^/]+$/);
   });
 
   test("J4 gap analysis submit", async ({ page }) => {
-    // Generous beyond GENERATION_TIMEOUT_MS: question generation runs
-    // synchronously inside the create-application request and routinely
-    // outlasts the API Gateway integration timeout (a 504 while the Lambda
-    // keeps running and persists its result afterward, confirmed by network
-    // trace — the same job's questions are there minutes later). Once that
-    // happens this page has no way to recover: `fetchQuestions` runs once on
-    // mount, the empty-state branch it lands in has no retry affordance (only
-    // the separate network-error branch gets a Retry button), so the only
-    // real option is reloading until the background generation lands.
+    // Generous beyond GENERATION_TIMEOUT_MS: the LLM call now runs in an SQS
+    // worker (HANDOFF-09), off the request path, but this budget covers queue
+    // delivery plus generation. The page polls itself every 3s (useEffect in
+    // gap-analysis/page.tsx) and shows a "generating" state while status is
+    // pending/processing, so no manual reload loop is needed here anymore —
+    // waiting on the questions list (with its own auto-wait) is sufficient.
     const GAP_QUESTIONS_TIMEOUT_MS = 2 * GENERATION_TIMEOUT_MS;
     test.setTimeout(GAP_QUESTIONS_TIMEOUT_MS + 60_000);
     await page.goto(`${applicationUrl}/gap-analysis`);
 
     const questionCards = page.getByTestId("questions-list").locator("> div");
-    const retryButton = page.getByTestId("retry-button");
-    await expect(async () => {
-      if (await retryButton.isVisible().catch(() => false)) {
-        await retryButton.click();
-      } else {
-        await page.reload();
-      }
-      await expect(questionCards.first()).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: GAP_QUESTIONS_TIMEOUT_MS, intervals: [10_000] });
+    const generationFailedBanner = page.getByTestId("generation-failed-banner");
+    const outcome = await Promise.race([
+      questionCards
+        .first()
+        .waitFor({ state: "visible", timeout: GAP_QUESTIONS_TIMEOUT_MS })
+        .then(() => "ready" as const)
+        .catch(() => "exhausted" as const),
+      generationFailedBanner
+        .waitFor({ state: "visible", timeout: GAP_QUESTIONS_TIMEOUT_MS })
+        .then(() => "failed" as const)
+        .catch(() => "exhausted" as const),
+    ]);
+
+    if (outcome === "failed") {
+      throw new Error("gap-question generation reported status=failed");
+    }
+    if (outcome === "exhausted") {
+      throw new Error("gap-question generation neither completed nor reported failed in time");
+    }
 
     const count = await questionCards.count();
     expect(count).toBeGreaterThan(0);
@@ -373,7 +453,16 @@ test.describe("THE JOURNEY", () => {
         "I led a three-person team migrating a monolith to Lambda over eight months.",
       );
       await questionCards.nth(i).getByRole("button", { name: /^save$/i }).click();
-      await expect(questionCards.nth(i).getByRole("button", { name: /^save$/i })).toHaveCount(0);
+      // Not "the Save button went away": while the request is in flight the
+      // button renders a spinner carrying aria-label="Saving", which makes its
+      // accessible name "Saving Save" and stops /^save$/ matching. That is the
+      // save STARTING. Waiting on it let this loop open the next question
+      // mid-save, where the page's own guard correctly blocked it — read for a
+      // full run as "J4 is broken". Edit only renders once the card has left
+      // edit state holding a stored response, so it means the answer landed.
+      await expect(questionCards.nth(i).getByRole("button", { name: /^edit$/i })).toBeVisible({
+        timeout: PAGE_TIMEOUT_MS,
+      });
     }
 
     await page.getByTestId("submit-all-btn").click();

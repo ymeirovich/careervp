@@ -25,6 +25,7 @@ from botocore.exceptions import ClientError
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from careervp.logic.utils.env import resource_env
 from careervp.logic.utils.secret_provider import get_ssm_secret
 
 try:
@@ -216,7 +217,7 @@ class AuthService:
                 ],
             )
             # Auto-confirm user in non-prod environments (for testing)
-            if os.environ.get('ENVIRONMENT', 'prod') != 'prod':
+            if resource_env(default='prod') != 'prod':
                 user_pool_id = os.environ.get('COGNITO_USER_POOL_ID')
                 if user_pool_id:
                     cognito_idp = boto3.client('cognito-idp')

@@ -160,6 +160,7 @@ def test_replacement_report_passes_on_safe_changeset() -> None:
     [
         'AWS::ApiGateway::RestApi',
         'AWS::DynamoDB::Table',
+        'AWS::DynamoDB::GlobalTable',
         'AWS::S3::Bucket',
         'AWS::Cognito::UserPool',
     ],

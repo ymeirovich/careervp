@@ -10,6 +10,36 @@
  */
 
 import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
+import path from "path";
+
+// ---------------------------------------------------------------------------
+// Load .env.e2e into process.env.
+//
+// helpers/auth.ts reads process.env.E2E_TEST_EMAIL / E2E_TEST_PASSWORD and its
+// error message tells you to create a .env.e2e file -- but nothing ever loaded
+// one and `dotenv` is not a dependency, so the documented local workflow could
+// not work. `make journey` therefore failed in global setup for anyone who did
+// not already have the variables exported, which is why the journey had not
+// been measured since 2026-09-14.
+//
+// Both paths named in the codebase are honoured: auth.ts's docstring says
+// src/frontend/.env.e2e, its thrown error says tests/e2e/.env.e2e.
+//
+// Real environment variables always win, so GitHub Actions secrets are
+// unaffected by this.
+// ---------------------------------------------------------------------------
+for (const rel of [".env.e2e", "tests/e2e/.env.e2e"]) {
+  const file = path.resolve(__dirname, rel);
+  if (!fs.existsSync(file)) continue;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    const [, key, rawValue] = m;
+    if (process.env[key]) continue; // never override a real env var
+    process.env[key] = rawValue.replace(/^(['"])(.*)\1$/, "$2");
+  }
+}
 
 // Tests live co-located at src/frontend/tests/e2e/ so @playwright/test resolves
 const AUTH_FILE = "./tests/e2e/.auth/user.json";

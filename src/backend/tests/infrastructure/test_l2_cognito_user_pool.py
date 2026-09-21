@@ -33,7 +33,7 @@ def _template() -> Template:
     from careervp.service_stack import ServiceStack
 
     app = App()
-    naming = NamingUtils(environment='test', region='us-east-1', account_id='123456789012')
+    naming = NamingUtils(environment='dev', region='us-east-1', account_id='123456789012')
     stack = ServiceStack(
         scope=app,
         id=naming.stack_id('crud'),
@@ -94,7 +94,7 @@ def test_user_pool_domain_created() -> None:
     template.has_resource_properties(
         'AWS::Cognito::UserPoolDomain',
         {
-            'Domain': Match.string_like_regexp('^careervp-test'),
+            'Domain': Match.string_like_regexp('^careervp-dev'),
         },
     )
 

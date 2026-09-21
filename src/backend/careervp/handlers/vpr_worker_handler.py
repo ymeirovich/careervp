@@ -32,6 +32,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import load_confident_company_research_artifact
+from careervp.logic.utils.env import resource_env
 from careervp.logic.vpr_generator import generate_vpr
 from careervp.models.job import CompanyContext, GapResponse, JobPosting
 from careervp.models.result import ResultCode
@@ -48,8 +49,7 @@ def _get_results_bucket() -> str:
     if bucket_name:
         return bucket_name
     # Fallback to naming convention
-    env = os.environ.get('ENVIRONMENT', 'dev')
-    return f'careervp-{env}-vpr-results-us-east-1'
+    return f'careervp-{resource_env()}-vpr-results-us-east-1'
 
 
 def _generate_presigned_url(result_key: str) -> str:

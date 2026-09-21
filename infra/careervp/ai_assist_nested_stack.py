@@ -80,6 +80,7 @@ class AiAssistNestedStack(NestedStack):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
             environment={
+                "ENVIRONMENT": naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-ai-assist",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 # VPR, tailored CV and gap responses are still persisted in the
