@@ -122,6 +122,25 @@ phase3() {
     --query "AccessKeyMetadata[?AccessKeyId=='$KEY_ID'].Status" --output text)
   [ "$status" = "Inactive" ] || die "key is '$status', not Inactive -- do phase 2 and wait"
   ok "key is Inactive"
+  # HARD STOP: deleting the SECRETS is not the same as deleting the KEY.
+  # Measured 2026-09-21: ~145 remote branches still carry the pre-OIDC
+  # cdk-diff.yml that consumes secrets.AWS_ACCESS_KEY_ID. A PR from any of them
+  # needs those secrets to exist and be VALID. Only main, db-redesign and
+  # tools/proof-harness have the OIDC version.
+  local stale
+  stale=$(for B in $(git ls-remote --heads origin 2>/dev/null | awk '{print $2}' | sed 's|refs/heads/||'); do
+            for F in $(git ls-tree -r "origin/$B" --name-only 2>/dev/null | grep '^\.github/workflows/.*\.ya\?ml$'); do
+              git show "origin/$B:$F" 2>/dev/null | grep -q "secrets.AWS_ACCESS_KEY_ID" && echo "$B"
+            done
+          done | sort -u | wc -l | tr -d ' ')
+  if [ "${stale:-0}" -gt 0 ]; then
+    bad "$stale branches still consume secrets.AWS_ACCESS_KEY_ID"
+    echo "       Deleting the GitHub secrets breaks a PR from any of them."
+    echo "       ROTATE instead: issue a new key, overwrite the secrets, and"
+    echo "       deactivate the old key only once every holder is updated."
+    echo "       Delete the secrets only after those branches are migrated or pruned."
+    die "refusing to delete secrets while $stale branches depend on them"
+  fi
   run aws iam delete-access-key --user-name "$KEY_USER" --access-key-id "$KEY_ID"
   run gh secret delete AWS_ACCESS_KEY_ID
   run gh secret delete AWS_SECRET_ACCESS_KEY

@@ -17,14 +17,17 @@ Run these first. Commands, then prose.
 |---|---|---|
 | 0.1 | `git show origin/main:.github/workflows/pr-validation.yml \| grep -c 'tests/regression'` | `1` |
 | 0.2 | `git show origin/main:.github/workflows/cdk-diff.yml \| grep -c 'secrets.AWS_ACCESS_KEY_ID'` | `0` |
-| 0.3 | `aws iam list-access-keys --user-name careervp_user --query 'AccessKeyMetadata[].Status' --output text` | `Inactive` |
+| 0.3 | `aws iam list-access-keys --user-name careervp_user --query 'AccessKeyMetadata[].[AccessKeyId,Status]' --output text` | **two** keys, both `Active`: `…DGMPMWNS` (old) and `…HAFZ64UG` (new, 2026-09-21) |
 | 0.4 | `gh workflow list --all --json name,state --jq '.[]\|select(.name=="Deploy")\|.state'` | `disabled_manually` |
 | 0.5 | `git rev-parse origin/db-redesign origin/tools/proof-harness` | identical SHAs |
 | 0.6 | `cd src/backend && uv run pytest -q --tb=no -p no:cacheprovider -p no:randomly \| tail -1` | `2058 passed, 48 skipped, 12 xfailed` |
 | 0.7 | `./scripts/ops/blast-radius.sh push db-redesign` | `deploy-backend-dev`, stack `CareerVpCrudDevx`, gate `environment=devx` |
 
-**0.3 is the security one.** If it reads `Active`, someone reactivated the key —
-find out who and why before doing anything else.
+**0.3 — read the amendment below before judging this row.** The key was
+deactivated and then *reactivated* on 2026-09-21, and a second key was issued.
+Two Active keys is the expected, correct state mid-rotation. If only ONE key
+exists, part of the rotation has been completed or reverted — find out which
+before doing anything else.
 
 **0.7 must read `environment=devx`, not `dev`.** `dev` has 0 protection rules;
 `devx` has 1 required reviewer. If it says `dev`, the gate has regressed and a
@@ -129,29 +132,75 @@ the first thing to check — but check it, do not assume it.
 
 ---
 
-## Step 3 — Finish the key retirement (small, and it is nearly done)
+## Step 3 — Finish the key ROTATION. Do not delete. Read why.
 
-The key `AKIA3PAP…MWNS` on `careervp_user` (AdministratorAccess) is **Inactive**
-as of 2026-09-21. The vulnerability is closed — an inactive key cannot
-authenticate. What remains is cleanup, deliberately deferred so a rollback stays
-possible:
+**Amended 2026-09-21 after the original plan was tried and was wrong twice.**
+
+What happened, in order:
+
+1. The key was deactivated on the strength of "no workflow on `main` references
+   it, and every workflow uses OIDC."
+2. **That broke the operator's own access.** They hold the secret in a local
+   `~/.aws/credentials` profile and as a GitHub secret. A repository grep is not
+   an inventory of who holds a credential.
+3. The key was reactivated within minutes. Deactivation being reversible is the
+   only reason this was an inconvenience and not an outage.
+4. A **second** key was then issued and the GitHub secrets rotated to it.
+
+**Deleting the key would break CI on nearly every branch in this repo.**
+Measured 2026-09-21 — ~145 remote branches still carry the pre-OIDC
+`cdk-diff.yml` that consumes `secrets.AWS_ACCESS_KEY_ID`:
 
 ```bash
-./scripts/security/remediate-exposed-key.sh 3-delete            # dry run
-APPLY=1 ./scripts/security/remediate-exposed-key.sh 3-delete    # after the observation window
+for B in $(git ls-remote --heads origin | awk '{print $2}' | sed 's|refs/heads/||'); do
+  for F in $(git ls-tree -r "origin/$B" --name-only 2>/dev/null | grep '^\.github/workflows/.*\.ya\?ml$'); do
+    git show "origin/$B:$F" 2>/dev/null | grep -q "secrets.AWS_ACCESS_KEY_ID" && echo "$B :: $(basename $F)"
+  done
+done | wc -l        # -> ~145
 ```
 
-**Before running it**, confirm nothing broke while the key was inactive:
+Only `main`, `db-redesign` and `tools/proof-harness` have the OIDC version. A PR
+opened from any other branch still needs those secrets to exist and be valid.
+**This is why the correct operation is rotation, not deletion**, and why
+`remediate-exposed-key.sh` phase 3 must not be run as written.
+
+### Current state
+
+| | |
+|---|---|
+| Old key `…DGMPMWNS` | **Active** — still in the operator's local config on machines not yet updated |
+| New key `…HAFZ64UG` | **Active** — created 2026-09-21, verified with `sts get-caller-identity` |
+| GitHub secrets | Rotated to the new key at 2026-09-21T10:21Z |
+| Local handoff of the new secret | `~/careervp_user-new-credentials.txt`, mode 600, never printed to a transcript |
+
+### What remains
+
+Only after the operator confirms every machine of theirs uses the new key:
 
 ```bash
+aws iam update-access-key --user-name careervp_user \
+    --access-key-id AKIA3PAPU3DODGMPMWNS --status Inactive
+# observe for several days, checking for AccessDenied
 aws cloudtrail lookup-events --region us-east-1 --max-results 50 \
   --lookup-attributes AttributeKey=Username,AttributeValue=careervp_user \
   --query 'Events[].[EventTime,EventName,ErrorCode]' --output text
+# only then
+aws iam delete-access-key --user-name careervp_user --access-key-id AKIA3PAPU3DODGMPMWNS
+aws iam untag-user --user-name careervp_user --tag-keys AKIA3PAPU3DODGMPMWNS
 ```
 
-Any `AccessDenied` means something still depends on it — find it before deleting.
-If nothing appears, phase 3 deletes the key, the leaking tag, and the two
-vestigial GitHub secrets.
+**Ask the operator first. Do not infer from a grep that a credential is unused.**
+
+### The exposure, stated accurately
+
+The 23 MB dump contains the old key's **id as an IAM tag name**, account id
+`788159322332`, and 456 IAM ARNs. It is a
+`get-account-authorization-details` dump — an API that never returns secrets, and
+a grep confirms none is present. **The secret never leaked.** The exposure is
+reconnaissance, not access. Treat it as an information-disclosure issue with a
+real but bounded blast radius, not a live credential compromise. The rotation
+above is good hygiene for an over-privileged long-lived key; it is not incident
+response.
 
 **Phase 4 (purging the 23 MB dump from git history) is still open and is the
 operator's call.** It rewrites public history and forces every collaborator to
