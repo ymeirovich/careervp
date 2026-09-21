@@ -1,0 +1,36 @@
+{
+  "kind": "journey",
+  "journey_reached": 2,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "fail: TimeoutError: page.waitForURL: Timeout 240000ms exceeded.",
+    "J4": "not run",
+    "J5": "not run",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "git_sha": "39ef4b38b20b226bc1ee9a8fa7a2ecc4c3cfc32b",
+  "git_short": "39ef4b3",
+  "git_dirty": true,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "7c08d89286d181885ebefd49702159c0d5d08667-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260921T125027-39ef4b3",
+  "timestamp": "2026-09-21T12:54:46.660Z"
+}
