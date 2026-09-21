@@ -67,6 +67,19 @@ phase0() {
   else
     ok "main's cdk-diff.yml no longer uses static keys"
   fi
+
+  # THIS CHECK COVERS THE REPOSITORY ONLY. It cannot see a developer laptop, a
+  # second machine, a local ~/.aws/credentials profile, a CI system outside
+  # GitHub, a script on a server, or a teammate. On 2026-09-21 phase 2 was run
+  # on the strength of "no workflow references this key" and broke the
+  # operator's own access, because workflows were not the only consumer.
+  bad "UNVERIFIABLE FROM HERE: who else holds this key's SECRET"
+  echo "       Before deactivating, confirm with the human that it is not in:"
+  echo "         - any ~/.aws/credentials on any machine they use"
+  echo "         - GitHub secrets consumed by a workflow on a NON-main branch"
+  echo "         - any non-GitHub CI, cron, server or teammate's environment"
+  echo "       Deactivation is instantly reversible; breaking someone's access"
+  echo "       for an afternoon is not free. ASK FIRST."
   echo
   echo "  Last used:"
   aws iam get-access-key-last-used --access-key-id "$KEY_ID" \
