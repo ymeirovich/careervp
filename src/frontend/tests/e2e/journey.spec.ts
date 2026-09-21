@@ -81,6 +81,56 @@ const GENERATION_TIMEOUT_MS = Number(process.env.JOURNEY_GENERATION_TIMEOUT_MS ?
 const PAGE_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
+// Browser-side diagnostics
+// ---------------------------------------------------------------------------
+//
+// J3's first failure against deployed code (2026-09-21) reported nothing but
+// `waitForURL: Timeout 240000ms exceeded`. What actually happened: the click
+// landed, POST /jobs answered 403 trial_expired, and the form rendered that
+// reason above the fold of a scrolled page. The browser knew the answer the
+// whole time and the report discarded it, so the failure was misdiagnosed as
+// client-side and "no network request is issued".
+//
+// Everything the page says about itself is now recorded into the proof.
+
+const MAX_DIAGNOSTICS = 50;
+const MAX_DIAGNOSTIC_CHARS = 400;
+
+const diagnosticsByStep: Partial<Record<StepId, string[]>> = {};
+let diagnostics: string[] = [];
+let pendingBodies: Promise<unknown>[] = [];
+
+function note(line: string): void {
+  if (diagnostics.length < MAX_DIAGNOSTICS) diagnostics.push(line.slice(0, MAX_DIAGNOSTIC_CHARS));
+}
+
+/** Record console errors, uncaught exceptions, failed requests, and every
+ *  4xx/5xx response together with its body — the body is where the API states
+ *  its reason, and that reason is the thing worth keeping. */
+function attachDiagnostics(page: Page): void {
+  diagnostics = [];
+  pendingBodies = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") note(`console.${msg.type()}: ${msg.text()}`);
+  });
+  page.on("pageerror", (err) => note(`pageerror: ${err.message}`));
+  page.on("requestfailed", (req) =>
+    note(`requestfailed: ${req.method()} ${req.url()} — ${req.failure()?.errorText ?? "unknown"}`),
+  );
+  page.on("response", (res) => {
+    if (res.status() < 400) return;
+    const head = `http ${res.status()}: ${res.request().method()} ${res.url()}`;
+    pendingBodies.push(
+      res.text().then(
+        (body) => note(`${head} — ${body}`),
+        () => note(head),
+      ),
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Proof recording
 // ---------------------------------------------------------------------------
 
@@ -124,13 +174,20 @@ test.afterEach(async ({ page }, testInfo) => {
   const id = testInfo.title.slice(0, 2) as StepId;
   if (!STEP_IDS.includes(id)) return;
 
+  // Response bodies resolve asynchronously; settle them before reporting.
+  await Promise.allSettled(pendingBodies);
+  if (diagnostics.length > 0) diagnosticsByStep[id] = [...diagnostics];
+
   if (testInfo.status === "passed") {
     results[id] = "pass";
   } else if (testInfo.status === "skipped") {
     results[id] = "not reached";
   } else {
     const message = (testInfo.error?.message ?? testInfo.status).split("\n")[0];
-    results[id] = `fail: ${message}`;
+    // Lead with the server's own rejection when there is one — a status line
+    // beats a symptom every time.
+    const httpError = diagnostics.find((d) => d.startsWith("http "));
+    results[id] = httpError ? `fail: ${message} [${httpError}]` : `fail: ${message}`;
   }
 
   // Screenshot every step, pass or fail — the failing frame is the most
@@ -155,6 +212,7 @@ test.afterAll(async () => {
     journey_total: STEP_IDS.length,
     steps,
     step_names: STEP_NAMES,
+    browser_diagnostics: diagnosticsByStep,
     git_sha: GIT_SHA || null,
     git_short: GIT_SHORT,
     git_dirty: GIT_DIRTY,
@@ -263,6 +321,7 @@ let applicationUrl = "";
 test.describe("THE JOURNEY", () => {
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(PAGE_TIMEOUT_MS);
+    attachDiagnostics(page);
   });
 
   test("J1 sign in", async ({ page }) => {
@@ -329,9 +388,32 @@ test.describe("THE JOURNEY", () => {
     // matches the starting /applications/new page itself, and waitForURL
     // resolves immediately without waiting for any real navigation — a false
     // pass that never submits anything.
-    await page.waitForURL(/\/applications\/(?!new\/?$)[^/]+(\/gap-analysis)?\/?$/, {
+    // A rejected submit must fail *here*, in the API's own words. On
+    // 2026-09-21 this waited the full 240s and reported a navigation timeout
+    // while the form had been displaying the rejection the whole time — which
+    // is exactly how a plain 403 got misread as a client-side defect. Scoped
+    // to the card because the app shell renders its own role="alert" banners.
+    const rejection = page.getByTestId("new-application-card").getByRole("alert").first();
+    const navigated = page.waitForURL(/\/applications\/(?!new\/?$)[^/]+(\/gap-analysis)?\/?$/, {
       timeout: GENERATION_TIMEOUT_MS,
     });
+    // Each branch carries its own catch: the loser of the race settles later,
+    // and must not surface as an unhandled rejection after the test moves on.
+    const outcome = await Promise.race([
+      navigated.then(() => "navigated" as const).catch(() => "exhausted" as const),
+      rejection
+        .waitFor({ state: "visible", timeout: GENERATION_TIMEOUT_MS })
+        .then(() => "rejected" as const)
+        .catch(() => "exhausted" as const),
+    ]);
+
+    if (outcome === "rejected") {
+      const stated = (await rejection.textContent().catch(() => null))?.trim();
+      throw new Error(`create-application was rejected: ${stated || "(error shown, but it said nothing)"}`);
+    }
+    if (outcome === "exhausted") {
+      throw new Error("create-application neither navigated nor surfaced an error");
+    }
     applicationUrl = page.url().replace(/\/gap-analysis\/?$/, "").replace(/\/$/, "");
     expect(applicationUrl).toMatch(/\/applications\/(?!new$)[^/]+$/);
   });
@@ -373,7 +455,16 @@ test.describe("THE JOURNEY", () => {
         "I led a three-person team migrating a monolith to Lambda over eight months.",
       );
       await questionCards.nth(i).getByRole("button", { name: /^save$/i }).click();
-      await expect(questionCards.nth(i).getByRole("button", { name: /^save$/i })).toHaveCount(0);
+      // Not "the Save button went away": while the request is in flight the
+      // button renders a spinner carrying aria-label="Saving", which makes its
+      // accessible name "Saving Save" and stops /^save$/ matching. That is the
+      // save STARTING. Waiting on it let this loop open the next question
+      // mid-save, where the page's own guard correctly blocked it — read for a
+      // full run as "J4 is broken". Edit only renders once the card has left
+      // edit state holding a stored response, so it means the answer landed.
+      await expect(questionCards.nth(i).getByRole("button", { name: /^edit$/i })).toBeVisible({
+        timeout: PAGE_TIMEOUT_MS,
+      });
     }
 
     await page.getByTestId("submit-all-btn").click();
