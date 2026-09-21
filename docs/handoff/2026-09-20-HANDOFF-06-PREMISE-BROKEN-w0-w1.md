@@ -1,3 +1,30 @@
+> ## ⚠️ SUPERSEDED — do not act on this document's recommendations
+>
+> **Superseded by `2026-09-21-HANDOFF-07-first-real-journey-measurement.md`.**
+>
+> This was written as a stop-and-hand-back report. It was never actually handed
+> to a fresh session — the same session continued and resolved the blocker,
+> which is itself a deviation from the chain's rule that a session may not
+> certify its own work. Recorded rather than hidden.
+>
+> **Its central framing is wrong.** It treats "get the harness onto `main`" as
+> the blocker and costs three options for doing so. It contains **zero mentions
+> of `db-redesign` and zero of Amplify** — the two facts that resolved it.
+> Measured afterwards: `ui-upgrade` ⊆ `db-redesign` ⊆ `tools/proof-harness`, the
+> real pipeline is `db-redesign` → `environment: devx` → `make deploy-devx` →
+> `CareerVpCrudDevx`, and four Amplify branches auto-build. `main` is not a
+> deploy target for this project, so the harness never needed to go there and
+> all three costed options answer a question that did not need asking.
+>
+> **What in here is still valid evidence:**
+> - the `CareerVpCrudDev` incident accounting (~70 resources deleted, no data lost)
+> - the p26 nested-stack measurement: 491 resources without the flag vs 261 with it
+> - W0.2 shipped; W0.3 was already done and could not have worked as specified
+> - the harness genuinely is absent from `main` — true, just not the relevant blocker
+>
+> **What is stale:** every recommendation, the three integration options, and the
+> "Recommended Step 0 for handoff 07" section. Use handoff 07's Step 0 instead.
+
 # HANDOFF 06 — PREMISE BROKEN: W0/W1 cannot run from `main`
 
 **Status: stopped at the premise, per the production program's own rule** —
