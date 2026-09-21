@@ -43,6 +43,11 @@ jobs:
           aws-region: us-east-1
       - name: Run CDK diff
         working-directory: infra
+        env:
+          # infra/careervp/scratch_deployment.py fails closed on an unset
+          # ENVIRONMENT (P-64) rather than silently guessing "dev" — devx is
+          # this repo's actual live deploy target, see CLAUDE.md's topology.
+          ENVIRONMENT: devx
         run: |
           npx cdk diff --json > cdk-diff.json
       - name: Ensure diff output exists
