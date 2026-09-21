@@ -239,31 +239,23 @@ test.afterAll(async () => {
 // but never tolerates absence — if nothing matches, the step fails loudly.
 // ---------------------------------------------------------------------------
 
-/** A CV file the parser can actually read; deliberately obviously synthetic. */
-const SYNTHETIC_CV = [
-  "Jane Doe",
-  "Software Engineer",
-  "jane.doe@example.com",
-  "",
-  "Experience",
-  "Acme Corp — Backend Engineer, 2020-2024.",
-  "Built Python services on AWS Lambda and DynamoDB. Led a team of three.",
-  "",
-  "Education",
-  "BSc Computer Science, Example University, 2020.",
-  "",
-  "Skills",
-  "Python, TypeScript, AWS, DynamoDB, REST APIs",
-].join("\n");
-
-const JOB_DESCRIPTION = [
-  "Senior Backend Engineer — Serverless",
-  "",
-  "We are looking for an engineer with strong Python and AWS Lambda experience.",
-  "You will design DynamoDB access patterns, own API contracts, and mentor others.",
-  "Requirements: 5+ years Python, production AWS, event-driven architecture,",
-  "and experience leading technical projects end to end.",
-].join("\n");
+// The operator's own SysAid application, used as the journey's input. A
+// synthetic CV and an "Example Corp" job posting cannot exercise this product:
+// company research has nothing to research, and gap analysis has no real
+// distance between a CV and a role to find. These are the actual artifacts.
+const CV_PATH = path.join(
+  REPO_ROOT,
+  "docs/architecture/careervp_prompts/02_Yitzchak_Meirovich_Learning_Experience_Specialist_SysAid.docx",
+);
+const JOB_DESCRIPTION = fs.readFileSync(
+  path.join(REPO_ROOT, "docs/features/Sysaid Job Description.txt"),
+  "utf8",
+);
+const JOB_TITLE = "Learning Experience Specialist";
+const COMPANY_NAME = "SysAid";
+// A real, reachable company site: the backend probes the URL (domain_validator.py)
+// and company research resolves the company from it.
+const COMPANY_URL = "https://www.sysaid.com";
 
 /** Wait for an artifact page to leave its loading/queued state. */
 async function waitForArtifact(page: Page, bodyPattern: RegExp): Promise<void> {
@@ -339,11 +331,9 @@ test.describe("THE JOURNEY", () => {
     const before = await page.getByRole("row").count();
 
     await page.getByRole("button", { name: /upload|add cv|new cv/i }).first().click();
-    await page.setInputFiles('input[type="file"]', {
-      name: "jane-doe-cv.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from(SYNTHETIC_CV, "utf8"),
-    });
+    // The picker accepts .pdf/.doc/.docx and not .txt (ChooseBaseCVModal), so
+    // the previous synthetic text buffer was never a file a customer could pick.
+    await page.setInputFiles('input[type="file"]', CV_PATH);
 
     const confirm = page.getByRole("button", { name: /upload|save|confirm/i }).last();
     if (await confirm.isEnabled().catch(() => false)) await confirm.click();
@@ -362,13 +352,13 @@ test.describe("THE JOURNEY", () => {
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
     await page.goto("/applications/new");
 
-    await page.getByLabel(/job title|position/i).fill("Senior Backend Engineer");
-    await page.getByLabel(/company/i).fill("Example Corp");
+    await page.getByLabel(/job title|position/i).fill(JOB_TITLE);
+    await page.getByLabel(/company/i).fill(COMPANY_NAME);
     await page.getByLabel(/job description|description/i).fill(JOB_DESCRIPTION);
     // The form's submit button stays disabled until a job URL is present too,
     // and the backend probes the URL for real reachability (domain_validator.py)
     // before accepting it — a synthetic path 404s, so this must be a live page.
-    await page.getByLabel(/job url|url/i).fill("https://example.com/");
+    await page.getByLabel(/job url|url/i).fill(COMPANY_URL);
 
     // Selecting a base CV here is what makes gap-analysis questions exist at
     // all: handleSubmit (applications/new/page.tsx) only calls
