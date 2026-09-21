@@ -216,6 +216,12 @@ INTERVIEW_PREP_JOBS_QUEUE_NAME: Final[str] = os.environ.get(
     get_resource_name('interview-prep-jobs', 'queue'),
 )
 
+# Queue name for gap-question generation async submit -> worker flow
+GAP_ANALYSIS_QUEUE_NAME: Final[str] = os.environ.get(
+    'GAP_ANALYSIS_QUEUE_NAME',
+    get_resource_name('gap-analysis', 'queue'),
+)
+
 # Jobs table for async job tracking
 VPR_JOBS_TABLE_NAME: Final[str] = os.environ.get(
     'VPR_JOBS_TABLE_NAME',

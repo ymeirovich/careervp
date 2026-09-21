@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 import boto3
+from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
 from careervp.dal import table_registry
@@ -22,9 +23,13 @@ from careervp.handlers.utils.observability import log_response_status, logger, m
 from careervp.logic.gap_analysis import generate_gap_questions
 from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
+from careervp.logic.utils.constants import GAP_ANALYSIS_QUEUE_NAME
 from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import GapQuestionRequest, GapResponseRequest
 from careervp.models.result import Result, ResultCode
+
+# Module-level SQS client for testing/mocking (mirrors vpr_submit_handler).
+sqs = boto3.client('sqs')
 
 _trial_service: TrialService | None = None
 _application_repository: ApplicationRepository | None = None
@@ -76,12 +81,35 @@ def _get_responses_dal() -> DynamoDalHandler:
     return DynamoDalHandler(table_name=table_name)
 
 
+def _get_sqs_queue_url() -> str:
+    """Resolve the gap-analysis SQS queue URL deterministically from env or lookup."""
+    queue_url = os.environ.get('SQS_QUEUE_URL')
+    if queue_url:
+        return queue_url
+
+    queue_name = os.environ.get('SQS_QUEUE_NAME', GAP_ANALYSIS_QUEUE_NAME)
+    response = sqs.get_queue_url(QueueName=queue_name)
+    resolved_url = response.get('QueueUrl')
+    if not isinstance(resolved_url, str) or not resolved_url:
+        raise RuntimeError(f'Unable to resolve SQS queue URL for queue {queue_name}')
+    return resolved_url
+
+
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
 @log_response_status
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     global _current_request_origin
+
+    # SQS worker dispatch: gap-question generation runs the LLM call here, outside
+    # the 30s API Gateway request budget (mirrors cover_letter_handler.py).
+    records = event.get('Records', [])
+    if records and isinstance(records, list):
+        first_source = (records[0] or {}).get('eventSource', '')
+        if first_source == 'aws:sqs':
+            return _process_sqs_event(event)
+
     _headers = event.get('headers') or {}
     _current_request_origin = _headers.get('origin') or _headers.get('Origin')
     method = str(event.get('httpMethod', '')).upper()
@@ -138,6 +166,15 @@ def _error_response(status_code: int | HTTPStatus, message: str, code: str) -> d
 
 
 def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
+    """POST /gap-analysis/questions — submit gap-question generation as an async job.
+
+    Validates the request and confirms the CV exists (a cheap read, done before
+    any trial credit is charged), writes a PENDING row, enqueues the worker, and
+    returns 202. The LLM call itself runs in the SQS-triggered worker
+    (_process_gap_generation_job), outside the 30s API Gateway request budget —
+    gap-question generation previously ran here inline and exceeded that budget
+    under real input (HANDOFF-09).
+    """
     payload = _parse_body(event)
     if payload is None:
         return _error_response(HTTPStatus.BAD_REQUEST, 'Invalid request body', ResultCode.INVALID_JSON)
@@ -165,10 +202,11 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
 
     max_questions = _normalize_max_questions(openapi_request.max_questions)
     focus_areas = _normalize_focus_areas(openapi_request.focus_areas)
+
+    # Fail fast on a missing CV before any trial credit is charged.
     user_cv = _build_user_cv_prompt_payload(user_id=user_id, cv_id=cv_id, focus_areas=focus_areas)
     if _is_cv_error_envelope(user_cv):
         return _json_response(HTTPStatus.NOT_FOUND, _public_cv_error_envelope(user_cv))
-    job_posting = _build_job_prompt_payload(job_id=job_id, focus_areas=focus_areas)
 
     application_id, error_response = _prepare_trial_and_pending_state(
         payload=payload,
@@ -178,7 +216,113 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     )
     if error_response is not None:
         return error_response
-    application_repo = _get_application_repository()
+
+    try:
+        dal = _get_dal()
+    except RuntimeError:
+        logger.exception('Gap questions table not configured')
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)
+
+    try:
+        pending_result = dal.save_gap_questions(
+            user_id=user_id,
+            cv_id=cv_id,
+            job_id=job_id,
+            questions=[],
+            status='pending',
+        )
+    except Exception as exc:
+        logger.exception('Unexpected DAL exception while writing pending gap questions row', error=str(exc), job_id=job_id)
+        pending_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
+    if not pending_result.success:
+        logger.error(
+            'Failed to write pending gap questions row',
+            user_id=user_id,
+            job_id=job_id,
+            error=pending_result.error,
+        )
+        return _error_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            f'Failed to create job. Details: {pending_result.error}',
+            pending_result.code,
+        )
+
+    try:
+        queue_url = _get_sqs_queue_url()
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps(
+                {
+                    'user_id': user_id,
+                    'cv_id': cv_id,
+                    'job_id': job_id,
+                    'application_id': application_id,
+                    'max_questions': max_questions,
+                    'focus_areas': focus_areas,
+                }
+            ),
+            MessageAttributes={
+                'job_type': {'StringValue': 'gap_question_generation', 'DataType': 'String'},
+                'job_id': {'StringValue': job_id, 'DataType': 'String'},
+                'user_id': {'StringValue': user_id, 'DataType': 'String'},
+            },
+        )
+        logger.info('Gap question generation job queued', user_id=user_id, job_id=job_id, cv_id=cv_id)
+    except BotoClientError as exc:
+        logger.error('Failed to send message to SQS', job_id=job_id, error=str(exc))
+        metrics.add_metric(name='SqsError', unit='Count', value=1)
+        dal.save_gap_questions(
+            user_id=user_id,
+            cv_id=cv_id,
+            job_id=job_id,
+            questions=[],
+            status='failed',
+            error='Failed to queue for processing',
+        )
+        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Failed to queue job for processing', ResultCode.DYNAMODB_ERROR)
+
+    metrics.add_metric(name='GapQuestionsJobQueued', unit='Count', value=1)
+    return _json_response(
+        HTTPStatus.ACCEPTED,
+        {
+            'request_id': job_id,
+            'job_id': job_id,
+            'cv_id': cv_id,
+            'status': 'processing',
+            'estimated_time_seconds': 45,
+        },
+    )
+
+
+def _process_gap_generation_job(message_body: dict[str, Any]) -> None:
+    """Worker: run the LLM call and persist the result (SQS-triggered, no 30s budget)."""
+    user_id = str(message_body.get('user_id') or '').strip()
+    cv_id = str(message_body.get('cv_id') or '').strip()
+    job_id = str(message_body.get('job_id') or '').strip()
+    application_id = str(message_body.get('application_id') or job_id).strip()
+    max_questions = _normalize_max_questions(message_body.get('max_questions'))
+    focus_areas = _normalize_focus_areas(message_body.get('focus_areas'))
+
+    if not user_id or not cv_id or not job_id:
+        logger.error('Gap question SQS message missing required fields', message_body=message_body)
+        return
+
+    logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
+
+    try:
+        dal = _get_dal()
+    except RuntimeError:
+        logger.exception('Gap questions table not configured in worker')
+        return
+
+    dal.save_gap_questions(user_id=user_id, cv_id=cv_id, job_id=job_id, questions=[], status='processing')
+
+    user_cv = _build_user_cv_prompt_payload(user_id=user_id, cv_id=cv_id, focus_areas=focus_areas)
+    if _is_cv_error_envelope(user_cv):
+        logger.error('CV missing at worker time', user_id=user_id, cv_id=cv_id)
+        dal.save_gap_questions(user_id=user_id, cv_id=cv_id, job_id=job_id, questions=[], status='failed', error='CV not found')
+        return
+    job_posting = _build_job_prompt_payload(job_id=job_id, focus_areas=focus_areas)
 
     try:
         with bind_llm_usage_context(application_id=application_id, user_id=user_id):
@@ -191,73 +335,28 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             )
     except Exception as exc:
         error_details = f'{type(exc).__name__}: {str(exc)}'
-        logger.error(
-            'Gap question generation failed',
-            job_id=job_id,
-            error=error_details,
-            exc_info=True,
-        )
-        return _error_response(
-            HTTPStatus.SERVICE_UNAVAILABLE,
-            f'Failed to invoke LLM model: {error_details}',
-            ResultCode.LLM_API_ERROR,
-        )
+        logger.error('Gap question generation failed', job_id=job_id, error=error_details, exc_info=True)
+        dal.save_gap_questions(user_id=user_id, cv_id=cv_id, job_id=job_id, questions=[], status='failed', error=error_details)
+        return
+
     if not generation_result.success or generation_result.data is None:
-        status = (
-            HTTPStatus.SERVICE_UNAVAILABLE
-            if generation_result.code
-            in {
-                ResultCode.LLM_TIMEOUT,
-                ResultCode.LLM_API_ERROR,
-                ResultCode.TIMEOUT,
-            }
-            else HTTPStatus.INTERNAL_SERVER_ERROR
-        )
-        return _error_response(
-            status,
-            generation_result.error or 'Gap question generation failed',
-            generation_result.code,
-        )
+        error_msg = generation_result.error or 'Gap question generation failed'
+        logger.error('Gap question generation unsuccessful', job_id=job_id, error=error_msg, code=generation_result.code)
+        dal.save_gap_questions(user_id=user_id, cv_id=cv_id, job_id=job_id, questions=[], status='failed', error=error_msg)
+        return
 
     questions = generation_result.data[:max_questions]
-    missing_qualifications = _build_missing_qualifications(focus_areas)
 
-    try:
-        dal = _get_dal()
-    except RuntimeError:
-        logger.exception('Gap questions table not configured')
-        return _error_response(HTTPStatus.INTERNAL_SERVER_ERROR, 'Internal server error', ResultCode.MISSING_ENV)
-
-    try:
-        save_result = dal.save_gap_questions(
-            user_id=user_id,
-            cv_id=cv_id,
-            job_id=job_id,
-            questions=questions,
-        )
-    except Exception as exc:
-        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)
-        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)
-
+    save_result = dal.save_gap_questions(user_id=user_id, cv_id=cv_id, job_id=job_id, questions=questions, status='completed')
     if not save_result.success:
-        logger.error(
-            'Gap question persistence failed',
-            user_id=user_id,
-            job_id=job_id,
-            save_result_code=save_result.code,
-            error=save_result.error,
-        )
+        logger.error('Gap question persistence failed', user_id=user_id, job_id=job_id, error=save_result.error)
         metrics.add_metric(name='GapQuestionPersistenceFailures', unit='Count', value=1)
-        # Return detailed error for diagnostics (includes table_name, operation, error_code, message)
-        return _error_response(
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-            f'Failed to save gap questions. Details: {save_result.error}',
-            save_result.code,
-        )
-
-    logger.info('Gap questions persisted', user_id=user_id, job_id=job_id, question_count=len(questions))
+        # Leave status at 'processing' (the last successful write) and raise so SQS
+        # retries the whole job rather than silently stranding it there.
+        raise RuntimeError(f'Failed to save gap questions: {save_result.error}')
 
     try:
+        application_repo = _get_application_repository()
         application_repo.update_state(
             application_id=application_id,
             user_id=user_id,
@@ -268,15 +367,32 @@ def generate_questions(event: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
         pass
 
     metrics.add_metric(name='GapQuestionsGenerated', unit='Count', value=1)
-    return _json_response(
-        HTTPStatus.OK,
-        {
-            'job_id': job_id,
-            'cv_id': cv_id,
-            'questions': questions,
-            'missing_qualifications': missing_qualifications,
-        },
-    )
+    logger.info('Gap questions persisted', user_id=user_id, job_id=job_id, question_count=len(questions))
+
+
+def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Process SQS messages for async gap-question generation."""
+    batch_item_failures: list[dict[str, str]] = []
+    for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
+        raw_body = record.get('body')
+        if not raw_body:
+            logger.warning('SQS record missing body field')
+            continue
+        try:
+            message_body = json.loads(raw_body)
+        except json.JSONDecodeError:
+            logger.warning('SQS record body is not valid JSON')
+            continue
+        if not isinstance(message_body, dict):
+            logger.warning('SQS record body is not a JSON object')
+            continue
+        try:
+            _process_gap_generation_job(message_body)
+        except Exception as exc:
+            logger.exception('Unexpected error processing gap question job', message_id=message_id, error=str(exc))
+            batch_item_failures.append({'itemIdentifier': message_id})
+    return {'batchItemFailures': batch_item_failures}
 
 
 def get_questions(event: dict[str, Any]) -> dict[str, Any]:
@@ -333,14 +449,18 @@ def get_questions(event: dict[str, Any]) -> dict[str, Any]:
         job_id=job_id,
         retrieval_count=len(items),
     )
-    return _json_response(
-        HTTPStatus.OK,
-        {
-            'job_id': job_id,
-            'cv_id': latest.get('cv_id'),
-            'questions': latest.get('questions') or [],
-        },
-    )
+    # Legacy rows saved before the async split have no 'status' field; a row that
+    # exists with no status was, by construction, already a completed synchronous
+    # write.
+    response_body: dict[str, Any] = {
+        'job_id': job_id,
+        'cv_id': latest.get('cv_id'),
+        'questions': latest.get('questions') or [],
+        'status': latest.get('status') or 'completed',
+    }
+    if latest.get('error'):
+        response_body['error'] = latest['error']
+    return _json_response(HTTPStatus.OK, response_body)
 
 
 def submit_response(event: dict[str, Any]) -> dict[str, Any]:
@@ -715,12 +835,6 @@ def _normalize_focus_areas(value: Any) -> list[str]:
     return normalized
 
 
-def _build_missing_qualifications(focus_areas: list[str]) -> list[dict[str, str]]:
-    if not focus_areas:
-        return []
-    return [{'skill': focus_area, 'priority': 'MEDIUM'} for focus_area in focus_areas]
-
-
 def _normalize_submitted_responses(
     raw_responses: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
@@ -997,4 +1111,12 @@ def _log_trial_credit_attribution(
         metrics.add_metric(name='TrialUsageAfter', unit='Count', value=usage_after)
 
 
-__all__ = ['lambda_handler', 'generate_questions', 'get_questions', 'submit_response', 'get_responses']
+__all__ = [
+    'lambda_handler',
+    'generate_questions',
+    'get_questions',
+    'submit_response',
+    'get_responses',
+    '_process_gap_generation_job',
+    '_process_sqs_event',
+]

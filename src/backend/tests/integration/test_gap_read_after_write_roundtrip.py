@@ -174,41 +174,53 @@ def _generated_questions(n: int = 3) -> list[dict[str, Any]]:
 
 @pytest.mark.integration
 def test_get_after_post_returns_persisted_questions(gap_table: Any) -> None:
-    """POST then GET with same user_id/job_id returns >=1 question (AC-GAP-002)."""
+    """POST (submit) then worker then GET with same user_id/job_id returns >=1
+    question (AC-GAP-002). Generation now runs in the SQS worker, not inline
+    with the POST (HANDOFF-09), so this drives both phases."""
     from careervp.handlers import gap_handler
-    from careervp.models.result import Result, ResultCode
 
     questions = _generated_questions(3)
+
+    cv_payload = {
+        'personal_info': {'full_name': 'Test User'},
+        'work_experience': [],
+        'skills': [],
+        'education': [],
+    }
 
     with (
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
-        patch.object(
-            gap_handler,
-            '_build_user_cv_prompt_payload',
-            return_value={
-                'personal_info': {'full_name': 'Test User'},
-                'work_experience': [],
-                'skills': [],
-                'education': [],
-            },
-        ),
-        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=cv_payload),
+        patch.object(gap_handler, '_get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch.object(gap_handler, 'sqs'),
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_gen.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
-
         post_response = gap_handler.generate_questions(_post_event())
 
-    assert post_response['statusCode'] == 200, (
-        f'POST must return 200 when persistence succeeds, got {post_response["statusCode"]}: {post_response["body"]}'
+    assert post_response['statusCode'] == 202, (
+        f'POST must return 202 when the job is queued, got {post_response["statusCode"]}: {post_response["body"]}'
     )
 
+    with (
+        patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=cv_payload),
+        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
+    ):
+        from careervp.models.result import Result, ResultCode
+
+        mock_app_repo.return_value.update_state.return_value = None
+        mock_gen.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
+        gap_handler._process_gap_generation_job({'user_id': USER_ID, 'cv_id': CV_ID, 'job_id': JOB_ID, 'application_id': JOB_ID})
+
     get_response = gap_handler.get_questions(_get_event())
-    assert get_response['statusCode'] == 200, f'GET must return 200 after successful POST, got {get_response["statusCode"]}: {get_response["body"]}'
+    assert get_response['statusCode'] == 200, (
+        f'GET must return 200 after the worker completes, got {get_response["statusCode"]}: {get_response["body"]}'
+    )
     get_body = json.loads(get_response['body'])
     assert get_body.get('cv_id') == CV_ID, f'GET cv_id must match persisted value, got: {get_body.get("cv_id")}'
-    assert len(get_body.get('questions', [])) >= 1, f'GET questions must be non-empty after POST, got: {get_body.get("questions")}'
+    assert get_body.get('status') == 'completed', f'GET status must be completed after the worker runs, got: {get_body.get("status")}'
+    assert len(get_body.get('questions', [])) >= 1, f'GET questions must be non-empty after the worker runs, got: {get_body.get("questions")}'
 
 
 @pytest.mark.integration
@@ -329,13 +341,12 @@ def test_get_returns_non_2xx_on_dal_failure(gap_table: Any) -> None:
 def test_cross_user_does_not_leak_questions(gap_table: Any) -> None:
     """GET for user B must not return questions posted by user A (cross-user isolation)."""
     from careervp.handlers import gap_handler
-    from careervp.models.result import Result, ResultCode
 
     user_a = 'user-a-isolation'
     user_b = 'user-b-isolation'
-    questions = _generated_questions(2)
 
-    # User A posts questions
+    # User A posts questions (submit only — cross-user isolation is a property of
+    # the pk, so it holds regardless of whether the worker has run yet).
     with (
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
@@ -349,13 +360,13 @@ def test_cross_user_does_not_leak_questions(gap_table: Any) -> None:
                 'education': [],
             },
         ),
-        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
+        patch.object(gap_handler, '_get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch.object(gap_handler, 'sqs'),
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_gen.return_value = Result(success=True, data=questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
         post_response = gap_handler.generate_questions(_post_event(user_id=user_a))
 
-    assert post_response['statusCode'] == 200, f'User A POST failed: {post_response["body"]}'
+    assert post_response['statusCode'] == 202, f'User A POST failed: {post_response["body"]}'
 
     # User B reads — must not see User A's questions
     get_response = gap_handler.get_questions(_get_event(user_id=user_b))

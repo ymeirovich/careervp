@@ -3,6 +3,7 @@ import type {
   User,
   Usage,
   SubscriptionResponse,
+  ArtifactStatus,
   Job,
   CreateJobInput,
   JobDetail,
@@ -12,7 +13,7 @@ import type {
   UserCV,
   GapQuestion,
   GapAnalysisRequest,
-  GapAnalysisResponse,
+  GapAnalysisStatusResponse,
   GapResponse,
   VPRGenerateRequest,
   AsyncTaskResponse,
@@ -138,6 +139,8 @@ export const api = {
     apiClient.post<UserCV>('/users/me/cv', data).then((r) => r.data),
 
   // ── Gap Analysis ──
+  // Generation is async (submit → SQS worker); poll getGapQuestionsStatus until
+  // status leaves "pending"/"processing".
   getGapQuestions: async (jobId: string): Promise<GapQuestion[]> => {
     const data = await apiFetchOrNull(() =>
       apiClient
@@ -147,8 +150,27 @@ export const api = {
     return (data?.questions ?? []).map(normaliseGapQuestion);
   },
 
-  generateGapQuestions: (data: GapAnalysisRequest): Promise<GapAnalysisResponse> =>
-    apiClient.post<GapAnalysisResponse>('/gap-analysis/questions', data).then((r) => r.data),
+  getGapQuestionsStatus: async (jobId: string): Promise<GapAnalysisStatusResponse> => {
+    const data = await apiClient
+      .get<{
+        job_id: string;
+        cv_id?: string | null;
+        questions: RawGapQuestion[];
+        status?: string;
+        error?: string;
+      }>(`/jobs/${jobId}/gap-questions`)
+      .then((r) => r.data);
+    return {
+      job_id: data.job_id,
+      cv_id: data.cv_id,
+      status: (data.status as ArtifactStatus | undefined) ?? 'completed',
+      questions: (data.questions ?? []).map(normaliseGapQuestion),
+      error: data.error,
+    };
+  },
+
+  generateGapQuestions: (data: GapAnalysisRequest): Promise<AsyncTaskResponse> =>
+    apiClient.post<AsyncTaskResponse>('/gap-analysis/questions', data).then((r) => r.data),
 
   saveGapResponses: (jobId: string, responses: GapResponse[]): Promise<void> =>
     apiClient.post<void>(`/jobs/${jobId}/gap-responses`, { responses }).then(() => undefined),

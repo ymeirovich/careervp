@@ -904,9 +904,11 @@ class DynamoDalHandler(DalHandler):
         job_id: str,
         questions: list[dict[str, Any]],
         ttl_days: int = 90,
+        status: str = 'completed',
+        error: str | None = None,
     ) -> Result[None]:
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
-        logger.info('saving gap analysis questions to DynamoDB')
+        logger.info('saving gap analysis questions to DynamoDB', status=status)
         try:
             table = self._get_db_handler(self.table_name)
             # Convert floats to Decimals for DynamoDB compatibility
@@ -919,10 +921,13 @@ class DynamoDalHandler(DalHandler):
                 'cv_id': cv_id,
                 'job_id': job_id,
                 'questions': converted_questions,
+                'status': status,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),
             }
+            if error:
+                item['error'] = error
             logger.debug('gap_questions item prepared', item_keys=list(item.keys()), item_size_estimate=len(str(item)))
             # Pre-validate JSON serializability to catch issues before DynamoDB
             try:

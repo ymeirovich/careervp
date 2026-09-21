@@ -123,7 +123,7 @@ def test_profile_raises_for_an_undeclared_environment() -> None:
     ``false`` — the exact property that would have caught P-26's ``dev`` ->
     ``devx`` rename before it shipped."""
     with pytest.raises(ValueError, match="No profile for 'staging'"):
-        profile('staging')
+        profile("staging")
 
 
 def test_capability_flags_match_declared_profile(

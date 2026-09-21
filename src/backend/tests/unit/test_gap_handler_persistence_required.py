@@ -176,8 +176,10 @@ def test_post_fails_when_table_not_configured() -> None:
 
 
 @pytest.mark.unit
-def test_post_returns_200_only_when_persistence_succeeds() -> None:
-    """POST returns 200 only after successful persistence (persisted=True invariant)."""
+def test_post_returns_202_only_when_pending_row_persists() -> None:
+    """POST returns 202 only after the PENDING row is persisted (persisted=True
+    invariant) and the job is queued. Generation itself now runs in the SQS
+    worker, not inline (HANDOFF-09)."""
     from careervp.handlers import gap_handler
     from careervp.models.result import Result, ResultCode
 
@@ -186,28 +188,61 @@ def test_post_returns_200_only_when_persistence_succeeds() -> None:
     mock_dal = MagicMock()
     mock_dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
 
-    questions = _generated_questions(2)
     with (
         patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
         patch.object(gap_handler, '_get_trial_service', return_value=None),
         patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
         patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
-        patch.object(gap_handler, 'generate_gap_questions') as mock_gen,
+        patch.object(gap_handler, '_get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch.object(gap_handler, 'sqs') as mock_sqs,
     ):
         mock_app_repo.return_value.update_state.return_value = None
-        mock_gen.return_value = Result(
-            success=True,
-            data=questions,
-            code=ResultCode.GAP_QUESTIONS_GENERATED,
-        )
         response = gap_handler.generate_questions(event)
 
-    assert response['statusCode'] == 200, f'Expected 200 when persistence succeeds but got {response["statusCode"]}'
+    assert response['statusCode'] == 202, f'Expected 202 when the job is queued but got {response["statusCode"]}'
     payload = json.loads(response['body'])
     assert payload['job_id'] == 'job-ok'
     assert payload['cv_id'] == 'cv-ok'
-    assert len(payload['questions']) == 2
-    mock_dal.save_gap_questions.assert_called_once()
+    assert payload['status'] == 'processing'
+    mock_dal.save_gap_questions.assert_called_once_with(
+        user_id='user-abc',
+        cv_id='cv-ok',
+        job_id='job-ok',
+        questions=[],
+        status='pending',
+    )
+    mock_sqs.send_message.assert_called_once()
+
+
+@pytest.mark.unit
+def test_post_fails_when_sqs_send_fails() -> None:
+    """POST returns 5xx and marks the row failed when enqueueing fails after a
+    successful pending-row write."""
+    from botocore.exceptions import ClientError
+
+    from careervp.handlers import gap_handler
+    from careervp.models.result import Result, ResultCode
+
+    event = _make_event(body={'cv_id': 'cv-sqs-fail', 'job_id': 'job-sqs-fail', 'max_questions': 2})
+
+    mock_dal = MagicMock()
+    mock_dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
+
+    with (
+        patch.object(gap_handler, '_get_questions_dal', return_value=mock_dal),
+        patch.object(gap_handler, '_get_trial_service', return_value=None),
+        patch.object(gap_handler, '_get_application_repository') as mock_app_repo,
+        patch.object(gap_handler, '_build_user_cv_prompt_payload', return_value=_valid_cv_payload()),
+        patch.object(gap_handler, '_get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch.object(gap_handler, 'sqs') as mock_sqs,
+    ):
+        mock_app_repo.return_value.update_state.return_value = None
+        mock_sqs.send_message.side_effect = ClientError({'Error': {'Code': 'InternalError', 'Message': 'boom'}}, 'SendMessage')
+        response = gap_handler.generate_questions(event)
+
+    assert response['statusCode'] >= 500, f'Expected 5xx when SQS send fails but got {response["statusCode"]}'
+    failed_calls = [c for c in mock_dal.save_gap_questions.call_args_list if c.kwargs.get('status') == 'failed']
+    assert len(failed_calls) == 1
 
 
 @pytest.mark.unit

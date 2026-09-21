@@ -346,9 +346,10 @@ test.describe("THE JOURNEY", () => {
   });
 
   test("J3 create application", async ({ page }) => {
-    // Submission chains straight into gap-question generation (an LLM call)
-    // before redirecting — the same generation budget J4-J9 get, not the
-    // default page timeout.
+    // Submission enqueues gap-question generation and redirects immediately
+    // (HANDOFF-09: the LLM call moved to an SQS worker, off the request path)
+    // — this no longer needs the full generation budget, but keeps it as
+    // headroom rather than risking flakiness from an untested tighter bound.
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
     await page.goto("/applications/new");
 
@@ -409,29 +410,36 @@ test.describe("THE JOURNEY", () => {
   });
 
   test("J4 gap analysis submit", async ({ page }) => {
-    // Generous beyond GENERATION_TIMEOUT_MS: question generation runs
-    // synchronously inside the create-application request and routinely
-    // outlasts the API Gateway integration timeout (a 504 while the Lambda
-    // keeps running and persists its result afterward, confirmed by network
-    // trace — the same job's questions are there minutes later). Once that
-    // happens this page has no way to recover: `fetchQuestions` runs once on
-    // mount, the empty-state branch it lands in has no retry affordance (only
-    // the separate network-error branch gets a Retry button), so the only
-    // real option is reloading until the background generation lands.
+    // Generous beyond GENERATION_TIMEOUT_MS: the LLM call now runs in an SQS
+    // worker (HANDOFF-09), off the request path, but this budget covers queue
+    // delivery plus generation. The page polls itself every 3s (useEffect in
+    // gap-analysis/page.tsx) and shows a "generating" state while status is
+    // pending/processing, so no manual reload loop is needed here anymore —
+    // waiting on the questions list (with its own auto-wait) is sufficient.
     const GAP_QUESTIONS_TIMEOUT_MS = 2 * GENERATION_TIMEOUT_MS;
     test.setTimeout(GAP_QUESTIONS_TIMEOUT_MS + 60_000);
     await page.goto(`${applicationUrl}/gap-analysis`);
 
     const questionCards = page.getByTestId("questions-list").locator("> div");
-    const retryButton = page.getByTestId("retry-button");
-    await expect(async () => {
-      if (await retryButton.isVisible().catch(() => false)) {
-        await retryButton.click();
-      } else {
-        await page.reload();
-      }
-      await expect(questionCards.first()).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: GAP_QUESTIONS_TIMEOUT_MS, intervals: [10_000] });
+    const generationFailedBanner = page.getByTestId("generation-failed-banner");
+    const outcome = await Promise.race([
+      questionCards
+        .first()
+        .waitFor({ state: "visible", timeout: GAP_QUESTIONS_TIMEOUT_MS })
+        .then(() => "ready" as const)
+        .catch(() => "exhausted" as const),
+      generationFailedBanner
+        .waitFor({ state: "visible", timeout: GAP_QUESTIONS_TIMEOUT_MS })
+        .then(() => "failed" as const)
+        .catch(() => "exhausted" as const),
+    ]);
+
+    if (outcome === "failed") {
+      throw new Error("gap-question generation reported status=failed");
+    }
+    if (outcome === "exhausted") {
+      throw new Error("gap-question generation neither completed nor reported failed in time");
+    }
 
     const count = await questionCards.count();
     expect(count).toBeGreaterThan(0);

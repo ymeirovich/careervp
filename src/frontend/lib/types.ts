@@ -161,6 +161,16 @@ export interface GapAnalysisResponse {
   questions: GapQuestion[];
 }
 
+// Gap-question generation is async (submit → SQS worker); poll this until
+// status leaves "pending"/"processing".
+export interface GapAnalysisStatusResponse {
+  job_id: string;
+  cv_id?: string | null;
+  status: ArtifactStatus;
+  questions: GapQuestion[];
+  error?: string;
+}
+
 // ── VPR ──
 export interface EvidenceItem {
   requirement: string;
