@@ -1,3 +1,27 @@
+> ## ✅ EXECUTED 2026-09-21 — continue with HANDOFF 08
+>
+> Step 1 is done: the devx deploy was approved and the journey ran.
+> **Result: `N = 2 of 9`**, the first measurement ever taken against deployed
+> code. Proof: `docs/evidence/journey-20260921T125027-39ef4b3.json`.
+>
+> **This document's "expected values" were wrong in two ways**, recorded rather
+> than quietly corrected:
+>
+> - It predicted preflight's `deployed commit is known` would flip UNKNOWN →
+>   **PASS**. It flipped UNKNOWN → **FAIL**: every CI deploy stamps `-dirty`
+>   because `GIT_STAMP :=` is evaluated at make *parse* time, after CI's
+>   `make build` has regenerated two tracked requirements files.
+> - It predicted `journey 3 of 9, J4 fails`. Actual: **2 of 9, J3 fails** — and
+>   the inherited `3` turned out to have been measured against
+>   `http://localhost:3000`, not a deployed environment. It was never a
+>   measurement of the product.
+>
+> Step 3 (key retirement) was superseded mid-flight: the key was deactivated,
+> which **broke the operator's own access**, was reactivated, and then properly
+> **rotated**. Do not delete it — ~145 branches still consume those secrets.
+>
+> **Next: `2026-09-21-HANDOFF-08-j3-client-side-submit.md`.**
+
 # HANDOFF 07 — deploy devx from db-redesign and get a real N
 
 **Model: Opus 5, high effort.** Fresh session at the repo root, on
