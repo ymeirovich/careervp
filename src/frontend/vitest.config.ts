@@ -20,6 +20,7 @@ export default defineConfig({
       'tests/unit/ProgressBar.test.tsx',
       'tests/regression/cross-module-invalidation.test.ts',
       'tests/regression/cta-label-consistency.test.tsx',
+      'tests/regression/hub-company-research-cta.test.tsx',
       'tests/regression/state-machine-transitions.test.ts',
       'tests/integration/api-polling.test.ts',
       'tests/integration/cognito-auth.test.ts',
