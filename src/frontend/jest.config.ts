@@ -65,6 +65,7 @@ const config: Config = {
         '<rootDir>/tests/regression/state-machine-transitions.test.ts',
         '<rootDir>/tests/regression/cross-module-invalidation.test.ts',
         '<rootDir>/tests/regression/cta-label-consistency.test.tsx',
+        '<rootDir>/tests/regression/hub-company-research-cta.test.tsx',
       ],
       transform: { '^.+\\.[tj]sx?$': 'ts-jest' },
       testEnvironment: 'node',
