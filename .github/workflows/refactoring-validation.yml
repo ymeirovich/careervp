@@ -206,4 +206,9 @@ jobs:
         run: make build
       - name: CDK Synth
         working-directory: infra
+        env:
+          # infra/careervp/scratch_deployment.py fails closed on an unset
+          # ENVIRONMENT (P-64) rather than silently guessing "dev" — devx is
+          # this repo's actual live deploy target, see CLAUDE.md's topology.
+          ENVIRONMENT: devx
         run: npx cdk synth
