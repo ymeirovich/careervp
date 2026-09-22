@@ -1,0 +1,49 @@
+{
+  "kind": "journey",
+  "journey_reached": 4,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "pass",
+    "J5": "fail: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "browser_diagnostics": {
+    "J2": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=ck3ub — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/billing/?_rsc=ypqti — net::ERR_ABORTED"
+    ],
+    "J4": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=l984r — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/jobs/db258333-bbb6-42f0-a264-ce53a340c8a9/gap-questions — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/applications/db258333-bbb6-42f0-a264-ce53a340c8a9 — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/users/me/cv — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/company-research/db258333-bbb6-42f0-a264-ce53a340c8a9 — net::ERR_ABORTED"
+    ]
+  },
+  "git_sha": "2b41d0a3e63e3d283e58644a858473d3ca0b1711",
+  "git_short": "2b41d0a",
+  "git_dirty": false,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "86cb6b0be2bb2d65dc199e86f9ca8c32d37ed4b2-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260922T104455-2b41d0a",
+  "timestamp": "2026-09-22T10:51:30.598Z"
+}
