@@ -1,0 +1,50 @@
+{
+  "kind": "journey",
+  "journey_reached": 3,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "fail: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).not.\u001b[22mtoBeEmpty\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed [http 500: POST https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/ai/assist — {\"error\": \"AI-assist failed\", \"code\": \"INTERNAL_ERROR\"}]",
+    "J5": "not run",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "browser_diagnostics": {
+    "J2": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=ck3ub — net::ERR_ABORTED"
+    ],
+    "J3": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=1bk5q — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=1pyg9 — net::ERR_ABORTED"
+    ],
+    "J4": [
+      "console.error: Failed to load resource: the server responded with a status of 500 ()",
+      "pageerror: AI-assist failed",
+      "http 500: POST https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/ai/assist — {\"error\": \"AI-assist failed\", \"code\": \"INTERNAL_ERROR\"}"
+    ]
+  },
+  "git_sha": "56aa3f90587cc9fa0f601e6d5623b651d3fbc933",
+  "git_short": "56aa3f9",
+  "git_dirty": false,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "0d99e901d301e3bd79cd3da5076f942425138904-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260922T100902-56aa3f9",
+  "timestamp": "2026-09-22T10:13:52.917Z"
+}

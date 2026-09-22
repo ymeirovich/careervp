@@ -105,31 +105,45 @@ def record_llm_usage(
     if context is not None:
         repository = _get_application_repository()
         if repository is not None:
-            totals = repository.record_llm_usage(
-                application_id=context.application_id,
-                user_id=context.user_id,
-                model_id=model_id,
-                traffic_origin=resolved_origin,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost_usd=cost_usd,
-                prompt_cache_hit=prompt_cache_hit,
-                prompt_cache_lookup=prompt_cache_lookup,
-            )
-            _emit_metric_set(
-                dimensions={'TrafficOrigin': resolved_origin},
-                metric_values={
-                    'CostPerApplicationUSD': float(totals['cost_per_application_usd']),
-                    'ApplicationInputTokens': int(totals['input_tokens_total']),
-                    'ApplicationOutputTokens': int(totals['output_tokens_total']),
-                    'PromptCacheHitRate': float(totals['prompt_cache_hit_rate']) * 100.0,
-                },
-            )
-            if float(totals['cost_per_application_usd']) > COST_PER_APP_ALARM_THRESHOLD:
+            try:
+                totals = repository.record_llm_usage(
+                    application_id=context.application_id,
+                    user_id=context.user_id,
+                    model_id=model_id,
+                    traffic_origin=resolved_origin,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=cost_usd,
+                    prompt_cache_hit=prompt_cache_hit,
+                    prompt_cache_lookup=prompt_cache_lookup,
+                )
+            except Exception:
+                # This is a cost/observability side effect of a call whose real
+                # work (the LLM response) already succeeded — a write failure
+                # here (e.g. a role missing UpdateItem, confirmed live for
+                # ai-assist in devx 2026-09-22) must not discard that response.
+                # See docs/evidence/prediction-2026-09-21.md.
+                logger.exception(
+                    'Failed to record LLM usage totals; continuing without them',
+                    application_id=context.application_id,
+                    model_id=model_id,
+                )
+                totals = None
+            if totals is not None:
                 _emit_metric_set(
                     dimensions={'TrafficOrigin': resolved_origin},
-                    metric_values={'CostPerApplicationThresholdBreaches': 1},
+                    metric_values={
+                        'CostPerApplicationUSD': float(totals['cost_per_application_usd']),
+                        'ApplicationInputTokens': int(totals['input_tokens_total']),
+                        'ApplicationOutputTokens': int(totals['output_tokens_total']),
+                        'PromptCacheHitRate': float(totals['prompt_cache_hit_rate']) * 100.0,
+                    },
                 )
+                if float(totals['cost_per_application_usd']) > COST_PER_APP_ALARM_THRESHOLD:
+                    _emit_metric_set(
+                        dimensions={'TrafficOrigin': resolved_origin},
+                        metric_values={'CostPerApplicationThresholdBreaches': 1},
+                    )
 
     logger.info(
         'LLM usage metered',
