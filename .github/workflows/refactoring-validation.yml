@@ -173,12 +173,41 @@ jobs:
           stack_content = '\n'.join(f.read_text() for f in sources)
           print(f'scanned {len(sources)} infra module(s)')
 
+          # s3_spec.yaml is a phase-tagged ROADMAP, not an inventory of what
+          # must exist today: its own header says 'Used by: Phase 4 (CV
+          # storage), Phase 6 (Generated files)'. Requiring every entry to be
+          # built would fail the build for work that is correctly recorded as
+          # not yet started.
+          #
+          # deployment_spec.yaml already tracks which of those are pending, in
+          # a planned_refactor_contract block that names this very file as its
+          # source and carries status PLANNED_NOT_WIRED_IN_SERVICE_STACK. Read
+          # that rather than duplicating the fact, so the two cannot drift.
+          deployment = yaml.safe_load(open('docs/refactor/specs/deployment_spec.yaml'))
+          planned_values = set()
+          def collect(node):
+            if isinstance(node, dict):
+              if node.get('status') == 'PLANNED_NOT_WIRED_IN_SERVICE_STACK':
+                for b in node.get('buckets', []) or []:
+                  name = b.get('name', '')
+                  if "bucket_name('" in name:
+                    planned_values.add(name.split("bucket_name('")[1].split("'")[0])
+              for v in node.values(): collect(v)
+            elif isinstance(node, list):
+              for v in node: collect(v)
+          collect(deployment)
+          print(f'planned-not-wired bucket purposes: {sorted(planned_values) or "none"}')
+
+          by_constant = {b['constant']: b.get('value') for b in spec.get('buckets', [])}
+
           # Compare by constant usage in stack implementation.
           missing = []
           for constant in spec_constants:
             needle = f'constants.{constant}'
             if needle in stack_content:
               print(f'{constant}: ✅')
+            elif by_constant.get(constant) in planned_values:
+              print(f'{constant}: ⏳ planned, not wired (deployment_spec.yaml) -- not a failure')
             else:
               print(f'{constant}: ❌ not referenced anywhere in infra/careervp/')
               missing.append(constant)
