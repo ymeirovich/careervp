@@ -183,20 +183,20 @@ jobs:
           # a planned_refactor_contract block that names this very file as its
           # source and carries status PLANNED_NOT_WIRED_IN_SERVICE_STACK. Read
           # that rather than duplicating the fact, so the two cannot drift.
+          import re
           deployment = yaml.safe_load(open('docs/refactor/specs/deployment_spec.yaml'))
-          planned_values = set()
+          planned_names = []
           def collect(node):
             if isinstance(node, dict):
               if node.get('status') == 'PLANNED_NOT_WIRED_IN_SERVICE_STACK':
                 for b in node.get('buckets', []) or []:
-                  name = b.get('name', '')
-                  if "bucket_name('" in name:
-                    planned_values.add(name.split("bucket_name('")[1].split("'")[0])
+                  planned_names.append(str(b.get('name', '')))
               for v in node.values(): collect(v)
             elif isinstance(node, list):
               for v in node: collect(v)
           collect(deployment)
-          print(f'planned-not-wired bucket purposes: {sorted(planned_values) or "none"}')
+          planned_values = set(re.findall(r'bucket_name\(\x27([^\x27]+)\x27\)', chr(10).join(planned_names)))
+          print(f'planned-not-wired bucket purposes: {sorted(planned_values)}')
 
           by_constant = {b['constant']: b.get('value') for b in spec.get('buckets', [])}
 
