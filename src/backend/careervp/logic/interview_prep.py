@@ -40,7 +40,17 @@ PARSE_RETRY_TEMPERATURE = 0.1
 # generation was returned as INTERNAL_ERROR. Halving the question count on retry did not
 # help, because the cap -- not the question count -- was the binding constraint.
 #
-# 16000 matches what vpr_generator already uses for a comparably large structured document.
+# 16000 is sized against THIS caller's own model, not a borrowed number. generate()
+# runs on LLMClient.DEFAULT_MODEL -- claude-haiku-4-5-20251001 -- whose ceiling is 64K
+# output tokens (200K context), so 16000 leaves 4x headroom. Do not read the identical
+# 16000 in vpr_generator as the precedent: that caller pins claude-sonnet-4-6, a
+# different tier with a different ceiling.
+#
+# 16000 is also the practical CEILING here, and the constraint is transport, not the
+# model: _invoke_model uses a non-streaming messages.create, which starts risking SDK
+# HTTP timeouts above ~16000 output tokens. Raising this further requires moving
+# generate() to streaming FIRST. If the budget is ever too small, reduce the ask
+# instead -- MAX_QUESTIONS is 15 while V1 scope is 10.
 GENERATION_MAX_TOKENS = 16000
 
 logger = logging.getLogger(__name__)
