@@ -862,3 +862,65 @@ def test_error_report_role_is_logs_only(
     assert "ssm:GetParameter" not in flattened_actions, (
         "error-report role must not read SSM parameters"
     )
+
+
+def test_interview_prep_worker_can_read_cv_and_gap_responses(
+    features_template: Template,
+) -> None:
+    """The worker must be granted the two tables its context resolver actually reads.
+
+    Journey J8 surfaced this: _build_shared_table_env hands the interview-prep worker
+    CVS_TABLE_NAME and GAP_RESPONSES_TABLE_NAME, but the IAM grants were never added.
+    Every run logged AccessDeniedException on dynamodb:Query for both tables, fell back
+    to the artifacts table (ValidationException: missing key schema element), and then
+    continued at WARNING — so interview prep was generated with neither the candidate's
+    CV nor their gap answers, and still reported success. Env wired, IAM not.
+
+    Read-only by design: the worker only reads these two, and widening them to writes
+    would hand a generation worker the ability to mutate a user's CV.
+    """
+    lambda_resource = _lambda_resource_by_handler(
+        features_template,
+        "careervp.handlers.interview_prep_handler.lambda_handler",
+        function_name_contains="interview-prep-worker",
+    )
+    role_logical_id = _lambda_role_logical_id(lambda_resource)
+    statements = _policy_statements_for_role(features_template, role_logical_id)
+    assert statements, (
+        "No IAM policy statements attached to the interview-prep worker role"
+    )
+
+    def _arn_ref(statement: dict[str, Any]) -> str:
+        return json.dumps(statement.get("Resource", ""))
+
+    def _actions(statement: dict[str, Any]) -> set[str]:
+        raw = statement.get("Action", [])
+        actions = raw if isinstance(raw, list) else [raw]
+        return {a for a in actions if isinstance(a, str)}
+
+    for table_token in ("CvsTable", "GapResponsesTable"):
+        granted = {
+            action
+            for statement in statements
+            if table_token in _arn_ref(statement)
+            for action in _actions(statement)
+        }
+        assert granted, (
+            f"interview-prep worker has no policy statement for {table_token}"
+        )
+        assert "dynamodb:Query" in granted, (
+            f"worker cannot Query {table_token} — this is the exact AccessDeniedException "
+            "that left interview prep generating against empty context"
+        )
+        assert "dynamodb:GetItem" in granted, f"worker cannot GetItem {table_token}"
+
+        forbidden = {
+            "dynamodb:PutItem",
+            "dynamodb:UpdateItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:BatchWriteItem",
+        }
+        assert not (granted & forbidden), (
+            f"interview-prep worker must not hold write actions on {table_token}: "
+            f"{sorted(granted & forbidden)}"
+        )
