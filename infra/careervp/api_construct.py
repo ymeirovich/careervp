@@ -2183,6 +2183,15 @@ class ApiConstruct(Construct):
         artifacts_table.grant_read_write_data(lambda_function)
         applications_table.grant_read_write_data(lambda_function)
         jobs_table.grant_read_data(lambda_function)
+        # _resolve_interview_prep_context reads the base CV and the gap-analysis answers,
+        # and _build_shared_table_env already hands this worker both table names — but the
+        # grants were never added, so every run logged AccessDeniedException, fell back to
+        # the artifacts table (ValidationException: missing key schema element), and then
+        # carried on at WARNING. Generation succeeded against empty context: interview prep
+        # built with neither the candidate's CV nor their gap answers. Read-only, matching
+        # the cover-letter worker directly above.
+        self.api_db.cvs_table.grant_read_data(lambda_function)
+        self.api_db.gap_responses_table.grant_read_data(lambda_function)
         lambda_function.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["ssm:GetParameter"],
