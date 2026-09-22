@@ -1,0 +1,44 @@
+{
+  "kind": "journey",
+  "journey_reached": 3,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "fail: Error: gap-question generation neither completed nor reported failed in time",
+    "J5": "not run",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "browser_diagnostics": {
+    "J2": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=1sc4y — net::ERR_ABORTED"
+    ],
+    "J4": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/tailored-cvs/?_rsc=1pn6f — net::ERR_ABORTED"
+    ]
+  },
+  "git_sha": "d5b517698c4b425fc3d7c058d9313c4bb83f68e0",
+  "git_short": "d5b5176",
+  "git_dirty": true,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "7d17968a46c5300431e0365d6bef47cf9ab28f60-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260922T073713-d5b5176",
+  "timestamp": "2026-09-22T07:45:34.904Z"
+}

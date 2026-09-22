@@ -449,9 +449,22 @@ test.describe("THE JOURNEY", () => {
     // node, not a plain <textarea>. Answer → fill → Save, one card at a time.
     for (let i = 0; i < count; i += 1) {
       await questionCards.nth(i).getByRole("button", { name: /^answer$/i }).click();
-      await questionCards.nth(i).locator('[contenteditable="true"]').fill(
-        "I led a three-person team migrating a monolith to Lambda over eight months.",
-      );
+      const editable = questionCards.nth(i).locator('[contenteditable="true"]');
+      if (i === 0) {
+        // Exercise the AI Assist path for real (RichTextEditor's toolbar
+        // button -> POST /ai/assist -> ai-assist-lambda), not a synthetic
+        // fill — only on the first question, to keep this loop's LLM cost
+        // bounded. The button replaces the editor's content via
+        // editor.commands.setContent on success, so waiting for the field to
+        // stop being empty is the real completion signal (not the button's
+        // own "Generating…" label, which can transiently race the click).
+        await questionCards.nth(i).getByRole("button", { name: /ai assist/i }).click();
+        await expect(editable).not.toBeEmpty({ timeout: GENERATION_TIMEOUT_MS });
+      } else {
+        await editable.fill(
+          "I led a three-person team migrating a monolith to Lambda over eight months.",
+        );
+      }
       await questionCards.nth(i).getByRole("button", { name: /^save$/i }).click();
       // Not "the Save button went away": while the request is in flight the
       // button renders a spinner carrying aria-label="Saving", which makes its

@@ -1,0 +1,122 @@
+{
+  "deployed_matches_head": false,
+  "deployed_sha": "7d17968a46c5300431e0365d6bef47cf9ab28f60-dirty",
+  "deployed_sha_detail": "read from stack output",
+  "dirty_paths": [
+    "ocs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md",
+    "docs/handoff/2026-09-19-PRODUCTION-PROGRAM.md",
+    "docs/handoff/2026-09-20-HANDOFF-00-measurement-sweep.md",
+    "docs/handoff/2026-09-20-HANDOFF-05-merge-the-gate-and-finish-hermeticity.md",
+    "docs/evidence/journey-20260922T073713-d5b5176.json",
+    "docs/evidence/journey/20260922T073713-d5b5176/"
+  ],
+  "discovery_errors": [],
+  "git_branch": "tools/proof-harness",
+  "git_dirty": true,
+  "git_sha": "d5b517698c4b425fc3d7c058d9313c4bb83f68e0",
+  "git_short": "d5b5176",
+  "kind": "preflight",
+  "nested_stack_count": 5,
+  "premises": [
+    {
+      "command": "aws cloudformation describe-stacks --stack-name CareerVpCrudDevx",
+      "detail": "UPDATE_COMPLETE, last updated 2026-09-21 21:24:03.396000+00:00",
+      "name": "stack healthy",
+      "observed": {
+        "last_updated": "2026-09-21 21:24:03.396000+00:00",
+        "status": "UPDATE_COMPLETE"
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "aws cloudformation describe-stacks --query \"Stacks[0].Outputs[?OutputKey=='DeployedGitSha']\"",
+      "detail": "stack was deployed from a DIRTY tree (7d17968a46c5300431e0365d6bef47cf9ab28f60-dirty) \u2014 the running code is not in git",
+      "name": "deployed commit is known",
+      "observed": "7d17968a46c5300431e0365d6bef47cf9ab28f60-dirty",
+      "status": "FAIL"
+    },
+    {
+      "command": "aws apigateway get-stages --rest-api-id ymzhvcxod0",
+      "detail": "1 stage(s) logging",
+      "name": "api access logging enabled",
+      "observed": [
+        "arn:aws:logs:us-east-1:788159322332:log-group:CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E"
+      ],
+      "status": "PASS"
+    },
+    {
+      "command": "aws logs describe-log-groups --log-group-name-prefix CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E",
+      "detail": "CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E: 7d",
+      "name": "access logs kept long enough",
+      "observed": [
+        "CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E: 7d"
+      ],
+      "status": "PASS"
+    },
+    {
+      "command": "aws cloudformation get-template --stack-name CareerVpCrudDevx",
+      "detail": "18/18 Retain",
+      "name": "stateful resources retained",
+      "observed": 18,
+      "status": "PASS"
+    },
+    {
+      "command": "aws lambda get-function-configuration (read TABLE env vars) + aws dynamodb describe-table",
+      "detail": "10/10 exist, ACTIVE, and stack-managed",
+      "name": "tables exist and are managed",
+      "observed": {
+        "inactive": [],
+        "missing": [],
+        "unmanaged": [],
+        "wanted": [
+          "careervp-applications-table-devx",
+          "careervp-artifacts-table-devx",
+          "careervp-company-research-cache-table-devx",
+          "careervp-cvs-table-devx",
+          "careervp-gap-responses-table-devx",
+          "careervp-idempotency-table-devx",
+          "careervp-jobs-table-devx",
+          "careervp-knowledge-table-devx",
+          "careervp-llm-cache-devx",
+          "careervp-users-table-devx"
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "aws cloudformation get-template (read Code.S3Key) + aws lambda get-function-configuration --query CodeSha256",
+      "detail": "2 asset group(s), largest has 32 functions on one build; newest change 2026-09-21T21:32:03.000+0000",
+      "name": "one code build per asset",
+      "observed": {
+        "groups": 2,
+        "largest": 32,
+        "last_modified": "2026-09-21T21:32:03.000+0000"
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "aws ssm get-parameter --name /careervp/devx/anthropic-api-key",
+      "detail": "/careervp/devx/anthropic-api-key exists",
+      "name": "llm api key present",
+      "observed": "/careervp/devx/anthropic-api-key",
+      "status": "PASS"
+    },
+    {
+      "command": "aws cognito-idp describe-user-pool-client --user-pool-id <id> --client-id <id>",
+      "detail": "6 callback URL(s)",
+      "name": "sign-in callbacks configured",
+      "observed": [
+        "http://localhost:3000/callback",
+        "https://app.careervp.com/callback",
+        "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback",
+        "https://dev.careervp.com/callback",
+        "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
+        "https://stage.careervp.com/callback"
+      ],
+      "status": "PASS"
+    }
+  ],
+  "resource_count": 557,
+  "stack": "CareerVpCrudDevx",
+  "timestamp": "2026-09-22T07:50:46.218358+00:00"
+}
