@@ -60,7 +60,18 @@ jobs:
           # this repo's actual live deploy target, see CLAUDE.md's topology.
           ENVIRONMENT: devx
         run: |
-          npx cdk diff > cdk-diff.txt 2>&1
+          # The context MUST match src/backend/Makefile's deploy-devx target,
+          # or this job does not preview the deploy -- it previews a different
+          # application. Measured on this PR before the flag was added: 481
+          # added / 100 modified / 1058 removed, because api_construct.py:94
+          # branches on p26_rehome_features and cdk.json does not set it, so CI
+          # synthesized the un-rehomed topology and diffed it against the
+          # rehomed deployed reality. Every one of those 1058 "removals" was an
+          # artifact of the missing flag.
+          npx cdk diff \
+            --context "p26_rehome_features=true" \
+            --context "git_sha=${{ github.sha }}" \
+            > cdk-diff.txt 2>&1
       # Gate the summarizer on its own regression checks, so a change that
       # reintroduces an over-cap comment fails here rather than at the
       # GitHub API call.
