@@ -19,6 +19,132 @@ project has genuinely measured before.
 
 ---
 
+## Verification pass — 2026-09-22, against HEAD `4bab385`
+
+This document's own closing rule says not to restate its numbers as fresh
+findings but to re-derive them and update in place. That was done. Every row
+below is MEASURED this session (a command was run). **The headline — journey
+4 of 9, J1-J4 passing against deployed `86cb6b0b` — holds unchanged.** Four
+things moved.
+
+| Check | Expected (12A §0) | Measured now | |
+|---|---|---|---|
+| 0.1 `DeployedGitSha` | `86cb6b0b…-dirty` | `86cb6b0be2bb2d65dc199e86f9ca8c32d37ed4b2-dirty` | ✅ |
+| 0.2 `origin/tools/proof-harness` | `2bb94af` or later | `4bab385` (the A/B split commit) | ✅ |
+| 0.3 `db-redesign` ⊆ `tools/proof-harness` | merge-base equals `db-redesign` | merge-base `2b41d0a` ≠ `86cb6b0b` | ⚠️ **see below** |
+| 0.4 journey evidence | `4`, J5 `toHaveText` fail | `journey_reached: 4`, J5 `toHaveText` fail | ✅ |
+| 0.5 trial `application_count` | reset to `0` before `make journey` | **`1`** — must be reset before the next run | ⚠️ |
+| 0.6 PR #225 | `OPEN` | `OPEN` (`fix/ci-environment-devx` → `db-redesign`) | ✅ |
+
+### 0.3 — the topology claim is stale in ancestry, intact in substance
+
+`CLAUDE.md`'s topology table and handoff 07's finding both say `db-redesign`
+is a strict subset of `tools/proof-harness`. As literally written that is now
+**false**: `db-redesign` carries three commits absent from `proof-harness` —
+`7d17968`, `0d99e90`, `86cb6b0` — the squash-merges of PRs #224, #226 and
+#227, which GitHub rewrote into new SHAs on merge.
+
+The *substance* is unaffected, and this was checked rather than assumed:
+`git diff --name-only origin/tools/proof-harness origin/db-redesign` returns
+**nothing outside `docs/`**. The two branches' source, infra and test trees
+are byte-identical; the only delta is three documentation files that exist on
+`proof-harness` and not on `db-redesign`. So there is no source drift — but
+the ancestry test in 12A §0.3 will keep failing, and should be restated as a
+tree comparison rather than a merge-base comparison.
+
+### The one carried-forward unknown that can now be CLOSED
+
+Handoff 05's thread — "whether the remaining 4-file hermeticity fix and the
+`asyncio.run` test-patch fix actually landed is unverified" — **both landed.**
+Verified by reading the files, not by trusting PR #222's title:
+
+- `tests/integration/p05_seeding.py` now applies env via
+  `pytest.MonkeyPatch.context()`, which unwinds on exit; its docstring names
+  the exact prior defect ("the previous hand-rolled snapshot/restore only
+  unwound once the whole block had been entered").
+- `tests/unit/test_llm_client.py` and `tests/unit/test_vpr_handler.py` both
+  use `monkeypatch.delenv`, each carrying an in-code comment describing the
+  `os.environ.pop()` bug it replaced.
+- `tests/integration/conftest.py` mutates no credentials at all.
+- Repo-wide, the only remaining writer of AWS credential env is
+  `src/backend/tests/conftest.py` — the module-level session baseline, which
+  is the intended one.
+- `asyncio.run`: down from 3 stdlib-level patch sites to **1**
+  (`test_p14_p15_billing_idempotency.py:185`, module-scoped). Empirically
+  clean: `pyproject.toml` sets `filterwarnings = ["error::RuntimeWarning"]`,
+  so an unawaited coroutine would fail the test outright — the file passes
+  4/4.
+
+### Corrections to specific claims in this document
+
+- **W5's denominator is 10, not 9.** Ten workflows contain `make deploy`, not
+  nine. The count of ungated ones — **7** — is correct. Measured against live
+  environment protection rules, not `environment:` labels: `devx` has 1
+  required reviewer (real), `staging` has 2 rules (real), **`dev` has 0
+  protection rules**, and the `production` and `gap-remediation` environments
+  **do not exist** — so `main-serverless-service.yml`'s production job and
+  `gap-remediation.yml` are ungated by absence, exactly the auto-create-
+  unprotected trap `CLAUDE.md` warns about.
+- **W6 is now re-verified, not merely superseded.** This document said whether
+  the environment is genuinely CFN-managed "was never re-verified after that
+  correction." It has been: `CareerVpCrudDevx` reports **11**
+  `AWS::DynamoDB::GlobalTable` resources as stack members. Handoff 00's
+  correction stands — the tables are managed. (Eleven, not ten.)
+- Everything else held: the `-dirty` `GIT_STAMP` bug is unchanged at
+  `src/backend/Makefile:28` (simple `:=` expansion) and the most recent
+  preflight still records `deployed commit is known` → FAIL; PRs #221 and
+  #225 are both still open; `python-security` and `iac-security` are still
+  red on `db-redesign`; `Infra Spec Consistency` is still red and its
+  diagnosed cause is confirmed — `refactoring-validation.yml:132` opens
+  `infra/careervp/dynamodb_stack.py`, which does not exist. Nothing from
+  `docs/DEAD-CODE.md` has been deleted (`cv_tailoring_stack.py`,
+  `vpr_handler.py`, `_add_vpr_lambda_integration` and both dead env vars are
+  all still in place). No `docs/FEATURE-STATE.md` exists.
+
+### NEW — `blast-radius.sh` silently under-reports, and this document inherited it
+
+Found while re-deriving, not looked for. `scripts/ops/blast-radius.sh push
+tools/proof-harness` prints **"workflows that fire: 0"**. GitHub disagrees:
+a `push`-event **Security Audit** run fired on `tools/proof-harness` twice
+today (12:02:36 and 11:58:58).
+
+Root cause, proven rather than inferred — `blast-radius.sh:48-49`:
+
+```python
+on = d.get('on') or d.get(True)
+if not isinstance(on, dict): continue
+```
+
+`security.yml` declares its triggers in the bare-list form, `on: [pull_request,
+push]`. YAML parses that to the **list** `['pull_request', 'push']`, so the
+`isinstance(..., dict)` test fails and the workflow is **skipped entirely and
+silently** — it is never considered for either the fires list or the deploy
+scan. Any workflow written in that form is invisible to the tool.
+
+Today the consequence is contained: `security.yml` has no deploy step, so the
+"changes no AWS infrastructure" verdict for `tools/proof-harness` is still
+correct, and 1 of 28 workflows uses this form. But the skip is unconditional —
+a bare-list workflow carrying `make deploy` would be reported as zero deploy
+jobs by the very tool `CLAUDE.md` makes mandatory *because of* the 2026-09-20
+incident. This is the same class of defect as handoff 00's
+`AWS::DynamoDB::Table` vs `GlobalTable` false negative: a safety check that
+queries the wrong shape and returns a confident, clean answer.
+
+Consequence for `CLAUDE.md`'s topology table: its "Push to
+`tools/proof-harness` → **0** workflows" row is wrong twice over — the push
+itself fires `Security Audit`, and because PR #221's head is
+`tools/proof-harness`, every push there also re-runs five `pull_request`
+workflows (PR Validation, CDK Diff Comment, Security Audit, Infra Tests,
+Refactoring Validation). None of them deploy, so the safety conclusion stands;
+the count does not.
+
+**Not fixed here** — one concern per commit, and a change to a safety-critical
+script does not belong inside a documentation-assessment pass. The fix is one
+line (`if isinstance(on, list): on = {k: None for k in on}` before the dict
+test), and it should land with its own regression test.
+
+---
+
 ## Part 1 — the handoff chain, 00 through 11, what actually happened
 
 This project's own methodology (`PRODUCTION-PROGRAM.md`, "The handoff chain")
@@ -156,8 +282,8 @@ fixed and live. J5 is the new, sole blocker — see `HANDOFF-12A`.
 | **W2** — table architecture | Build `table_map.py`, fix mismatches | **W2.1 done** (handoff 10). **W2.2/W2.3 not started** — inventory only, no fixes applied, no single-vs-multi-table decision made. |
 | **W3** — dead code sweep | Build `dead_api.py`/`dead_code.py`, remove findings | **W3.1 done** (handoff 10). **W3.3 not started** — `docs/DEAD-CODE.md` exists, nothing in it has been deleted, per the handoff's own ordering rule (inventory first, deletion is a separate reviewable pass). |
 | **W4** — test integrity, e2e, feature ledger | Wire CI (W4.01), rebuild e2e per feature (W4.1/4.2), generate a feature-state ledger (W4.3) | **W4.01 done** (handoffs 01-05, with one unresolved thread — see below). **W4.1/W4.2/W4.3 not started** — no `docs/FEATURE-STATE.md` exists yet; the per-feature e2e rebuild (282 blocks across 4 dispositions) hasn't begun. |
-| **W5** — close 9 ungated `make deploy` workflows | Gate every deploy path | **2 of 9 closed** (`db-redesign-checks.yml`, `ui-upgrade-checks.yml`). **7 remain ungated**, unchanged since handoff 03. |
-| **W6** — environment rebuildability | `cdk import` or accept 10 unmanaged tables | **Superseded, not resolved.** Handoff 00 found the "10/10 unmanaged" reading was itself a false positive (wrong DynamoDB type queried) — the tables *are* CFN-managed. Whether the environment is genuinely rebuildable from source was never re-verified after that correction. |
+| **W5** — close 9 ungated `make deploy` workflows | Gate every deploy path | **2 of 10 closed** (`db-redesign-checks.yml`, `ui-upgrade-checks.yml`). **7 remain ungated**, unchanged since handoff 03. *(Denominator corrected 2026-09-22: 10 workflows contain `make deploy`, not 9 — see the verification pass.)* |
+| **W6** — environment rebuildability | `cdk import` or accept 10 unmanaged tables | **Superseded, not resolved.** Handoff 00 found the "10/10 unmanaged" reading was itself a false positive (wrong DynamoDB type queried) — the tables *are* CFN-managed. Whether the environment is genuinely rebuildable from source was never re-verified after that correction. *(Partially closed 2026-09-22: `CareerVpCrudDevx` reports 11 `AWS::DynamoDB::GlobalTable` resources as stack members — the tables are confirmed CFN-managed. Full rebuildability remains untested.)* |
 
 **The plan's own headline metric** — `make journey` reporting 9 of 9 — now
 reads **4 of 9**, against an inherited "3 of 9" that turned out to have never
@@ -190,11 +316,21 @@ Compiled from the outcome table in Part 1 plus HANDOFF-11's execution:
 - **PR #221** (handoffs 01-03's broader CI wiring work) is open against
   `ci/proof-base`, not `main` or `db-redesign` — unclear if still relevant
   given how much has landed since; worth a quick check, not urgent.
-- **Whether handoff 05's remaining hermeticity fix (4 files) and the
-  asyncio.run test-patch fix actually landed is unverified** — no HANDOFF-06
-  in this numbering continues that specific thread; PR #222 merged, but
-  what exactly it contained wasn't re-verified.
-- **7 of 9 workflows are still ungated `make deploy`** (W5).
+- ~~**Whether handoff 05's remaining hermeticity fix (4 files) and the
+  asyncio.run test-patch fix actually landed is unverified**~~ — **CLOSED
+  2026-09-22.** Both landed; verified by reading the files rather than
+  trusting PR #222's title. See the verification pass above.
+- **7 of 10 workflows are still ungated `make deploy`** (W5) — denominator
+  corrected from 9; the ungated count of 7 was right. `dev` has 0 protection
+  rules and the `production`/`gap-remediation` environments do not exist, so
+  three of those seven are ungated by *absence* of the environment, not by
+  absence of a label.
+- **NEW — `scripts/ops/blast-radius.sh` silently skips any workflow using the
+  bare-list `on: [a, b]` trigger form** (line 49's `isinstance(on, dict)`
+  test), so it reports "workflows that fire: 0" for `tools/proof-harness`
+  while `Security Audit` demonstrably fires on push. No deploy job is hidden
+  *today*, but the mandatory safety tool under-reports by construction.
+  One-line fix, owed its own commit and regression test.
 - **`python-security`, `iac-security` (pre-#225), `Infra Spec Consistency`**
   are known-red CI checks with diagnosed, uncontested causes (upstream CVEs;
   the `ENVIRONMENT` CI gap; a reference to a deleted `dynamodb_stack.py`) —
