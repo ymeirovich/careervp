@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 
 const mockPush = vi.fn();
 
@@ -122,5 +122,51 @@ describe('Gap Analysis page', () => {
     await waitFor(() => {
       expect(screen.getByTestId('error-banner')).toBeDefined();
     });
+  });
+
+  // Regression for the 2026-09-22 production incident: a job that took longer
+  // than one poll interval to leave 'processing' left the page stuck showing
+  // "Generating..." forever, even though the backend had already finished.
+  // Root cause: polling was re-armed by a useEffect keyed on generationStatus
+  // state, which React does not re-run when consecutive polls return the SAME
+  // status string — exactly what happens whenever a real LLM call outlives a
+  // single 3s tick. gap-api logs showed 2 requests (both 'processing') then
+  // silence for the rest of an 8-minute test window.
+  it('keeps polling through repeated identical in-progress statuses until the job completes', async () => {
+    vi.useFakeTimers();
+    try {
+      apiMocks.getGapQuestionsStatus
+        .mockResolvedValueOnce(statusOf([], 'processing'))
+        .mockResolvedValueOnce(statusOf([], 'processing')) // same value as the previous poll
+        .mockResolvedValueOnce(statusOf([], 'processing')) // same value again — the trap
+        .mockResolvedValueOnce(statusOf(QUESTIONS, 'completed'));
+
+      const { default: GapPage } = await import('../../app/applications/[id]/gap-analysis/page');
+      await act(async () => {
+        renderWithSuspense(<GapPage params={Promise.resolve({ id: 'job1' })} />);
+      });
+
+      expect(apiMocks.getGapQuestionsStatus).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(apiMocks.getGapQuestionsStatus).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(apiMocks.getGapQuestionsStatus).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(apiMocks.getGapQuestionsStatus).toHaveBeenCalledTimes(4);
+
+      expect(screen.getByTestId('questions-list')).toBeDefined();
+      expect(screen.queryByTestId('generating-state')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

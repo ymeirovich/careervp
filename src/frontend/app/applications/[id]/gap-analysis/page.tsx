@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '../../../../api/methods';
@@ -117,9 +117,22 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
   const [fetchError, setFetchError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Generation is async (submit → SQS worker), so a freshly-created application
   // may still be "pending"/"processing" when this page loads — poll until it
   // leaves that state instead of treating zero questions as an empty result.
+  //
+  // The next poll is armed here, from the status this fetch just received —
+  // deliberately NOT via a useEffect keyed on generationStatus state. Two
+  // consecutive polls returning the SAME in-progress value (near-guaranteed
+  // once a job outlives one poll interval, which any real LLM call does)
+  // would never re-trigger such an effect: React does not re-run an effect
+  // whose dependencies didn't change, so a state-triggered timer silently
+  // stops polling before the job finishes. Confirmed in production: gap-api
+  // logs showed exactly 2 status requests (both 'processing') then nothing
+  // for the rest of an 8-minute wait, while the backend had already written
+  // status=completed within 23 seconds (docs/evidence/prediction-2026-09-21.md).
   const fetchQuestions = useCallback(async () => {
     setFetchError(false);
 
@@ -150,18 +163,19 @@ function GapAnalysisContent({ jobId }: { jobId: string }) {
     }
     setResponses(map);
     setLoading(false);
+
+    if (IN_PROGRESS_STATUSES.includes(status)) {
+      pollTimerRef.current = setTimeout(() => void fetchQuestions(), POLL_INTERVAL_MS);
+    }
   }, [jobId]);
 
   useEffect(() => {
     setLoading(true);
     void fetchQuestions();
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
   }, [fetchQuestions]);
-
-  useEffect(() => {
-    if (!generationStatus || !IN_PROGRESS_STATUSES.includes(generationStatus)) return;
-    const timer = setTimeout(() => void fetchQuestions(), POLL_INTERVAL_MS);
-    return () => clearTimeout(timer);
-  }, [generationStatus, fetchQuestions]);
 
   const isGenerating = generationStatus !== null && IN_PROGRESS_STATUSES.includes(generationStatus);
   const generationFailed = generationStatus === 'failed';
