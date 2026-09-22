@@ -163,3 +163,61 @@ If the chain (`ARTIFACT_CHAIN_ENABLED`) being on causes J5-J9 to newly reach
 and pass, say plainly that this is the artifact chain doing what it was built
 for, not evidence gap-question generation had anything to do with it —
 different subsystems.
+
+## Result — 2026-09-22
+
+**Predicted 5 of 9. Actual: 3 of 9 — down from the 4/9 pre-merge baseline.**
+The prediction was wrong, and not narrowly: J4 was predicted to become
+deterministic and instead started hanging for the full 8-minute test budget.
+This is recorded as a miss, not corrected in the text above.
+
+Per-item outcome:
+
+1. **ENVIRONMENT on every Lambda** — CONFIRMED. All 32 `-devx` Lambdas report
+   `ENVIRONMENT=devx` post-deploy (zero missing, was ~30/31 missing
+   pre-merge). `get_subscription failed` stopped appearing in
+   `careervp-gap-api-lambda-devx` logs after the deploy timestamp.
+2. **Capability table fails loud on unknown env** — NOT independently
+   re-verified post-merge (would require `ENVIRONMENT=nonsense cdk synth`
+   against the deployed stack, not attempted); the same code path was
+   confirmed working via the local pre-merge `cdk diff`/`cdk synth` runs in
+   Phase 3.
+3. **Artifact chain enabled for devx** — CONFIRMED at the config level:
+   `ARTIFACT_CHAIN_ENABLED=true` on `vpr-submit`, `gap-api`,
+   `cover-letter-api`, `company-research-worker` post-deploy. Execution count
+   stayed at 0, exactly as predicted (nothing in J1-J4 invokes it).
+4. **Async gap-question generation** — the prediction was WRONG on the
+   observable that mattered. The backend half is confirmed correct end-to-end
+   from CloudWatch logs: submit returns 202 and a PENDING row (07:37:32),
+   `gap-worker` picks up the SQS message immediately, calls the LLM, and
+   writes `status=completed` with 10 questions by 07:37:55 — about 23 seconds,
+   comfortably inside budget, and J3 no longer shows the 504 that the
+   pre-merge baseline had. But the frontend poll loop in
+   `gap-analysis/page.tsx` made exactly 2 status requests (07:37:35, 07:37:44
+   — both succeeded 200 OK server-side, confirmed in
+   `careervp-gap-api-lambda-devx` and `careervp-application-api-lambda-devx`
+   logs) and then never issued a third, for the remaining ~7.5 minutes of the
+   test's wait window. The failure screenshot
+   (`docs/evidence/journey/20260922T073713-d5b5176/J4-STUCK-at-8min-timeout.png`)
+   shows the page still on "Generating your gap analysis questions..." at
+   timeout — 8 minutes after the backend had already finished. Root cause of
+   *why* the poll loop stops is not pinned down: both polled requests
+   returned 200 server-side, so this is not a network or auth failure: it
+   looks like a client-side bug in the `useEffect` at
+   `src/frontend/app/applications/[id]/gap-analysis/page.tsx` that schedules
+   the next poll only when `generationStatus` changes, but needs a live
+   browser repro to close out.
+5. **GlobalTable gate fix / dead-code scripts** — CONFIRMED no runtime
+   change, as predicted.
+
+**Net effect: this merge made the backend correct and made the customer-visible
+behavior worse.** Pre-merge, J4 passed by an accident of timing (a 504 whose
+Lambda kept running in the background, landing before the old page's
+single fetch-on-mount, sometimes). Post-merge, the real architectural fix
+works exactly as designed on the backend, but a new frontend defect means a
+real user submitting gap-analysis now sees the generating spinner forever
+with no recovery affordance on the page itself — worse than the old
+"reload until it shows up" workaround, since at least manual reload used to
+work (a fresh mount performs one more fetch, which would pick up the
+already-completed row). This is a regression that should be triaged as its
+own follow-up, not folded into this record after the fact.
