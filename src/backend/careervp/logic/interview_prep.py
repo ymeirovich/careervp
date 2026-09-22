@@ -30,6 +30,19 @@ DEFAULT_GENERATION_TEMPERATURE = 0.3
 PARSE_RETRY_MAX_QUESTIONS = 5
 PARSE_RETRY_TEMPERATURE = 0.1
 
+# Output budget for one generation.
+#
+# This prompt asks for up to MAX_QUESTIONS answers of ANSWER_MAX_WORDS each, so the
+# worst-case body alone is 15 x 300 = 4500 words ~= 6000 tokens, before question text,
+# STAR fields and JSON scaffolding. LLMClient.generate() used to cap every caller at a
+# hardcoded 4096, which is below that floor: the model stopped mid-string and the JSON
+# never closed, so BOTH parse attempts failed with "Unterminated string" and the whole
+# generation was returned as INTERNAL_ERROR. Halving the question count on retry did not
+# help, because the cap -- not the question count -- was the binding constraint.
+#
+# 16000 matches what vpr_generator already uses for a comparably large structured document.
+GENERATION_MAX_TOKENS = 16000
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,6 +110,7 @@ async def generate_interview_prep(
                 llm_client.generate(
                     prompt=generation_prompt,
                     temperature=float(attempt['temperature']),
+                    max_tokens=GENERATION_MAX_TOKENS,
                 )
             )
         except TimeoutError as exc:

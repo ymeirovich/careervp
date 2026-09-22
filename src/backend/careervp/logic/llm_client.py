@@ -22,6 +22,10 @@ from careervp.models.cv import UserCV
 # Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 DEFAULT_TEMPERATURE = 0.3
+# Output ceiling for generate(). Was hardcoded inside _invoke_model, which silently
+# truncated any caller whose structured output ran long -- the model stops mid-token
+# and the JSON never closes. Callers that need a bigger document pass their own.
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
 DEFAULT_RETRY_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_BASE_DELAY_SECONDS = 0.5
 logger = logging.getLogger(__name__)
@@ -123,6 +127,7 @@ class LLMClient:
         cv: UserCV | None = None,
         model_name: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     ) -> dict[str, Any]:
         """Invoke Anthropic API and return parsed JSON payload."""
         _ = timeout
@@ -134,7 +139,7 @@ class LLMClient:
             return cached
 
         try:
-            response = self._call_anthropic(optimized_prompt, model_name, temperature)
+            response = self._call_anthropic(optimized_prompt, model_name, temperature, max_tokens)
         except CircuitBreakerOpen:
             # Graceful degradation path: serve cached deterministic response when available.
             fallback = self._check_cache(cache_key)
@@ -266,16 +271,28 @@ class LLMClient:
             logger.info('llm_cache_lookup cache_hit=false')
         return None
 
-    def _call_anthropic(self, prompt: str, model_name: str, temperature: float) -> Any:
+    def _call_anthropic(
+        self,
+        prompt: str,
+        model_name: str,
+        temperature: float,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+    ) -> Any:
         """Call Anthropic API and return the raw provider response."""
         try:
             with self._circuit_breaker:
-                response = self._invoke_model(prompt, model_name, temperature)
+                response = self._invoke_model(prompt, model_name, temperature, max_tokens)
         except CircuitBreakerBlockedError as exc:
             raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
         return response
 
-    def _invoke_model(self, prompt: str, model_name: str, temperature: float) -> Any:
+    def _invoke_model(
+        self,
+        prompt: str,
+        model_name: str,
+        temperature: float,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+    ) -> Any:
         """Invoke model and normalize transport/runtime failures for the circuit breaker."""
         attempts = self._retry_max_attempts()
         base_delay_seconds = self._retry_base_delay_seconds()
@@ -285,7 +302,7 @@ class LLMClient:
             try:
                 return self._client.messages.create(
                     model=model_name,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                     temperature=temperature,
                     messages=[{'role': 'user', 'content': prompt}],
                 )
