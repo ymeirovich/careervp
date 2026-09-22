@@ -41,7 +41,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_CDK_DIFF_ROLE_ARN }}
           role-session-name: cdk-diff-${{ github.run_id }}
           aws-region: us-east-1
+      # Human-readable output, not --json: the [+] [~] [-] resource markers and
+      # the IAM / security-group tables are what a reviewer compares against,
+      # and they do not exist in the JSON form. cdk writes the diff to stdout
+      # and progress to stderr, so capture both -- the artifact should be the
+      # whole story.
+      #
+      # continue-on-error so a failed diff is still REPORTED rather than
+      # killing the job before the comment step; the final step below re-fails
+      # the job so a genuine failure stays red.
       - name: Run CDK diff
+        id: cdk_diff
+        continue-on-error: true
         working-directory: infra
         env:
           # infra/careervp/scratch_deployment.py fails closed on an unset
@@ -49,13 +60,48 @@ jobs:
           # this repo's actual live deploy target, see CLAUDE.md's topology.
           ENVIRONMENT: devx
         run: |
-          npx cdk diff --json > cdk-diff.json
-      - name: Ensure diff output exists
+          # The context MUST match src/backend/Makefile's deploy-devx target,
+          # or this job does not preview the deploy -- it previews a different
+          # application. Measured on this PR before the flag was added: 481
+          # added / 100 modified / 1058 removed, because api_construct.py:94
+          # branches on p26_rehome_features and cdk.json does not set it, so CI
+          # synthesized the un-rehomed topology and diffed it against the
+          # rehomed deployed reality. Every one of those 1058 "removals" was an
+          # artifact of the missing flag.
+          npx cdk diff \
+            --context "p26_rehome_features=true" \
+            --context "git_sha=${{ github.sha }}" \
+            > cdk-diff.txt 2>&1
+      # Gate the summarizer on its own regression checks, so a change that
+      # reintroduces an over-cap comment fails here rather than at the
+      # GitHub API call.
+      - name: Self-check the diff summarizer
+        if: always()
+        run: python3 scripts/ci/test_summarize_cdk_diff.py
+      - name: Summarize diff for the PR comment
         if: always()
         run: |
-          test -s infra/cdk-diff.json || echo '{}' > infra/cdk-diff.json
+          touch infra/cdk-diff.txt
+          python3 scripts/ci/summarize_cdk_diff.py \
+            infra/cdk-diff.txt infra/cdk-diff-summary.md infra/cdk-diff-comment.md
+          cat infra/cdk-diff-summary.md >> "$GITHUB_STEP_SUMMARY"
+      # The full diff, unbounded, so the bounded comment never becomes the only
+      # copy of it.
+      - name: Upload full diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-diff
+          path: infra/cdk-diff.txt
+          if-no-files-found: warn
       - name: Comment CDK diff
+        if: always()
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          path: infra/cdk-diff.json
+          path: infra/cdk-diff-comment.md
           header: cdk-diff
+      - name: Fail if cdk diff itself failed
+        if: always() && steps.cdk_diff.outcome == 'failure'
+        run: |
+          echo "::error::cdk diff exited non-zero; see the job summary and the cdk-diff artifact."
+          exit 1
