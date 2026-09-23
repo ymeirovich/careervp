@@ -519,8 +519,27 @@ test.describe("THE JOURNEY", () => {
     test.setTimeout(GENERATION_TIMEOUT_MS + 60_000);
     await page.goto(`${applicationUrl}/cv-tailored`);
 
+    // ExportDropdown renders a toggle whose only behaviour is setOpen(o => !o);
+    // the real download buttons are rendered inside the menu it opens. The
+    // previous selector matched the toggle, so J9 opened the dropdown and then
+    // waited four minutes for a download that needed a second click — the
+    // export Lambda was never invoked once.
+    const dropdown = page.getByTestId("export-dropdown");
+    await expect(dropdown).toBeVisible({ timeout: 60_000 });
+    await dropdown.getByRole("button", { name: /^export/i }).click();
+
+    // Word, not PDF. export_handler._handle_export returns 501 for
+    // format=pdf ("PDF export is not yet available."); only docx is
+    // implemented. Clicking PDF would surface 'Export is coming soon!' and
+    // fire no download event — failing J9 with the identical timeout for a
+    // completely different reason.
+    const downloadItem = dropdown.getByRole("button", { name: /download as word/i });
+    await expect(downloadItem).toBeVisible();
+
+    // Arm the listener around the click that actually triggers the download,
+    // not around the toggle.
     const downloadPromise = page.waitForEvent("download", { timeout: GENERATION_TIMEOUT_MS });
-    await page.getByRole("button", { name: /export|download|pdf|docx/i }).first().click();
+    await downloadItem.click();
 
     const download = await downloadPromise;
     const file = await download.path();

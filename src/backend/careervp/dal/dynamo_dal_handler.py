@@ -284,6 +284,36 @@ class DynamoDalHandler(DalHandler):
         return f'{GAP_RESPONSES_SORT_KEY_PREFIX}v{version}'
 
     @staticmethod
+    def _gap_response_from_stored(item: dict[str, Any]) -> dict[str, Any]:
+        """Translate a stored gap-response entry into the GapResponse shape.
+
+        The writer (gap_handler._normalize_submitted_response_entry, via
+        save_gap_responses_raw) persists {question_id, response}; GapResponse
+        requires {question_id, question, answer}. Reading one as the other
+        raised ValidationError on every call, which get_gap_responses reported
+        as a DAL failure -- so interview prep never saw the candidate's answers.
+
+        Mapping here keeps GapResponse itself untouched, so cover_letter,
+        vpr.VPRRequest and the VPR worker are unaffected.
+
+        'question' is not persisted anywhere: gap_questions is absent from every
+        application record. vpr_worker_handler._fetch_gap_responses_from_application
+        already hit this and falls back to the question_id; do the same rather
+        than inventing a second convention.
+        """
+        question_id = str(item.get('question_id') or item.get('questionId') or '').strip()
+        answer = str(item.get('answer') or item.get('response') or '').strip()
+        mapped: dict[str, Any] = {
+            'question_id': question_id,
+            'question': str(item.get('question') or '').strip() or question_id,
+            'answer': answer,
+        }
+        destination = item.get('destination')
+        if destination in ('CV_IMPACT', 'INTERVIEW_MVP_ONLY'):
+            mapped['destination'] = destination
+        return mapped
+
+    @staticmethod
     def _parse_version_from_sk(sk: str) -> int:
         if '#v' not in sk:
             return 0
@@ -1072,7 +1102,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.get_item(Key={'userId': user_id, 'questionId': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
-            parsed = [GapResponse.model_validate(item) for item in payload]
+            parsed = [GapResponse.model_validate(self._gap_response_from_stored(item)) for item in payload if isinstance(item, dict)]
             return Result(success=True, data=parsed, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             return self._dal_failure_result(
