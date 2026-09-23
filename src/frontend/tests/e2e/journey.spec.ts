@@ -528,7 +528,12 @@ test.describe("THE JOURNEY", () => {
     await expect(dropdown).toBeVisible({ timeout: 60_000 });
     await dropdown.getByRole("button", { name: /^export/i }).click();
 
-    const downloadItem = dropdown.getByRole("button", { name: /download as pdf/i });
+    // Word, not PDF. export_handler._handle_export returns 501 for
+    // format=pdf ("PDF export is not yet available."); only docx is
+    // implemented. Clicking PDF would surface 'Export is coming soon!' and
+    // fire no download event — failing J9 with the identical timeout for a
+    // completely different reason.
+    const downloadItem = dropdown.getByRole("button", { name: /download as word/i });
     await expect(downloadItem).toBeVisible();
 
     // Arm the listener around the click that actually triggers the download,
