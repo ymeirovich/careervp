@@ -1,0 +1,22 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigateway",
+    "get-integration",
+    "--rest-api-id",
+    "ymzhvcxod0",
+    "--resource-id",
+    "fbukqc",
+    "--http-method",
+    "GET"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:37.260721+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"type\": \"AWS_PROXY\",\n    \"httpMethod\": \"POST\",\n    \"uri\": \"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx/invocations\",\n    \"passthroughBehavior\": \"WHEN_NO_MATCH\",\n    \"timeoutInMillis\": 29000,\n    \"cacheNamespace\": \"fbukqc\",\n    \"cacheKeyParameters\": [],\n    \"responseTransferMode\": \"BUFFERED\"\n}\n",
+  "stderr": ""
+}

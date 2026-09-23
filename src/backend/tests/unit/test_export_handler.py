@@ -44,7 +44,7 @@ def _make_event(
 
 
 def _mock_vpr_s3(monkeypatch: pytest.MonkeyPatch, data: dict | None = None) -> MagicMock:
-    vpr_data = data or {'summary': 'Great candidate', 'skills': 'Python, AWS'}
+    vpr_data = data or {'summary': 'Great candidate', 'skills': 'Python, AWS', 'userId': USER_ID}
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
     monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
@@ -211,7 +211,7 @@ def test_vpr_export_returns_200_with_download_url(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
-    vpr_data = {'summary': 'Strong candidate', 'skills': 'Python, AWS'}
+    vpr_data = {'summary': 'Strong candidate', 'skills': 'Python, AWS', 'userId': USER_ID}
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
     mock_s3.put_object.return_value = {}
@@ -230,6 +230,51 @@ def test_vpr_export_returns_200_with_download_url(monkeypatch: pytest.MonkeyPatc
     # AC-013: presigned URL key must target exports/vpr/{jobId}/{jobId}.docx
     put_call_args = mock_s3.put_object.call_args
     assert f'exports/vpr/{JOB_ID}/{JOB_ID}.docx' in str(put_call_args)
+
+
+# ---------------------------------------------------------------------------
+# S0a regression: a logged-in user must not be able to export another user's
+# VPR by guessing/knowing their job_id. Before the fix, _read_vpr read
+# results/{job_id}.json from S3 with no ownership check at all.
+# ---------------------------------------------------------------------------
+
+
+def test_vpr_export_denies_cross_tenant_access(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
+    monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
+
+    # VPR belongs to a different user than the one making the request.
+    vpr_data = {'summary': 'Strong candidate', 'skills': 'Python, AWS', 'userId': 'someone-else'}
+    mock_s3 = MagicMock()
+    mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
+
+    with patch('careervp.handlers.export_handler.boto3') as mock_boto3:
+        mock_boto3.client.return_value = mock_s3
+        response = lambda_handler(_make_event(module_type='vpr', user_id=USER_ID), None)
+
+    # Not-found, not forbidden — must not confirm to the attacker that a VPR
+    # exists for that job_id at all.
+    assert response['statusCode'] == 404
+    mock_s3.put_object.assert_not_called()
+    mock_s3.generate_presigned_url.assert_not_called()
+
+
+def test_vpr_export_allows_rightful_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Owner-positive control: the fix above must not also block the real owner."""
+    monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
+    monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
+
+    vpr_data = {'summary': 'Strong candidate', 'skills': 'Python, AWS', 'userId': USER_ID}
+    mock_s3 = MagicMock()
+    mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
+    mock_s3.put_object.return_value = {}
+    mock_s3.generate_presigned_url.return_value = 'https://s3.example.com/presigned'
+
+    with patch('careervp.handlers.export_handler.boto3') as mock_boto3:
+        mock_boto3.client.return_value = mock_s3
+        response = lambda_handler(_make_event(module_type='vpr', user_id=USER_ID), None)
+
+    assert response['statusCode'] == 200
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +382,7 @@ def test_expires_at_is_approximately_one_hour_from_now(monkeypatch: pytest.Monke
     monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
-    vpr_data = {'summary': 'Test'}
+    vpr_data = {'summary': 'Test', 'userId': USER_ID}
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
     mock_s3.put_object.return_value = {}
@@ -365,7 +410,7 @@ def test_s3_key_pattern_is_correct(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
-    vpr_data = {'section': 'value'}
+    vpr_data = {'section': 'value', 'userId': USER_ID}
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
     mock_s3.put_object.return_value = {}
@@ -555,7 +600,7 @@ def test_s3_upload_failure_returns_500(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'vpr-bucket')
     monkeypatch.setenv('ARTIFACTS_BUCKET_NAME', 'artifacts-bucket')
 
-    vpr_data = {'summary': 'Test candidate'}
+    vpr_data = {'summary': 'Test candidate', 'userId': USER_ID}
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {'Body': MagicMock(read=lambda: json.dumps(vpr_data).encode())}
     mock_s3.put_object.side_effect = botocore.exceptions.ClientError({'Error': {'Code': '503', 'Message': 'SlowDown'}}, 'PutObject')

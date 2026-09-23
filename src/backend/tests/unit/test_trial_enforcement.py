@@ -158,7 +158,18 @@ class TestApplicationCounter:
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'cv_id': 'cv-1', 'job_id': 'job-1'}),
         }
-        with patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service):
+        with (
+            patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
+        ):
             response = lambda_handler(event, MagicMock())
         assert response['statusCode'] == 403
 
@@ -177,7 +188,18 @@ class TestApplicationCounter:
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'cv_id': 'cv-1', 'job_id': 'job-1'}),
         }
-        with patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service):
+        with (
+            patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
+        ):
             response = lambda_handler(event, MagicMock())
         payload = json.loads(response['body'])
         assert payload['code'] == 'trial_exhausted'
@@ -305,12 +327,21 @@ class TestTrialIntegration:
             service.consume_credit('user-test-123')
 
     def test_day_15_user_blocked_on_any_route(self) -> None:
+        """Trial-only fallback path (no QuotaService wired) still blocks an expired trial.
+
+        _check_create_job_access only falls back to a raw trial_service check
+        when _get_quota_service() returns None — otherwise QuotaService is
+        authoritative, and an active subscriber must not be re-blocked by a
+        stale trial record (see job_handler_test's
+        test_active_subscription_bypasses_exhausted_trial_on_create_job).
+        """
         from careervp.handlers.job_handler import create_job
 
         with patch('careervp.handlers.job_handler._get_authenticated_user_id', return_value='user-test-123'):
-            with patch('careervp.handlers.job_handler._get_trial_service') as mock_trial:
-                mock_trial.return_value.check_trial_status.side_effect = TrialExpiredException('user-test-123', 15)
-                response = create_job()
+            with patch('careervp.handlers.job_handler._get_quota_service', return_value=None):
+                with patch('careervp.handlers.job_handler._get_trial_service') as mock_trial:
+                    mock_trial.return_value.check_trial_status.side_effect = TrialExpiredException('user-test-123', 15)
+                    response = create_job()
         assert response.status_code == 403
 
     def test_concurrent_boundary_no_overcount(self) -> None:

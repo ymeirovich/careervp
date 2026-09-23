@@ -1,0 +1,67 @@
+{
+  "_README": "Real evidence for wave-1 step 1.6 (P-07 frontend cutover), captured live against the db-redesign Amplify branch + devx backend. Checks 1-4 were captured in the prior 2026-07-23 session via two browser HAR exports and a curl PKCE replay (see wave-1-status.md 1.6 row + '1.6 live verification' section) and are transcribed here from that live-verified record, not re-captured in this session. Checks 5-7 (forced_401, refresh_exactly_once, sign_out) were captured live in THIS session via the Claude in-app Browser pane (claude-in-chrome was unavailable; user approved substituting the sandboxed Browser pane, user performed the login themselves).",
+  "status": "failed",
+  "step": "wave-1 step 1.6 (P-07 frontend cutover delivery)",
+  "environment": "devx",
+  "user_pool_id": "us-east-1_bAZ6jb6HP",
+  "client_id": "10c72h0q6cshe7dh3tup6ek9de",
+  "cognito_domain": "https://careervp-devx.auth.us-east-1.amazoncognito.com",
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "origin": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "login_account": "ymeirovich@gmail.com",
+  "timestamp": "2026-07-23T19:11:13Z",
+  "passed": false,
+  "checks": [
+    {
+      "name": "authorization_redirect",
+      "passed": true,
+      "detail": "Captured in the prior 2026-07-23 session via browser HAR export and a curl PKCE replay: /oauth2/authorize returned 302 to the hosted UI with response_type=code, code_challenge_method=S256, redirect_uri=https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback. Not re-captured in this session; transcribed from the live-verified record in wave-1-status.md (1.6 row / '1.6 live verification').",
+      "expected": "302 to the hosted UI login page",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "callback_route",
+      "passed": true,
+      "detail": "Captured in the prior 2026-07-23 session: /callback returned 200, state round-tripped, code parameter present, POST /login returned 302 with real credentials. Transcribed from wave-1-status.md; not re-captured in this session.",
+      "expected": "200 from the SPA /callback route, state round-trips",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "token_exchange",
+      "passed": true,
+      "detail": "Captured in the prior 2026-07-23 session: POST /oauth2/token returned 200 with id_token/access_token/refresh_token. Decoded id_token iss = us-east-1_bAZ6jb6HP (devx pool, NOT us-east-1_WiHMRqLpe, the dev pool) confirming environment isolation. Transcribed from wave-1-status.md; not re-captured in this session.",
+      "expected": "200 with id_token, access_token, refresh_token; iss names us-east-1_bAZ6jb6HP",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "authenticated_api_call",
+      "passed": true,
+      "detail": "Captured in the prior 2026-07-23 session: post-login, /dashboard loaded and read real API data from the devx raw execute-api URL. Also re-confirmed incidentally in this session prior to tampering the idToken (dashboard and /applications rendered normally with valid tokens). Transcribed primarily from wave-1-status.md.",
+      "expected": "200",
+      "status": "PASS (prior session; incidentally reconfirmed this session pre-tamper)"
+    },
+    {
+      "name": "forced_401",
+      "passed": false,
+      "detail": "Captured live this session. Tampered the last 6 characters of the idToken JWT signature segment in localStorage (key CognitoIdentityServiceProvider.10c72h0q6cshe7dh3tup6ek9de.848834a8-4061-703d-419c-0294d4e88d66.idToken), then reloaded /applications. Checked via performance.getEntriesByType('resource') on 4 separate reloads. Every authenticated call (/prod/users/me, /prod/users/me/usage, /prod/users/me/subscription, /prod/jobs) returned status 403 ('ACCESS_DENIED' per the UI), never 401. This is a real environment/contract mismatch: the API Gateway Cognito authorizer rejects a bad signature with 403, not 401.",
+      "expected": "401",
+      "status": "FAIL - observed 403 (ACCESS_DENIED) on every call, not 401"
+    },
+    {
+      "name": "refresh_exactly_once",
+      "passed": false,
+      "detail": "Captured live this session, same tamper as forced_401 above. Checked for any Cognito/oauth2/token-refresh network activity via performance.getEntriesByType('resource') filtered for cognito|oauth2|token — zero matches across 4 repeated reload attempts and repeated navigations. The frontend never attempted a token refresh in response to the repeated 403s; the UI instead rendered a static 'ACCESS_DENIED' banner with a manual Retry button that itself does not refresh tokens (confirmed by re-checking network activity was unchanged after clicking Retry-equivalent reloads). No silent-refresh-and-retry path exists for this failure mode in the current deployment.",
+      "expected": "refresh_count == 1, then the original request succeeds",
+      "observed_refresh_count": 0,
+      "status": "FAIL - 0 refresh attempts observed; no retry-with-fresh-token occurred; likely caused by the authorizer returning 403 (see forced_401) rather than 401, so any 401-triggered refresh interceptor (if one exists) never fires"
+    },
+    {
+      "name": "sign_out",
+      "passed": true,
+      "detail": "Captured live this session. Clicked the User menu -> Log out. All CognitoIdentityServiceProvider.* keys were removed from localStorage (confirmed via Object.keys(localStorage) before/after), and the app redirected to https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/login/. Additionally navigated directly to the protected /applications route post-logout and confirmed it redirects to /login/ instead of rendering, i.e. the session is genuinely gone, not just UI-hidden.",
+      "expected": "302 back to the registered logout URL, session gone",
+      "status": "PASS - localStorage cleared, redirected to /login/, protected route re-guarded"
+    }
+  ],
+  "blocking_finding": "Checks 5 and 6 (forced_401, refresh_exactly_once) FAIL. Root cause is not yet fixed: a tampered/invalid idToken produces 403 ACCESS_DENIED from the API Gateway Cognito authorizer rather than 401, and there is no working silent-refresh-and-retry path for this failure mode - the SPA surfaces a dead-end 'ACCESS_DENIED' + manual Retry banner instead. This means the 401-refresh-once contract asserted as already-green in the 1.3c row does not actually hold for this specific failure mode (bad signature) in the devx deployment. 1.1 should stay blocked until either (a) the authorizer is confirmed/fixed to return 401 for invalid signatures and a refresh-on-401 interceptor is verified to fire exactly once, or (b) the frontend is fixed to also attempt a refresh on 403 from the authorizer, with the same exactly-once guarantee, and this evidence file is re-run and updated to a passing state."
+}

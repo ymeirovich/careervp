@@ -13,24 +13,32 @@ from typing import Any
 import boto3
 from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import vpr_access_denied_envelope
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.interview_prep import generate_interview_prep
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.interview_prep import InterviewPrepRequest as LogicInterviewPrepRequest
 from careervp.models.result import Result, ResultCode
 
 sfn = boto3.client('stepfunctions')
 
-INTERVIEW_PREP_SORT_KEY_PREFIX = 'ARTIFACT#INTERVIEW_PREP#'
+INTERVIEW_PREP_SORT_KEY_PREFIX = table_registry.INTERVIEW_PREP_SORT_KEY_PREFIX
 PRIMARY_KEY_MODE = 'applicationId/artifactId'
+
+
+class _VPRAccessDenied(ValueError):
+    """Terminal owned-upstream refusal; callers must not try another key."""
 
 
 def _convert_decimal_to_float(obj: Any) -> Any:
@@ -45,11 +53,7 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ''
+    return table_registry.resolve_artifacts_table_name()
 
 
 def _get_dal() -> DynamoDalHandler:
@@ -66,6 +70,7 @@ def _normalize_interview_prep_artifact_id(interview_prep_id: str) -> str:
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle interview prep API requests and SQS worker events."""
     _ = context
@@ -116,7 +121,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
     """Process SQS messages for async interview prep generation."""
+    batch_item_failures: list[dict[str, str]] = []
+    sqs_batch_seen = False
+
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
+        is_sqs_record = record.get('eventSource') == 'aws:sqs' and bool(message_id)
+        sqs_batch_seen = sqs_batch_seen or is_sqs_record
         logger.info('Interview prep worker received SQS record', sqs_record=record)
         body = json.loads(record.get('body', '{}'))
         logger.info('Interview prep worker parsed SQS body', sqs_body=body)
@@ -144,10 +155,13 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             logger.error('Interview prep SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
             _send_task_failure(task_token, cause=str(exc))
-            if task_token:
-                continue
-            raise
+            if not task_token and not is_sqs_record:
+                raise
+            batch_item_failures.append({'itemIdentifier': message_id})
+            continue
 
+    if sqs_batch_seen:
+        return {'batchItemFailures': batch_item_failures}
     return {'statusCode': 200, 'body': 'OK'}
 
 
@@ -390,7 +404,7 @@ def _update_artifact_status(  # noqa: C901
 
     artifact_id = _normalize_interview_prep_artifact_id(job_id)
     update_kwargs: dict[str, Any] = {
-        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'Key': table_registry.canonical_item_key(user_id, artifact_id),
         'UpdateExpression': update_expr,
         'ExpressionAttributeNames': attr_names,
         'ExpressionAttributeValues': attr_values,
@@ -470,9 +484,23 @@ def _submit_interview_prep_request(event: dict[str, Any]) -> dict[str, Any]:
     api_request = request_result.data
 
     dal = _get_dal()
+    application_id, vpr_artifact_id, denial_response = _resolve_request_vpr_identity(
+        dal=dal,
+        api_request=api_request,
+        user_id=user_id,
+    )
+    if denial_response is not None:
+        return denial_response
 
     try:
-        generation_result = _generate_interview_prep_result(api_request=api_request, user_id=user_id)
+        generation_result = _generate_interview_prep_result(
+            api_request=api_request,
+            user_id=user_id,
+            application_id=application_id,
+            vpr_artifact_id=vpr_artifact_id,
+        )
+    except _VPRAccessDenied:
+        return _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
     except Exception as gen_exc:
         logger.error(
             'Interview prep generation raised exception',
@@ -571,7 +599,7 @@ def list_interview_preps(event: dict[str, Any]) -> dict[str, Any]:
     dal = _get_dal()
     table = dal._get_db_handler(dal.table_name)
     response = table.query(
-        KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+        KeyConditionExpression=table_registry.canonical_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
         Limit=50,
     )
     items = response.get('Items', []) if isinstance(response, dict) else []
@@ -676,48 +704,83 @@ def _extract_vpr_differentiators(vpr_payload: dict[str, Any]) -> list[str] | Non
     return differentiators or None
 
 
-def _resolve_vpr_from_jobs_table(vpr_id: str, user_id: str) -> dict[str, Any] | None:
+def _resolve_request_vpr_identity(
+    *,
+    dal: DynamoDalHandler,
+    api_request: InterviewPrepRequest,
+    user_id: str,
+) -> tuple[str | None, str | None, dict[str, Any] | None]:
+    application_id = api_request.application_id or api_request.job_id
+    if not application_id:
+        return None, None, None
+    artifact_id = _resolve_owned_vpr_artifact_id(
+        dal=dal,
+        application_id=application_id,
+        user_id=user_id,
+    )
+    if artifact_id is None:
+        return application_id, None, _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
+    return application_id, artifact_id, None
+
+
+def _resolve_owned_vpr_artifact_id(
+    *,
+    dal: DynamoDalHandler,
+    application_id: str,
+    user_id: str,
+) -> str | None:
+    jobs_repository = JobsRepository()
+    jobs_result = CoreRepository(
+        dal=dal,
+        vpr_jobs_repository=jobs_repository,
+    ).resolve_artifact_id(
+        application_id=application_id,
+        artifact_type='vpr',
+        user_id=user_id,
+    )
+    if jobs_result.success and jobs_result.data is not None:
+        return jobs_result.data
+
+    artifact_result = CoreRepository(dal=dal).resolve_artifact_id(
+        application_id=application_id,
+        artifact_type='vpr',
+        user_id=user_id,
+    )
+    return artifact_result.data if artifact_result.success else None
+
+
+def _resolve_vpr_from_jobs_table(
+    application_id: str,
+    artifact_id: str,
+    user_id: str,
+) -> dict[str, Any] | None:
     table_name = _coerce_text(os.environ.get('VPR_JOBS_TABLE_NAME') or os.environ.get('JOBS_TABLE_NAME'))
     if not table_name:
         return None
 
-    logger.info('Interview prep context VPR jobs lookup start', vpr_id=vpr_id, jobs_table_name=table_name)
-    try:
-        repository = JobsRepository(table_name=table_name)
-        job_record = repository.get_job(vpr_id)
-    except Exception as exc:
-        logger.warning('Interview prep context VPR jobs lookup failed', vpr_id=vpr_id, jobs_table_name=table_name, error=str(exc))
+    logger.info('Interview prep context VPR jobs lookup start', artifact_id=artifact_id, jobs_table_name=table_name)
+    repository = CoreRepository(
+        vpr_jobs_repository=JobsRepository(table_name=table_name),
+    )
+    result = repository.get_vpr_by_artifact_id(
+        application_id=application_id,
+        artifact_id=artifact_id,
+        user_id=user_id,
+    )
+    if result.code == ResultCode.FORBIDDEN:
+        raise _VPRAccessDenied('VPR is not available for this application')
+    if not result.success:
+        logger.warning(
+            'Interview prep context VPR jobs lookup failed',
+            artifact_id=artifact_id,
+            jobs_table_name=table_name,
+            error=result.error,
+        )
         return None
-
-    if not isinstance(job_record, dict):
-        logger.info('Interview prep context VPR jobs lookup empty', vpr_id=vpr_id, jobs_table_name=table_name)
+    if not isinstance(result.data, dict):
+        logger.info('Interview prep context VPR jobs lookup empty', artifact_id=artifact_id, jobs_table_name=table_name)
         return None
-
-    # Ownership check: the job record must belong to the requesting user.
-    record_owner = str(job_record.get('user_id') or '').strip()
-    if record_owner != user_id:
-        logger.warning('VPR job ownership mismatch for interview prep', vpr_id=vpr_id, expected=user_id, actual=record_owner)
-        return None
-
-    logger.info('Interview prep context VPR jobs lookup payload', vpr_id=vpr_id, jobs_table_name=table_name, job_record=job_record)
-    payload = job_record.get('result')
-    if isinstance(payload, dict):
-        merged_payload = dict(payload)
-    else:
-        merged_payload = {}
-
-    merged_payload.setdefault('vpr_id', vpr_id)
-    application_id = _coerce_text(job_record.get('application_id'))
-    if application_id:
-        merged_payload.setdefault('application_id', application_id)
-
-    input_data = job_record.get('input_data')
-    if isinstance(input_data, dict):
-        language = _coerce_text(input_data.get('language'))
-        if language:
-            merged_payload.setdefault('language', language)
-
-    return merged_payload if merged_payload else None
+    return result.data
 
 
 _MAX_QUESTION_COUNT = 15
@@ -728,6 +791,9 @@ def _resolve_interview_prep_context(  # noqa: C901
     dal: Any,
     user_id: str,
     api_request: InterviewPrepRequest,
+    *,
+    application_id: str | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> dict[str, Any]:
     """Resolve architecture-required context inputs server-side (section 3.7).
 
@@ -741,17 +807,18 @@ def _resolve_interview_prep_context(  # noqa: C901
         'vpr_data': None,
         'vpr_differentiators': None,
         'gap_responses': None,
+        # True when a gap lookup errored (as opposed to finding nothing);
+        # the artifact is then generated without the candidate's own answers.
+        'gap_responses_degraded': False,
         'company_research': None,
         'language': getattr(api_request, 'language', 'en') or 'en',
         'job_title': '',
         'job_id': getattr(api_request, 'job_id', None),
     }
 
-    # Resolve CV facts
-    cv_candidates = _build_context_dal_candidates(
-        env_table_name='CVS_TABLE_NAME',
-        fallback_dal=dal,
-    )
+    # Resolve CV facts from the one CV home. `dal` is retained only as a last
+    # resort while the users-table copy still exists.
+    cv_candidates = [DynamoDalHandler(table_registry.resolve_cv_table_name()), dal]
     for cv_dal in cv_candidates:
         cv_table_name = _coerce_text(getattr(cv_dal, 'table_name', ''))
         logger.info('Interview prep context CV lookup attempt', user_id=user_id, table_name=cv_table_name)
@@ -779,42 +846,36 @@ def _resolve_interview_prep_context(  # noqa: C901
         metrics.add_metric(name='InterviewPrepCVMissing', unit=MetricUnit.Count, value=1)
         logger.warning('CV not found for interview prep context', user_id=user_id)
 
-    # Resolve VPR data (prefer VPR jobs table entry by vpr job id)
-    try:
-        vpr_payload = _resolve_vpr_from_jobs_table(api_request.vpr_id, user_id=user_id)
+    # Resolve VPR only from an owned application-derived artifact id.
+    resolved_application_id = application_id or api_request.application_id or api_request.job_id or ''
+    resolved_artifact_id = vpr_artifact_id or api_request.vpr_id
+    if resolved_artifact_id:
+        vpr_payload = _resolve_vpr_from_jobs_table(
+            application_id=resolved_application_id,
+            artifact_id=resolved_artifact_id,
+            user_id=user_id,
+        )
         if isinstance(vpr_payload, dict):
-            logger.info('Interview prep context VPR payload from jobs table', vpr_id=api_request.vpr_id, vpr_payload=vpr_payload)
             context['vpr_data'] = vpr_payload
-            context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_payload) or []
-            context['language'] = _coerce_text(vpr_payload.get('language')) or context['language']
-            metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
         else:
-            vpr_result = dal.get_vpr(api_request.vpr_id)
-            if hasattr(vpr_result, 'success') and vpr_result.success and vpr_result.data is not None:
+            vpr_result = CoreRepository(dal=dal).get_vpr_by_artifact_id(
+                application_id=resolved_application_id or resolved_artifact_id,
+                artifact_id=resolved_artifact_id,
+                user_id=user_id,
+            )
+            if vpr_result.code == ResultCode.FORBIDDEN:
+                raise _VPRAccessDenied('VPR is not available for this application')
+            if vpr_result.success and vpr_result.data is not None:
                 vpr = vpr_result.data
-                # Ownership: reject VPRs that belong to a different user.
-                vpr_owner = getattr(vpr, 'user_id', None) or (vpr.get('user_id') if isinstance(vpr, dict) else None)
-                if str(vpr_owner or '').strip() != user_id:
-                    logger.warning('VPR ownership mismatch in DAL fallback for interview prep', vpr_id=api_request.vpr_id, expected=user_id)
-                    metrics.add_metric(name='InterviewPrepVPROwnershipMismatch', unit=MetricUnit.Count, value=1)
-                else:
-                    vpr_dict = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
-                    logger.info(
-                        'Interview prep context VPR payload from DAL fallback',
-                        vpr_id=api_request.vpr_id,
-                        table_name=getattr(dal, 'table_name', ''),
-                        vpr_payload=vpr_dict,
-                    )
-                    context['vpr_data'] = vpr_dict
-                    context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_dict) or []
-                    context['language'] = _coerce_text(vpr_dict.get('language')) or context['language']
-                    metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
-            else:
-                metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
-                logger.warning('VPR not found for context resolution', vpr_id=api_request.vpr_id)
-    except Exception as exc:
-        metrics.add_metric(name='InterviewPrepVPRResolutionError', unit=MetricUnit.Count, value=1)
-        logger.warning('VPR resolution failed', vpr_id=api_request.vpr_id, error=str(exc))
+                context['vpr_data'] = vpr.model_dump(mode='json') if hasattr(vpr, 'model_dump') else dict(vpr)
+
+    if isinstance(context['vpr_data'], dict):
+        vpr_data = context['vpr_data']
+        context['vpr_differentiators'] = _extract_vpr_differentiators(vpr_data) or []
+        context['language'] = _coerce_text(vpr_data.get('language')) or context['language']
+        metrics.add_metric(name='InterviewPrepVPRResolved', unit=MetricUnit.Count, value=1)
+    else:
+        metrics.add_metric(name='InterviewPrepVPRMissing', unit=MetricUnit.Count, value=1)
 
     if context['vpr_data'] is None:
         raise ValueError(f'Required VPR not found for interview prep: {api_request.vpr_id}')
@@ -839,7 +900,24 @@ def _resolve_interview_prep_context(  # noqa: C901
             logger.warning('Gap responses resolution failed', user_id=user_id, table_name=gap_table_name, error=str(exc))
             continue
 
-        if not hasattr(gap_result, 'success') or not gap_result.success or not gap_result.data:
+        # A lookup that FAILED and one that legitimately found nothing are not
+        # the same event. Reporting both at INFO as "empty" is what let a
+        # ValidationError on every stored gap response hide behind a green J8:
+        # interview prep was generated from CV+VPR alone, with the candidate's
+        # own answers silently absent.
+        if not hasattr(gap_result, 'success') or not gap_result.success:
+            context['gap_responses_degraded'] = True
+            metrics.add_metric(name='InterviewPrepGapResponsesLookupFailed', unit=MetricUnit.Count, value=1)
+            logger.warning(
+                'Interview prep context gap responses lookup FAILED',
+                user_id=user_id,
+                table_name=gap_table_name,
+                code=str(getattr(gap_result, 'code', '')),
+                error=str(getattr(gap_result, 'error', '')),
+            )
+            continue
+
+        if not gap_result.data:
             logger.info('Interview prep context gap responses lookup empty', user_id=user_id, table_name=gap_table_name)
             continue
 
@@ -865,6 +943,7 @@ def _resolve_interview_prep_context(  # noqa: C901
             context['gap_responses'] = filtered or all_responses
         else:
             context['gap_responses'] = all_responses
+        context['gap_responses_degraded'] = False
         metrics.add_metric(name='InterviewPrepGapResponsesResolved', unit=MetricUnit.Count, value=1)
         break
 
@@ -873,9 +952,9 @@ def _resolve_interview_prep_context(  # noqa: C901
     if job_id:
         try:
             table = dal._get_db_handler(dal.table_name)
-            company_prefix = 'ARTIFACT#COMPANY_RESEARCH#'
+            company_prefix = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
             resp = table.query(
-                KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(company_prefix),
+                KeyConditionExpression=table_registry.canonical_key_condition(user_id, company_prefix),
                 FilterExpression=Attr('artifactId').contains(job_id),
                 Limit=1,
             )
@@ -894,6 +973,7 @@ def _resolve_interview_prep_context(  # noqa: C901
         cv_resolved=context['cv_facts'] is not None,
         vpr_resolved=context['vpr_data'] is not None,
         gap_resolved=bool(context['gap_responses']),
+        gap_responses_degraded=context['gap_responses_degraded'],
         company_research_resolved=context['company_research'] is not None,
         language=context['language'],
         key_schema_mode=PRIMARY_KEY_MODE,
@@ -904,9 +984,18 @@ def _resolve_interview_prep_context(  # noqa: C901
 def _generate_interview_prep_result(
     api_request: InterviewPrepRequest,
     user_id: str,
+    *,
+    application_id: str | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> Result[Any]:
     dal = _get_dal()
-    ctx = _resolve_interview_prep_context(dal, user_id, api_request)
+    ctx = _resolve_interview_prep_context(
+        dal,
+        user_id,
+        api_request,
+        application_id=application_id,
+        vpr_artifact_id=vpr_artifact_id,
+    )
 
     # Enforce question_count policy: honor explicit lower values, cap at MAX
     question_count = min(max(int(api_request.question_count or _DEFAULT_QUESTION_COUNT), 1), _MAX_QUESTION_COUNT)
@@ -919,18 +1008,20 @@ def _generate_interview_prep_result(
         focus_areas=list(api_request.focus_areas),
         question_count=question_count,
     )
-    maybe_async_result = generate_interview_prep(
-        request=logic_request,
-        vpr_data=ctx['vpr_data'],
-        gap_responses=ctx['gap_responses'] or [],
-        job_title=ctx['job_title'],
-        company_name='',
-        cv_facts=ctx['cv_facts'],
-        job_requirements=None,
-        vpr_differentiators=ctx['vpr_differentiators'],
-        company_research=ctx['company_research'],
-        language=ctx['language'],
-    )
+    application_id = str(api_request.application_id or ctx['job_id']).strip()
+    with bind_llm_usage_context(application_id=application_id, user_id=user_id):
+        maybe_async_result = generate_interview_prep(
+            request=logic_request,
+            vpr_data=ctx['vpr_data'],
+            gap_responses=ctx['gap_responses'] or [],
+            job_title=ctx['job_title'],
+            company_name='',
+            cv_facts=ctx['cv_facts'],
+            job_requirements=None,
+            vpr_differentiators=ctx['vpr_differentiators'],
+            company_research=ctx['company_research'],
+            language=ctx['language'],
+        )
     logger.info(
         'Interview prep worker generation input payload',
         user_id=user_id,
@@ -971,10 +1062,9 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
     if not prep_id:
         prep_id = f'prep-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'
     ttl = int((datetime.now(timezone.utc) + timedelta(days=730)).timestamp())
-    artifact_id = f'{INTERVIEW_PREP_SORT_KEY_PREFIX}{prep_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(prep_id)
     item = {
-        'applicationId': user_id,
-        'artifactId': artifact_id,
+        **table_registry.canonical_item_key(user_id, artifact_id),
         'artifactType': 'interview_prep',
         'user_id': user_id,
         'prep_id': prep_id,
@@ -984,8 +1074,7 @@ def _persist_interview_prep(dal: DynamoDalHandler, user_id: str, prep_payload: d
         'updated_at': datetime.now(timezone.utc).isoformat(),
         'expiration': ttl,
         # Compatibility mirrors for legacy readers still expecting pk/sk attributes.
-        'pk': user_id,
-        'sk': artifact_id,
+        **table_registry.legacy_item_key(user_id, artifact_id),
     }
     logger.info('Interview prep worker writing interview prep artifact', user_id=user_id, prep_payload=prep_payload, dynamodb_item=item)
     table.put_item(Item=item)
@@ -1021,7 +1110,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     )
     for artifact_id in candidate_artifact_ids:
         try:
-            get_response = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+            get_response = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         except Exception:
             get_response = {}
         item = get_response.get('Item') if isinstance(get_response, dict) else None
@@ -1031,7 +1120,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     # Temporary backward-compatible fallback for legacy records written with pk/sk key schema.
     for artifact_id in candidate_artifact_ids:
         try:
-            legacy_response = table.get_item(Key={'pk': user_id, 'sk': artifact_id})
+            legacy_response = table.get_item(Key=table_registry.legacy_item_key(user_id, artifact_id))
         except Exception:
             legacy_response = {}
         legacy_item = legacy_response.get('Item') if isinstance(legacy_response, dict) else None
@@ -1040,7 +1129,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
 
     try:
         query_response = table.query(
-            KeyConditionExpression=Key('applicationId').eq(user_id) & Key('artifactId').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            KeyConditionExpression=table_registry.canonical_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
             FilterExpression=Attr('artifactId').contains(interview_prep_id),
             Limit=1,
         )
@@ -1053,7 +1142,7 @@ def _get_interview_prep_item(user_id: str, interview_prep_id: str) -> dict[str, 
     # Temporary legacy-query fallback while old records exist.
     try:
         legacy_query_response = table.query(
-            KeyConditionExpression=Key('pk').eq(user_id) & Key('sk').begins_with(INTERVIEW_PREP_SORT_KEY_PREFIX),
+            KeyConditionExpression=table_registry.legacy_key_condition(user_id, INTERVIEW_PREP_SORT_KEY_PREFIX),
             FilterExpression=Attr('sk').contains(interview_prep_id),
             Limit=1,
         )
@@ -1182,10 +1271,10 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
 
     table_name = _get_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
-    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(interview_prep_id)
 
     try:
-        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        get_resp = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         item = (get_resp or {}).get('Item')
     except Exception as exc:
         logger.error('DynamoDB error during interview prep cancel', error=str(exc))
@@ -1194,10 +1283,10 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
     if not item:
         try:
             query_resp = table.query(
-                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                KeyConditionExpression=table_registry.CANONICAL_PREFIX_KEY_CONDITION_EXPRESSION,
                 ExpressionAttributeValues={
                     ':uid': user_id,
-                    ':prefix': f'ARTIFACT#INTERVIEW_PREP#{interview_prep_id}',
+                    ':prefix': table_registry.interview_prep_artifact_id(interview_prep_id),
                 },
                 Limit=1,
             )
@@ -1215,7 +1304,7 @@ def _handle_interview_prep_cancel(event: dict[str, Any], user_id: str) -> dict[s
     item_app_id = str(item.get('applicationId', user_id))
     item_artifact_id = str(item.get('artifactId', artifact_id))
     table.update_item(
-        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        Key=table_registry.canonical_item_key(item_app_id, item_artifact_id),
         UpdateExpression='SET #s = :status',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={':status': 'CANCELLED'},
@@ -1344,12 +1433,12 @@ def _write_interview_prep_payload(
     table = _boto3.resource('dynamodb').Table(table_name)
 
     if 'applicationId' in item:
-        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+        key: dict[str, Any] = table_registry.canonical_item_key(item['applicationId'], item['artifactId'])
     else:
-        key = {
-            'pk': item.get('pk', user_id),
-            'sk': item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
-        }
+        key = table_registry.legacy_item_key(
+            item.get('pk', user_id),
+            item.get('sk', _normalize_interview_prep_artifact_id(interview_prep_id)),
+        )
 
     try:
         table.update_item(

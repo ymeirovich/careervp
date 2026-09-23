@@ -52,6 +52,103 @@
 - **Models Source:** `src/backend/careervp/models/`
 - **Verification Scripts:** `src/backend/scripts/`
 
+## Agent Model & Effort Policy (as of Aug 2026)
+
+Applies to both OpenAI Codex and Claude Code sessions used on this repo. Model/effort tiers shift over time — treat this as the current calculation, not a permanent ranking; re-verify against provider docs if it's been a while.
+
+**Codex (GPT-5.6 family — Sol/Terra/Luna tiers):**
+- Routine implementation, tests, small refactors: **Terra**, medium reasoning.
+- Large feature, unfamiliar codebase, debugging: **Sol**, high reasoning.
+- Architecture, migrations, security-sensitive review, hard diagnosis: **Sol**, xhigh reasoning.
+- Simple searches, repetitive edits, narrow reviews: **Luna** (or GPT-5.4 mini), low/medium reasoning.
+- Maximum-quality final judgment call: **Sol**, max reasoning (or Pro mode).
+
+**Claude Code:**
+- Routine coding: **Sonnet 5**, high effort.
+- Complex multi-service work: **Opus 5**, high or xhigh effort.
+- Very difficult architecture or long-running autonomous work: **Opus 5**, xhigh/max effort.
+- Hardest long-running research/coding where quality gain justifies cost: **Fable 5**, high effort.
+- Use `opusplan` when a strong plan is needed but implementation should stay at normal cost (Opus plans, Sonnet executes).
+
+**General rule:** default to the cheaper/faster tier (Sonnet 5 / GPT-5.6 Terra); escalate only when the task is genuinely architectural, ambiguous, long-running, or expensive to get wrong. Model switches must be confirmed via `/status` (Claude Code) or the equivalent Codex indicator — do not assume a stated policy alone changed the active model.
+
+## MANDATORY — Blast radius before irreversible or outward-facing actions
+
+**Before** merging a PR, pushing to a branch that auto-builds, deploying,
+executing a change set, deleting or deactivating an AWS resource, rotating a
+credential, or rewriting git history, you MUST run:
+
+```bash
+scripts/ops/blast-radius.sh <push|merge|pull_request> <branch>
+```
+
+and paste a three-line statement into the reply **before** taking the action:
+
+```
+Action:   <exactly what will run>
+Triggers: <every workflow/deploy/stack/Amplify build it sets off>
+Undo:     <the specific reversal, or "none — irreversible">
+```
+
+If the tool reports any job with `CREATE+EXECUTE`, `NO ENVIRONMENT GATE`, or an
+environment with `0 rules`, **stop and ask** before proceeding. An
+`environment:` label on a job is not a gate — GitHub auto-creates missing
+environments unprotected, and `dev` currently has zero protection rules.
+
+**Never classify an action as routine on your own judgment.** This rule exists
+because on 2026-09-20 a one-file workflow PR was merged into `main` as
+"paperwork"; the merge triggered an ungated `make deploy` that deleted ~70
+resources in `CareerVpCrudDev`, including the `CrudFeatures` nested stack, the
+WAFv2 WebACL and the API Gateway custom domain. The fact that `main`
+auto-deploys had been documented hours earlier in this same repo and was not
+connected to the action. No data was lost; that was luck, not design.
+
+Corollary: verify the environment before reasoning about it. Which branch is
+deployed, which stacks exist, and what fires on an event are all one command
+away — never infer them from a plan document, a handoff, or a prior session's
+prose.
+
+## Deployment topology — the single source of truth
+
+Measured 2026-09-21. Re-verify rather than trusting this table if it looks stale.
+
+| | Value |
+|---|---|
+| Working branch | `tools/proof-harness` (a strict superset of `db-redesign`, which is a strict superset of `ui-upgrade`) |
+| Backend target | `CareerVpCrudDevx`, deployed by `db-redesign-checks.yml` on push to `db-redesign` |
+| Backend gate | `environment: devx` — 1 required reviewer (a real gate) |
+| Backend deploy cmd | `make deploy-devx`, which passes `p26_rehome_features=true` (nested stacks) |
+| Frontend | Amplify branch `db-redesign` → `https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com` |
+| `main` | **Not a deploy target for this project.** Vestigial; 12 commits of stale history. |
+
+`CareerVpCrudDev` and `CareerVpCrudStaging` are **not** the working
+environments. `production` and `gap-remediation` environments do not exist.
+
+### What actually fires — measured 2026-09-21
+
+`blast-radius.sh` reads workflows from `origin/<branch>`, not your working tree.
+
+| Push to | Workflows | Deploy jobs | Gate |
+|---|---|---|---|
+| `tools/proof-harness` | **0** | none — changes no AWS infrastructure | n/a |
+| `db-redesign` | `db-redesign-checks.yml` | `deploy-backend-dev` → `CareerVpCrudDevx`, `CREATE+EXECUTE` | `environment: devx` — 1 rule, 1 reviewer (real) |
+
+**The path filter is the trap.** `db-redesign-checks.yml` fires only when the
+changed paths match `src/frontend/**`, `src/backend/**` or `infra/**` — and
+that match is on the *path*, never on the *intent*. A **test-only** change to
+`src/frontend/tests/e2e/*.spec.ts` matches `src/frontend/**` and therefore
+triggers a full CloudFormation deploy of `CareerVpCrudDevx`. So does a
+comment-only edit to any file under those three trees. A change confined to
+`docs/**` or `scripts/**` fires nothing.
+
+Never reason that "it is only a test" or "only a comment" makes a push inert —
+**the trigger does not read the diff.** That is the same mistake as the
+2026-09-20 one-file workflow PR that deleted ~70 resources.
+
+Pushing to `db-redesign` *also* rebuilds the Amplify branch `db-redesign`
+(auto-build, `DEVELOPMENT`) — a frontend deploy carrying no gate at all. The
+`devx` reviewer gate covers the backend job only.
+
 ## Git Workflow Rules
 - **Don't switch branches with uncommitted changes** - use `git stash` first to avoid accidentally deleting files
 - **Merge via gh CLI directly from the feature branch** - avoids needing to checkout main

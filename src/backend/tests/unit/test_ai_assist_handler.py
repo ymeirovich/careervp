@@ -15,7 +15,7 @@ import pytest
 
 from careervp.handlers import ai_assist_handler as module
 from careervp.handlers.ai_assist_handler import UpstreamMissingError
-from careervp.logic.llm_client import BedrockInvocationError, CircuitBreakerOpen
+from careervp.logic.llm_client import BedrockInvocationError, CircuitBreakerOpen, _LLMTextResponse
 from careervp.logic.prompts.ai_assist_prompt import AssistContext
 
 
@@ -96,14 +96,21 @@ def test_success_returns_200_with_resolved_context() -> None:
         patch.object(module, '_user_owns_application', return_value=True),
         patch.object(module, '_resolve_context', return_value=AssistContext()) as mock_ctx,
         patch.object(module, '_get_cache', return_value=fake_cache),
-        patch.object(module, '_call_llm', return_value='Rewritten letter body'),
+        # _call_llm returns an _LLMTextResponse in production (carrying usage
+        # metadata), not a bare string — mirror that so the token-metering path
+        # (input_tokens + output_tokens) is actually exercised.
+        patch.object(
+            module,
+            '_call_llm',
+            return_value=_LLMTextResponse(text='Rewritten letter body', input_tokens=12, output_tokens=8),
+        ),
     ):
         response = module.lambda_handler(_event(), _context())
     assert response['statusCode'] == 200
     body = json.loads(response['body'])
     assert body['generated_markdown'] == 'Rewritten letter body'
     assert body['model']
-    assert body['tokens'] >= 1
+    assert body['tokens'] == 20
     mock_ctx.assert_called_once()
 
 

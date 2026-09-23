@@ -7,6 +7,7 @@ try:
         create_job_and_get_id,
         generate_gap_questions,
         poll_until_terminal,
+        requires_live_api,
         submit_cv_tailoring_generate,
         submit_gap_responses,
         submit_vpr_generate,
@@ -20,12 +21,17 @@ except ImportError:  # pragma: no cover
         create_job_and_get_id,
         generate_gap_questions,
         poll_until_terminal,
+        requires_live_api,
         submit_cv_tailoring_generate,
         submit_gap_responses,
         submit_vpr_generate,
         unwrap_payload,
         upload_cv_and_get_id,
     )
+
+# handoff-01 Step 5: this file calls IntegrationApiClient.from_env(), which needs a
+# real deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
 
 def test_cv_tailoring_async_flow_integration() -> None:

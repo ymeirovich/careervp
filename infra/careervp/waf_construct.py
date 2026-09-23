@@ -5,8 +5,41 @@ from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_wafv2 as waf
-from .naming_utils import NamingUtils
 from constructs import Construct
+
+from .naming_utils import NamingUtils
+
+_RATE_LIMITS_BY_ENVIRONMENT = {
+    "dev": 2_000,
+    "staging": 1_500,
+    "prod": 1_000,
+}
+_DEFAULT_RATE_LIMIT = 1_000
+
+# Environments whose CV-upload route must accept a real CV file.
+#
+# AWSManagedRulesCommonRuleSet's SizeRestrictions_BODY BLOCKs any request body
+# over 8,192 bytes. `POST /users/me/cv` carries the CV base64-encoded inside a
+# JSON body (the frontend uses FileReader.readAsDataURL), and base64 inflates by
+# 4/3, so the effective ceiling was a ~6 KB file. A one-page docx is 40 KB.
+#
+# Measured on devx 2026-08-05: an 8,120-byte body reached the handler, an
+# 8,520-byte body was refused with 403. WAF logs name the rule outright:
+#   {"action":"BLOCK","terminatingRule":{"ruleId":"SizeRestrictions_BODY"}}
+# That is why every object ever written to the CV bucket is a sub-kilobyte .txt:
+# no real CV file has ever been able to reach the parser.
+#
+# Two changes, deliberately paired:
+#   1. SizeRestrictions_BODY -> Count, so body size no longer terminates.
+#   2. Body inspection limit 8 KB -> 64 KB, so the *content* rules
+#      (CrossSiteScripting_BODY, GenericRFI_BODY, GenericLFI_BODY,
+#      EC2MetaDataSSRF_BODY) actually examine a realistic upload instead of its
+#      first 8 KB. Without (2), (1) would let large bodies through
+#      under-inspected; with it, coverage is wider than before this change.
+#
+# Scoped to devx on purpose: dev and staging are out of scope for wave 3 and
+# must not change behaviour when they are next deployed.
+_LARGE_BODY_ENVIRONMENTS = frozenset({"devx"})
 
 
 class WafToApiGatewayConstruct(Construct):
@@ -25,6 +58,29 @@ class WafToApiGatewayConstruct(Construct):
         web_acl_name = naming.resource_name(feature, "waf")
         metric_name = web_acl_name.replace("-", "")
 
+        allow_large_bodies = naming.environment in _LARGE_BODY_ENVIRONMENTS
+        common_rule_set_overrides = (
+            [
+                waf.CfnWebACL.RuleActionOverrideProperty(
+                    name="SizeRestrictions_BODY",
+                    action_to_use=waf.CfnWebACL.RuleActionProperty(count={}),
+                )
+            ]
+            if allow_large_bodies
+            else None
+        )
+        association_config = (
+            waf.CfnWebACL.AssociationConfigProperty(
+                request_body={
+                    "API_GATEWAY": waf.CfnWebACL.RequestBodyAssociatedResourceTypeConfigProperty(
+                        default_size_inspection_limit="KB_64",
+                    )
+                }
+            )
+            if allow_large_bodies
+            else None
+        )
+
         # Create WAF WebACL with AWS Managed Rules
         web_acl = waf.CfnWebACL(
             self,
@@ -32,6 +88,7 @@ class WafToApiGatewayConstruct(Construct):
             scope="REGIONAL",  # Change to CLOUDFRONT if you're using edge-optimized API
             default_action=waf.CfnWebACL.DefaultActionProperty(allow={}),
             name=web_acl_name,
+            association_config=association_config,
             visibility_config=waf.CfnWebACL.VisibilityConfigProperty(
                 sampled_requests_enabled=True,
                 cloud_watch_metrics_enabled=True,
@@ -44,7 +101,9 @@ class WafToApiGatewayConstruct(Construct):
                     override_action={"none": {}},
                     statement=waf.CfnWebACL.StatementProperty(
                         managed_rule_group_statement=waf.CfnWebACL.ManagedRuleGroupStatementProperty(
-                            name="AWSManagedRulesCommonRuleSet", vendor_name="AWS"
+                            name="AWSManagedRulesCommonRuleSet",
+                            vendor_name="AWS",
+                            rule_action_overrides=common_rule_set_overrides,
                         )
                     ),
                     visibility_config=waf.CfnWebACL.VisibilityConfigProperty(
@@ -101,6 +160,25 @@ class WafToApiGatewayConstruct(Construct):
                         sampled_requests_enabled=True,
                         cloud_watch_metrics_enabled=True,
                         metric_name="Product-AWSManagedRulesKnownBadInputsRuleSet",
+                    ),
+                ),
+                waf.CfnWebACL.RuleProperty(
+                    name=f"careervp-api-rate-limit-{naming.environment}",
+                    priority=4,
+                    action=waf.CfnWebACL.RuleActionProperty(block={}),
+                    statement=waf.CfnWebACL.StatementProperty(
+                        rate_based_statement=waf.CfnWebACL.RateBasedStatementProperty(
+                            aggregate_key_type="IP",
+                            limit=_RATE_LIMITS_BY_ENVIRONMENT.get(
+                                naming.environment,
+                                _DEFAULT_RATE_LIMIT,
+                            ),
+                        )
+                    ),
+                    visibility_config=waf.CfnWebACL.VisibilityConfigProperty(
+                        sampled_requests_enabled=True,
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=f"careervp-api-rate-limit-{naming.environment}",
                     ),
                 ),
             ],

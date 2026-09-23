@@ -16,11 +16,16 @@ from anthropic import Anthropic
 from careervp.logic.circuit_breaker import CircuitBreaker, CircuitBreakerBlockedError
 from careervp.logic.cv_summarizer import CVSummarizer
 from careervp.logic.llm_cache import LLMResponseCache
+from careervp.logic.utils.llm_metering import calculate_cost, record_llm_usage
 from careervp.models.cv import UserCV
 
 # Default model: Haiku for cost efficiency (per CLAUDE.md Decision 1.2)
 DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 DEFAULT_TEMPERATURE = 0.3
+# Output ceiling for generate(). Was hardcoded inside _invoke_model, which silently
+# truncated any caller whose structured output ran long -- the model stops mid-token
+# and the JSON never closes. Callers that need a bigger document pass their own.
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
 DEFAULT_RETRY_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_BASE_DELAY_SECONDS = 0.5
 logger = logging.getLogger(__name__)
@@ -29,10 +34,34 @@ logger = logging.getLogger(__name__)
 class _LLMTextResponse:
     """Thin response wrapper returned by LLMClient.complete() for the pipeline interface."""
 
-    __slots__ = ('text',)
+    __slots__ = (
+        'text',
+        'input_tokens',
+        'output_tokens',
+        'cost',
+        'prompt_cache_hit',
+        'cache_read_input_tokens',
+        'cache_creation_input_tokens',
+    )
 
-    def __init__(self, text: str) -> None:
+    def __init__(
+        self,
+        text: str,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cost: float = 0.0,
+        prompt_cache_hit: bool = False,
+        cache_read_input_tokens: int = 0,
+        cache_creation_input_tokens: int = 0,
+    ) -> None:
         self.text = text
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cost = cost
+        self.prompt_cache_hit = prompt_cache_hit
+        self.cache_read_input_tokens = cache_read_input_tokens
+        self.cache_creation_input_tokens = cache_creation_input_tokens
 
 
 class BedrockInvocationError(RuntimeError):
@@ -98,6 +127,7 @@ class LLMClient:
         cv: UserCV | None = None,
         model_name: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     ) -> dict[str, Any]:
         """Invoke Anthropic API and return parsed JSON payload."""
         _ = timeout
@@ -109,7 +139,7 @@ class LLMClient:
             return cached
 
         try:
-            response = self._call_anthropic(optimized_prompt, model_name, temperature)
+            response = self._call_anthropic(optimized_prompt, model_name, temperature, max_tokens)
         except CircuitBreakerOpen:
             # Graceful degradation path: serve cached deterministic response when available.
             fallback = self._check_cache(cache_key)
@@ -117,7 +147,7 @@ class LLMClient:
                 return fallback
             raise
 
-        return self._handle_response(response, cache_key)
+        return self._handle_response(response, cache_key, model_name=model_name, use_system_cache=False)
 
     def complete(
         self,
@@ -147,10 +177,16 @@ class LLMClient:
         except CircuitBreakerBlockedError as exc:
             raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
 
-        for block in response.content:
-            if block.type == 'text':
-                return _LLMTextResponse(str(block.text))
-        return _LLMTextResponse('')
+        usage_metadata = self._usage_metadata(response, model_name=model_name, use_system_cache=use_system_cache)
+        return _LLMTextResponse(
+            self._extract_text_content(response),
+            input_tokens=int(usage_metadata['input_tokens']),
+            output_tokens=int(usage_metadata['output_tokens']),
+            cost=float(usage_metadata['cost']),
+            prompt_cache_hit=bool(usage_metadata['prompt_cache_hit']),
+            cache_read_input_tokens=int(usage_metadata['cache_read_input_tokens']),
+            cache_creation_input_tokens=int(usage_metadata['cache_creation_input_tokens']),
+        )
 
     def _invoke_model_with_system(
         self,
@@ -235,20 +271,28 @@ class LLMClient:
             logger.info('llm_cache_lookup cache_hit=false')
         return None
 
-    def _call_anthropic(self, prompt: str, model_name: str, temperature: float) -> str:
-        """Call Anthropic API and return text content."""
+    def _call_anthropic(
+        self,
+        prompt: str,
+        model_name: str,
+        temperature: float,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+    ) -> Any:
+        """Call Anthropic API and return the raw provider response."""
         try:
             with self._circuit_breaker:
-                response = self._invoke_model(prompt, model_name, temperature)
+                response = self._invoke_model(prompt, model_name, temperature, max_tokens)
         except CircuitBreakerBlockedError as exc:
             raise CircuitBreakerOpen(retry_after=exc.retry_after) from exc
+        return response
 
-        for block in response.content:
-            if block.type == 'text':
-                return str(block.text)
-        return ''
-
-    def _invoke_model(self, prompt: str, model_name: str, temperature: float) -> Any:
+    def _invoke_model(
+        self,
+        prompt: str,
+        model_name: str,
+        temperature: float,
+        max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+    ) -> Any:
         """Invoke model and normalize transport/runtime failures for the circuit breaker."""
         attempts = self._retry_max_attempts()
         base_delay_seconds = self._retry_base_delay_seconds()
@@ -258,7 +302,7 @@ class LLMClient:
             try:
                 return self._client.messages.create(
                     model=model_name,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                     temperature=temperature,
                     messages=[{'role': 'user', 'content': prompt}],
                 )
@@ -320,9 +364,11 @@ class LLMClient:
         )
         return any(marker in message for marker in transient_markers)
 
-    def _handle_response(self, text_content: str, cache_key: str | None) -> dict[str, Any]:
+    def _handle_response(self, response: Any, cache_key: str | None, *, model_name: str, use_system_cache: bool) -> dict[str, Any]:
         """Parse response and handle caching."""
+        text_content = self._extract_text_content(response)
         parsed_response = self._try_parse_json(text_content)
+        parsed_response.update(self._usage_metadata(response, model_name=model_name, use_system_cache=use_system_cache))
 
         if cache_key is not None:
             if self._is_error_response(parsed_response):
@@ -332,6 +378,41 @@ class LLMClient:
                 self._cache.set(cache_key, json.dumps(parsed_response, ensure_ascii=False))
                 logger.info('llm_cache_write cache_store=true')
         return parsed_response
+
+    @staticmethod
+    def _extract_text_content(response: Any) -> str:
+        for block in getattr(response, 'content', []):
+            if getattr(block, 'type', '') == 'text':
+                return str(getattr(block, 'text', ''))
+        return ''
+
+    def _usage_metadata(self, response: Any, *, model_name: str, use_system_cache: bool) -> dict[str, Any]:
+        usage = getattr(response, 'usage', None)
+        input_tokens = int(getattr(usage, 'input_tokens', 0) or 0)
+        output_tokens = int(getattr(usage, 'output_tokens', 0) or 0)
+        cache_read_input_tokens = int(getattr(usage, 'cache_read_input_tokens', 0) or 0)
+        cache_creation_input_tokens = int(getattr(usage, 'cache_creation_input_tokens', 0) or 0)
+        prompt_cache_hit = cache_read_input_tokens > 0
+        cost = calculate_cost(model_name, input_tokens, output_tokens)
+        record_llm_usage(
+            model_id=model_name,
+            task_mode=None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost,
+            prompt_cache_hit=prompt_cache_hit,
+            prompt_cache_lookup=use_system_cache,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+        )
+        return {
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'cost': round(cost, 6),
+            'prompt_cache_hit': prompt_cache_hit,
+            'cache_read_input_tokens': cache_read_input_tokens,
+            'cache_creation_input_tokens': cache_creation_input_tokens,
+        }
 
     def _try_parse_json(self, text: str) -> dict[str, Any]:
         """Try to parse response as JSON, fallback to text wrapper."""

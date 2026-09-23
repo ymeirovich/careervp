@@ -1,6 +1,6 @@
 from typing import Any
 
-from aws_cdk import Aspects, CfnOutput, Stack, Tags
+from aws_cdk import Aspects, CfnOutput, CfnResource, Stack, Tags
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from constructs import Construct
 
@@ -20,6 +20,7 @@ from .constants import (
 )
 from .monitoring import MonitoringNestedStack
 from .naming_utils import NamingUtils
+from .scratch_deployment import ScratchDeploymentSettings
 from .utils import get_construct_name, get_username
 
 
@@ -31,9 +32,34 @@ class ServiceStack(Stack):
         is_production_env: bool,
         naming: NamingUtils | None = None,
         stack_feature: str | None = None,
+        scratch_settings: ScratchDeploymentSettings | None = None,
+        scratch_teardown_safe: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(scope, id, **kwargs)
+        if scratch_teardown_safe and scratch_settings is None:
+            raise ValueError(
+                "scratch_teardown_safe requires validated scratch_settings"
+            )
+        if scratch_settings is not None:
+            if not scratch_settings.scratch_mode:
+                raise ValueError("scratch_settings must enable scratch mode")
+            if naming is None or (
+                naming.environment != scratch_settings.environment
+                or naming.region != scratch_settings.region
+                or naming.account_id != scratch_settings.account
+            ):
+                raise ValueError("scratch_settings must exactly match NamingUtils")
+            if is_production_env:
+                raise ValueError("scratch_settings cannot be used for production")
+            scratch_teardown_safe = True
+        self.scratch_settings = scratch_settings
+        self.scratch_teardown_safe = scratch_teardown_safe
+        # P-27: termination protection on every top-level stack. Blocks whole-stack
+        # deletion (a wrong-profile / careless `cdk destroy` cannot drop the 908 live
+        # dev users' RestApi, tables, buckets, or Cognito pool). Per-resource
+        # replace/delete is separately blocked by the human-applied cfn_stack_policy.json.
+        self.termination_protection = not scratch_teardown_safe
         self.naming = naming or NamingUtils(environment=ENVIRONMENT)
         self.stack_feature = stack_feature or STACK_FEATURE
         self._add_stack_tags()
@@ -44,14 +70,19 @@ class ServiceStack(Stack):
         self.dynamic_configuration = ConfigurationStore(
             self,
             get_construct_name(stack_prefix=id, construct_name="DynamicConf"),
-            ENVIRONMENT,
+            self.naming.environment,
             SERVICE_NAME,
             CONFIGURATION_NAME,
+            configuration_source=(
+                scratch_settings.configuration_source if scratch_settings else None
+            ),
+            scratch_settings=scratch_settings,
         )
         self.cognito = CognitoConstruct(
             self,
             get_construct_name(stack_prefix=id, construct_name="Cognito"),
             environment=self.naming.environment,
+            scratch_settings=scratch_settings,
         )
         self.api = ApiConstruct(
             self,
@@ -61,6 +92,7 @@ class ServiceStack(Stack):
             naming=self.naming,
             user_pool=self.cognito.user_pool,
             cognito_client_id=self.cognito.client_id,
+            scratch_settings=scratch_settings,
         )
         self.monitoring_nested_stack = MonitoringNestedStack(
             self,
@@ -80,6 +112,7 @@ class ServiceStack(Stack):
             ],
             notification_topic=self.api.monitoring.notification_topic,
             naming=self.naming,
+            scratch_settings=scratch_settings,
         )
         self.ai_assist_nested_stack = AiAssistNestedStack(
             self,
@@ -93,10 +126,13 @@ class ServiceStack(Stack):
             gap_responses_table=self.api.api_db.gap_responses_table,
             users_table=self.api.api_db.users_table,
             llm_cache_table=self.api.llm_cache_table,
-            allowed_origins=self.api.node.try_get_context("allowed_origins")
-            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            allowed_origins=self.api.allowed_origins,
+            deployment_application=self.api.p23_deployment_application,
+            deployment_role=self.api.p23_deployment_role,
+            rollback_alarms=self.api.p23_rollback_alarms,
+            notification_topic=self.api.monitoring.notification_topic,
         )
-        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_lambda)
+        self.api.register_ai_assist_routes(self.ai_assist_nested_stack.ai_assist_alias)
 
         # Client error reports (forwarded from the Next.js SSR /api/errors route).
         # Lambda lives in a nested stack to keep the near-limit parent stack lean;
@@ -106,11 +142,14 @@ class ServiceStack(Stack):
             "ErrorReportNestedStack",
             naming=self.naming,
             logs_kms_key=self.api.logs_kms_key,
-            allowed_origins=self.api.node.try_get_context("allowed_origins")
-            or "https://main.d3j2wnm8g5clnw.amplifyapp.com,https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com,https://ui-upgrade.d3j2wnm8g5clnw.amplifyapp.com,https://app.careervp.com,https://dev.careervp.com,https://stage.careervp.com,http://localhost:3000",
+            allowed_origins=self.api.allowed_origins,
+            deployment_application=self.api.p23_deployment_application,
+            deployment_role=self.api.p23_deployment_role,
+            rollback_alarms=self.api.p23_rollback_alarms,
+            notification_topic=self.api.monitoring.notification_topic,
         )
         self.api.register_error_report_route(
-            self.error_report_nested_stack.error_report_lambda
+            self.error_report_nested_stack.error_report_alias
         )
 
         self.company_research_nested_stack = CompanyResearchNestedStack(
@@ -122,19 +161,61 @@ class ServiceStack(Stack):
             company_research_role=self.api.lambda_role,
             company_research_cache_table=self.api.api_db.company_research_cache_table,
             notification_topic=self.api.monitoring.notification_topic,
+            scratch_settings=scratch_settings,
         )
 
         CfnOutput(self, "UserPoolId", value=self.cognito.user_pool_id)
         CfnOutput(self, "ClientId", value=self.cognito.client_id)
+        CfnOutput(self, "RawApiInvokeUrl", value=self.api.rest_api.url)
+
+        # Which commit is this stack running? Without this, "is my change live?"
+        # is unanswerable, and every debugging session risks reading source that
+        # is not executing. Supplied by the deploy target as
+        # `--context git_sha=$(git rev-parse HEAD)`; a deploy from a dirty tree
+        # appends `-dirty`, which preflight treats as a failure because the
+        # running code is then in no repository at all.
+        CfnOutput(
+            self,
+            "DeployedGitSha",
+            value=self.node.try_get_context("git_sha") or "unstamped",
+            description="Git commit this stack was deployed from",
+        )
+
+        if scratch_teardown_safe:
+            self._name_scratch_auto_delete_provider()
 
         # add security check
         self._add_security_tests()
+
+    def _name_scratch_auto_delete_provider(self) -> None:
+        """Give the CDK S3 cleanup provider an explicit scratch physical name."""
+        provider_nodes = [
+            node
+            for node in self.node.find_all()
+            if "S3AutoDeleteObjects" in node.node.path
+        ]
+        providers = [
+            node
+            for node in provider_nodes
+            if isinstance(node, CfnResource) and node.node.id == "Handler"
+        ]
+        if len(providers) != 1:
+            raise ValueError(
+                "scratch teardown expected exactly one S3 auto-delete provider; "
+                f"found {len(providers)} functions in "
+                f"{[(type(node).__name__, node.node.path) for node in provider_nodes]}"
+            )
+        providers[0].add_property_override(
+            "FunctionName", self.naming.lambda_name("scratch-s3-auto-delete")
+        )
 
     def _add_stack_tags(self) -> None:
         # best practice to help identify resources in the console
         Tags.of(self).add(SERVICE_NAME_TAG, SERVICE_NAME)
         Tags.of(self).add(OWNER_TAG, get_username())
         Tags.of(self).add("feature", self.stack_feature)
+        if self.scratch_settings is not None:
+            Tags.of(self).add("environment", self.naming.environment)
 
     def _add_security_tests(self) -> None:
         Aspects.of(self).add(AwsSolutionsChecks(verbose=True))

@@ -18,17 +18,25 @@ from typing import Any
 
 import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 
 from careervp.dal.application_repository import ApplicationRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
+from careervp.dal.idempotency_repository import (
+    IdempotencyRepository,
+    idempotency_repository_from_environment,
+)
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import research_company
 from careervp.logic.company_research_store import write_cr_artifact, write_cr_failed
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.company import CompanyResearchRequest, CompanyResearchResult, ResearchSource
 
 _DEFAULT_CR_CONFIDENCE_THRESHOLD = 0.85
+_WORKER_ARTIFACT_TYPE = 'company_research'
+_WORKER_OPERATION = 'generate'
 
 
 class CRWorkerInput(BaseModel):
@@ -67,6 +75,30 @@ def _get_app_repo() -> ApplicationRepository:
 def _get_jobs_repository() -> JobsRepository:
     table_name = os.environ.get('JOBS_TABLE_NAME') or os.environ.get('VPR_JOBS_TABLE_NAME') or None
     return JobsRepository(table_name=table_name)
+
+
+def _get_idempotency_repository() -> IdempotencyRepository | None:
+    return idempotency_repository_from_environment()
+
+
+def _claim_worker_operation(
+    idempotency_key: str,
+) -> tuple[IdempotencyRepository | None, bool]:
+    """Claim an operation, preserving legacy non-AWS unit harness behavior."""
+    repository = _get_idempotency_repository()
+    if repository is None:
+        return None, True
+    try:
+        return repository, repository.claim_operation(idempotency_key)
+    except ClientError as exc:
+        error_code = exc.response.get('Error', {}).get('Code')
+        if os.environ.get('AWS_EXECUTION_ENV') or error_code != 'UnrecognizedClientException':
+            raise
+        logger.warning(
+            'Durable worker idempotency unavailable outside Lambda runtime',
+            error_code=error_code,
+        )
+        return None, True
 
 
 def _coerce_str(value: Any) -> str:
@@ -163,6 +195,60 @@ def _enqueue_vpr_standalone(user_id: str, job_id: str, result: CompanyResearchRe
     )
 
 
+def _handle_cancel_ccf(input_data: CRWorkerInput) -> None:
+    """Handle ConditionalCheckFailedException from the cancel guard (FE-UI-043).
+
+    Signals chain failure so Step Functions routes to HandleCRFailure (→ cr_failed).
+    If the chain was already stopped by cancel_artifact, send_task_failure raises and
+    is swallowed.  In both cases we then directly transition the application state
+    cr_pending → cr_failed and set company_research_error so the UI is not stuck.
+    """
+    logger.info(
+        'CR job cancelled before COMPLETED write — aborting cleanly',
+        job_id=input_data.job_id,
+        cancelled_before_persist=True,
+    )
+    try:
+        _send_chain_signal(
+            task_token=input_data.task_token,
+            job_id=input_data.job_id,
+            success=False,
+            cause='CR cancelled before persist',
+        )
+    except Exception as signal_exc:
+        logger.info(
+            'CR cancel chain signal suppressed (execution already stopped)',
+            job_id=input_data.job_id,
+            error=str(signal_exc),
+        )
+
+    # Whether the chain signal succeeded or not, directly unblock the UI by
+    # transitioning the application state and setting the error flag.  If the
+    # chain's HandleCRFailure state already did this, both writes hit CCF/no-op.
+    app_repo = _get_app_repo()
+    try:
+        app_repo.set_company_research_error(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            error=True,
+        )
+    except Exception as exc:
+        logger.info('CR cancel: could not set company_research_error', job_id=input_data.job_id, error=str(exc))
+    try:
+        app_repo.update_state(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
+    except Exception as exc:
+        logger.info(
+            'CR cancel state transition skipped (application already past cr_pending)',
+            job_id=input_data.job_id,
+            error=str(exc),
+        )
+
+
 def _hard_fail(input_data: CRWorkerInput, cause: str) -> None:
     """Record CR failure on the application record without raising.
 
@@ -230,7 +316,11 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
         domain=input_data.domain,
         job_posting_url=input_data.job_posting_url,  # type: ignore[arg-type]
     )
-    research_result = await research_company(cr_request)
+    with bind_llm_usage_context(
+        application_id=_coerce_str(input_data.application_id) or input_data.job_id,
+        user_id=input_data.user_id,
+    ):
+        research_result = await research_company(cr_request)
 
     if not research_result.success or not research_result.data:
         cause = research_result.error or 'research_company returned no data'
@@ -263,8 +353,10 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
     # CANCELLED guard (FE-UI-043 § worker_cancelled_guard): the update_artifact_status
     # write uses a conditional DynamoDB expression so that if a concurrent cancel
     # already set the artifact status to 'cancelled', this write raises
-    # ConditionalCheckFailedException.  On CCF we signal failure back to the chain
-    # (so Step Functions can mark the branch) and return cleanly — no DLQ.
+    # ConditionalCheckFailedException.  On CCF we signal success (not CRHardFail) so
+    # the chain does not route to handle_cr_failure and the UI shows no error.
+    from botocore.exceptions import ClientError as _ClientError
+
     app_repo = _get_app_repo()
     try:
         app_repo.update_artifact_status(
@@ -274,21 +366,9 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
             status='completed',
             fail_if_status='cancelled',
         )
-    except Exception as exc:
-        from botocore.exceptions import ClientError as _ClientError
-
-        if isinstance(exc, _ClientError) and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            logger.info(
-                'CR job cancelled before COMPLETED write — aborting cleanly',
-                job_id=input_data.job_id,
-                cancelled_before_persist=True,
-            )
-            _send_chain_signal(
-                task_token=input_data.task_token,
-                job_id=input_data.job_id,
-                success=False,
-                cause='cancelled_before_persist',
-            )
+    except _ClientError as exc:
+        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            _handle_cancel_ccf(input_data)
             return
         raise
 
@@ -326,9 +406,8 @@ async def _async_process_record(input_data: CRWorkerInput, receive_count: int) -
 def _process_record(record: dict[str, Any]) -> None:
     """Process a single SQS record.
 
-    Idempotency key: user_id:job_id via DynamoDB PutItem condition on the
-    knowledge table entry written by _persist_cr_result; a second invocation
-    finds the item already present and skips cleanly after artifact_status check.
+    The durable claim is keyed by application, artifact type, and operation;
+    request timestamps and SQS delivery metadata never participate in the key.
     """
     raw_body = record.get('body', '')
     if not raw_body:
@@ -337,27 +416,35 @@ def _process_record(record: dict[str, Any]) -> None:
 
     body = json.loads(raw_body)
     input_data = _hydrate_company_fields(CRWorkerInput.model_validate(body))
-    idempotency_key = f'{input_data.user_id}:{input_data.job_id}'
+    application_id = _coerce_str(input_data.application_id) or input_data.job_id
+    idempotency_key = f'WORKER_OPERATION#{application_id}#{_WORKER_ARTIFACT_TYPE}#{_WORKER_OPERATION}'
     logger.append_keys(idempotency_key=idempotency_key)
 
-    # Idempotency guard: if CR already completed, skip.
-    try:
-        app_repo = _get_app_repo()
-        application = app_repo.get(application_id=input_data.job_id, user_id=input_data.user_id)
-        if isinstance(application, dict):
-            artifact_statuses = application.get('artifact_statuses') or {}
-            cr_status = artifact_statuses.get('company_research') if isinstance(artifact_statuses, dict) else None
-            # 'completed' = idempotency; 'cancelled' = a cancel landed before this
-            # (re)delivery. Skip both so we don't redo research only to have the
-            # confidence-gated persist rejected by the fail_if_status='cancelled' guard.
-            if cr_status in ('completed', 'cancelled'):
-                logger.info('CR already terminal — skipping', idempotency_key=idempotency_key, cr_status=cr_status)
-                return
-    except Exception as exc:
-        logger.warning('Idempotency check failed; proceeding with processing', error=str(exc))
+    idempotency_repo, should_process = _claim_worker_operation(idempotency_key)
+    if not should_process:
+        return
 
-    receive_count = int(record.get('attributes', {}).get('ApproximateReceiveCount', '1'))
-    asyncio.run(_async_process_record(input_data, receive_count))
+    try:
+        # Existing terminal state is a second guard for operations completed
+        # before durable worker claims were introduced.
+        try:
+            app_repo = _get_app_repo()
+            application = app_repo.get(application_id=input_data.job_id, user_id=input_data.user_id)
+            if isinstance(application, dict):
+                artifact_statuses = application.get('artifact_statuses') or {}
+                cr_status = artifact_statuses.get(_WORKER_ARTIFACT_TYPE) if isinstance(artifact_statuses, dict) else None
+                if cr_status in ('completed', 'cancelled'):
+                    logger.info('CR already terminal — skipping', idempotency_key=idempotency_key, cr_status=cr_status)
+                    return
+        except Exception as exc:
+            logger.warning('Terminal-state check failed; proceeding with processing', error=str(exc))
+
+        receive_count = int(record.get('attributes', {}).get('ApproximateReceiveCount', '1'))
+        asyncio.run(_async_process_record(input_data, receive_count))
+    except Exception:
+        if idempotency_repo is not None:
+            idempotency_repo.release_operation(idempotency_key)
+        raise
 
 
 @logger.inject_lambda_context(log_event=False)

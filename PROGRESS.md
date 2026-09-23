@@ -2,6 +2,43 @@
 
 ## Current Phase: VPR Generator Complete
 
+## Wave 3 — 3.FIX-SECURITY (2026-08-01)
+
+- [x] Closed devx CV-upload IDOR: authorizer identity overrides every request shape; stored-owner regression and live verification pass.
+- [x] Removed interview-prep whole-event/body logging; bearer/body sentinel regression and live verification pass.
+- [x] Deleted the original and session-created synthetic IDOR probe records; evidence: `docs/evidence/wave3-3fixsecurity-devx-20260801.md`.
+
+## Wave 1 Security — Step 1.3c
+
+- [x] P-11 WebACL rate rules implemented for dev, staging, and prod with API-stage association tests.
+- [x] P-07 authorization-code + S256 PKCE frontend path, Cognito Plus threat protection, OPTIONAL TOTP grace state, self-service TOTP enrollment, scope inventory, and 401 retry oracle implemented and tested.
+- [x] ~~P-07 final cutover blocked on human deploy + 30-day soak~~ **Corrected 2026-07-22: the soak never started.** The PKCE commit `4228346` is on `db-redesign` only, and Amplify never built that branch, so the SPA was never served and the 30-day clock has no start date. Split into 1.6 (below) and P-07b.
+- [ ] **Step 1.6 (new, blocks 1.1):** delete the hardcoded dev-pool fallbacks in `src/frontend/lib/pkce.ts` + `auth.ts`, register devx Amplify callback URLs, deploy the PKCE SPA to a `db-redesign` Amplify branch pointed at devx, and capture one verified end-to-end login as evidence.
+- [ ] **P-07b (deferred, blocks staging promotion — not 1.1):** move browser-side password-change and TOTP enrollment behind backend proxies, then remove implicit grant + `COGNITO_ADMIN` and enforce MFA.
+
+## Wave 1 — Step 1.1 (P-04/P-05) — split into two sessions
+
+- [ ] **1.1-RED:** write the five P-04/P-05 tests (none exist today) plus the checked-in route×handler matrix. Tests only; zero implementation files touched.
+- [ ] **1.1-GREEN:** fresh session, may not edit the test files. Removes the `x-user-id` fallback (`auth_utils.py:44`) and the dead `AUTHORIZER_DISABLED` env (`api_construct.py:2106`), and enforces owner checks on every authenticated route.
+- Blocked until 1.6 closes green. Rationale: `docs/db-redesign/code/code-analysis/project/runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)".
+
+## Wave 1 — P-26 devx (CLOSED, live-verified 2026-07-20)
+
+- [x] O-9 custom-domain prerequisite human-executed and live-verified on `CareerVpCrudDev`.
+- [x] `CareerVpCrudDevx` domain-claim guard and AC-P26-9 RED→GREEN infrastructure test landed; devx synthesizes with zero shared `DomainName`/`BasePathMapping` resources.
+- [x] Human executed the devx creation change set: `CareerVpCrudDevx` is `CREATE_COMPLETE`, **211 physical resources**, zero replacements.
+- [x] P-30 four-wire smoke green against devx's raw invoke URL (4/4, after seeding `/careervp/devx/anthropic-api-key`) — `docs/evidence/smoke-20260720T203735Z-019ff0.json`.
+- [ ] The shared-domain BasePathMapping flip and old-dev decommission remain separate, later human-only actions. **No decommission date is set** — until one is, "run it on dev" is ambiguous, since `api.dev.careervp.com` still points at the old stack.
+
+## Wave 2 Money — Steps 2.0b–2.1 (P-25/P-25b/P-14/P-15)
+
+- [x] `StripeProvider` implements the payment-provider port, real Stripe REST calls, multi-`v1` webhook signature rotation, tamper/wrong-secret rejection, and stale-timestamp replay rejection.
+- [x] P-25b freeze-line tests pass without network calls; P-25 mock regressions, full backend unit/integration, coverage, Ruff, and strict mypy are green.
+- [x] `MockProvider` accepts any matching `v1` and produces a stable digest event id when the verified payload has no provider id; B-2-1 and B-2-2 are settled true.
+- [x] P-14 webhook and company-research worker replays are suppressed by primary-key conditional claims against the shared idempotency table; successful webhook results replay deterministically and failed work releases its claim.
+- [x] P-15 customer lookup uses `customer-id-index`; `BillingLambda` has no Scan permission, while the separate reconciliation Lambda and `scan_active_subscriptions` remain intact for step 2.5.
+- [x] Devx synth count is unchanged at 499 across parent and active nested templates; naming, CDK diff, full backend/CDK tests, coverage, Ruff, and strict mypy are green.
+
 - [x] Folder Structure Initialization
 - [x] Environment Configuration
 - [x] Command Center Setup (`CLAUDE.md`, `.clauderules`)
@@ -29,6 +66,7 @@
 - [x] FE-UI-021 BillingContent page restructure (`src/frontend/app/billing/page.tsx`)
 - [x] FE-UI-045 inline rich-text editing + autosave-on-blur for Cover Letter, Tailored CV, and Interview Prep (`src/frontend/hooks/useArtifactAutosave.ts`, `src/frontend/app/applications/[id]/cover-letter/page.tsx`, `src/frontend/app/applications/[id]/cv-tailored/page.tsx`, `src/frontend/app/applications/[id]/interview-prep/page.tsx`)
 - [x] FE-UI-048 API Gateway per-feature `{proxy+}` collapse with protected/public authorizer parity, explicit mixed-handler exceptions, and parent-stack resource headroom (`infra/careervp/api_construct.py`)
+- [x] F-01/F-06 frontend contract oracle: Zod FE mirror, Pydantic JSON Schema artifacts, AJV dual-truth validation, MSW contract tests, and all 10 §3 assertions
 - [x] WORKER-LEGS-001 artifact chain VPR task-token signaling and CV direct Lambda invoke (`infra/careervp/artifact_chain_construct.py`, `src/backend/careervp/handlers/vpr_worker_handler.py`, `src/backend/careervp/handlers/cv_tailoring_handler.py`)
 - [x] FE-UI-049 Tavily company research retrieval, WEB_API identity-gated confidence, and enriched CompanyContext (`src/backend/careervp/logic/company_research.py`, `src/backend/careervp/logic/utils/tavily_client.py`)
 - [x] FE-UI-050 cross-user company-intel split-TTL cache with profile/news records, normalized keys, best-effort DynamoDB degradation, and in-flight miss locking (`src/backend/careervp/logic/company_intel_cache.py`)
@@ -98,3 +136,6 @@
 | `src/backend/tests/unit/test_tavily_client.py`, `src/backend/tests/unit/test_web_search.py`, `src/backend/tests/unit/test_company_research.py`, `src/backend/tests/unit/test_vpr_company_research_binding.py` | FE-UI-049 regression coverage for Tavily key resolution, two-query retrieval, confidence gate, no-fabrication failure, and downstream context enrichment |
 | `src/backend/careervp/logic/company_intel_cache.py`, `src/backend/careervp/logic/company_research.py`, `src/backend/careervp/logic/utils/web_search.py` | FE-UI-050 shared company-intel cache: split profile/news TTL records, domain-first cache keys, news-only refresh, cache miss writes, and in-flight lock |
 | `src/backend/tests/unit/test_company_intel_cache.py` | FE-UI-050 unit coverage for key normalization, TTL read/write, cache-first flow, degradation, miss writes, and lock behavior |
+| `src/frontend/lib/contractSchemas.ts`, `src/frontend/lib/contractOracle.ts`, `src/frontend/tests/contract/oracleFixtures.ts` | F-01/F-06 executable frontend contract oracle: Zod mirror, AJV/Pydantic schema validation, fixture corpus, and all 10 §3 assertions |
+| `src/frontend/tests/unit/frontend-oracle.contract.test.ts`, `src/frontend/tests/integration/frontend-oracle-msw.contract.test.ts` | F-01/F-06 RED→GREEN oracle coverage, including MSW-backed API paths, `vpr_id:null` vs absent, stale `base_version` 409, and 401 retry-once sign-out |
+| `src/backend/scripts/emit_json_schemas.py`, `src/backend/contract/schemas/*.json`, `src/backend/tests/unit/test_frontend_oracle_schema_emission.py` | Backend Pydantic `model_json_schema()` emission and committed-schema freshness check for the frontend oracle |

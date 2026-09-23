@@ -39,13 +39,12 @@ def extract_user_id(event: dict[str, Any]) -> str | None:  # noqa: C901
                 if user_id:
                     return user_id
 
-    headers = event.get('headers')
-    if isinstance(headers, dict):
-        for header_name in ('x-user-id', 'X-User-Id'):
-            user_id = _coerce_non_empty_string(headers.get(header_name))
-            if user_id:
-                return user_id
-
+    # P-04: identity comes ONLY from validated Cognito claims (or the P-24 resolver context).
+    # The former client-supplied identity-header fallback was an identity bypass (a caller could
+    # assert any tenant); it has been removed. On failure we fail closed (return None -> handlers
+    # 401) and emit the distinct resolver-failure signal below. Emitting the CloudWatch
+    # resolver-failure *metric* is P-24's responsibility (AC-P04-2); it is not implemented here,
+    # and aggregate 401-rate is deliberately not treated as that signal.
     logger.warning('Failed to extract user id from auth context')
     return None
 

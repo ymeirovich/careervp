@@ -331,6 +331,91 @@ class TestTaskTokenSignal:
         assert call_kwargs['taskToken'] == 'sfn-token-xyz'
         assert call_kwargs['error'] == 'CRHardFail'
 
+    @pytest.mark.asyncio
+    async def test_cancel_ccf_sends_task_failure_and_updates_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When update_artifact_status raises CCF (cancelled guard), send task_failure
+        so the chain routes to HandleCRFailure, and directly transition the application
+        state cr_pending → cr_failed so the UI is not stuck."""
+        from botocore.exceptions import ClientError
+
+        monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
+        monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')
+
+        cr_result = _make_cr_result(ResearchSource.WEBSITE_SCRAPE, confidence=0.9)
+        input_data = _make_input(task_token='sfn-token-cancel')
+
+        mock_app_repo = MagicMock()
+        mock_app_repo.update_artifact_status.side_effect = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'cancelled'}},
+            'UpdateItem',
+        )
+        mock_sfn = MagicMock()
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.research_company', new_callable=AsyncMock) as mock_research,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('careervp.handlers.company_research_worker_handler._persist_cr_result'),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
+            await _async_process_record(input_data, receive_count=1)
+
+        mock_sfn.send_task_failure.assert_called_once()
+        mock_sfn.send_task_success.assert_not_called()
+        mock_app_repo.set_company_research_error.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            error=True,
+        )
+        mock_app_repo.update_state.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_ccf_suppresses_signal_error_when_execution_stopped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If the chain execution is already stopped (stop_execution called by cancel_artifact),
+        send_task_failure raises — the error must be swallowed, and the worker must still
+        directly update application state so the UI is not stuck at cr_pending."""
+        from botocore.exceptions import ClientError
+
+        monkeypatch.setenv('ARTIFACT_CHAIN_ENABLED', 'true')
+        monkeypatch.setenv('STEP_FUNCTIONS_CHAIN_ARN', 'arn:aws:states:us-east-1:123:stateMachine:test')
+
+        cr_result = _make_cr_result(ResearchSource.WEBSITE_SCRAPE, confidence=0.9)
+        input_data = _make_input(task_token='sfn-token-stopped')
+
+        mock_app_repo = MagicMock()
+        mock_app_repo.update_artifact_status.side_effect = ClientError(
+            {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'cancelled'}},
+            'UpdateItem',
+        )
+        mock_sfn = MagicMock()
+        mock_sfn.send_task_failure.side_effect = ClientError(
+            {'Error': {'Code': 'ExecutionDoesNotExist', 'Message': 'execution stopped'}},
+            'SendTaskFailure',
+        )
+
+        with (
+            patch('careervp.handlers.company_research_worker_handler.research_company', new_callable=AsyncMock) as mock_research,
+            patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
+            patch('careervp.handlers.company_research_worker_handler._persist_cr_result'),
+            patch('boto3.client', return_value=mock_sfn),
+        ):
+            mock_research.return_value = Result(success=True, data=cr_result, code=ResultCode.SUCCESS)
+            # Must not raise even though send_task_failure raised
+            await _async_process_record(input_data, receive_count=1)
+
+        # Direct state update must fire even when the chain signal fails
+        mock_app_repo.update_state.assert_called_once_with(
+            application_id=input_data.job_id,
+            user_id=input_data.user_id,
+            new_state='cr_failed',
+            expected_state='cr_pending',
+        )
+
 
 # ---------------------------------------------------------------------------
 # Idempotency
@@ -348,12 +433,12 @@ class TestIdempotency:
 
         with (
             patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
-            patch('careervp.handlers.company_research_worker_handler.asyncio') as mock_asyncio,
+            patch('careervp.handlers.company_research_worker_handler._async_process_record') as mock_async,
         ):
             _process_record(record)  # type: ignore[arg-type]
 
-        # asyncio.run should never be called — idempotency guard returns early
-        mock_asyncio.run.assert_not_called()
+        # the work coroutine is never even constructed — idempotency guard returns early
+        mock_async.assert_not_called()
 
     def test_processes_if_cr_not_yet_completed(self) -> None:
         """Record is processed when artifact_statuses.company_research != completed."""
@@ -363,11 +448,11 @@ class TestIdempotency:
 
         with (
             patch('careervp.handlers.company_research_worker_handler._get_app_repo', return_value=mock_app_repo),
-            patch('careervp.handlers.company_research_worker_handler.asyncio') as mock_asyncio,
+            patch('careervp.handlers.company_research_worker_handler._async_process_record') as mock_async,
         ):
             _process_record(record)  # type: ignore[arg-type]
 
-        mock_asyncio.run.assert_called_once()
+        mock_async.assert_called_once()
 
     def test_process_record_hydrates_company_fields_for_chain_payload(self) -> None:
         """Resolver-started chains send only IDs; CR worker hydrates company fields."""

@@ -366,3 +366,71 @@ def test_users_can_only_access_own_jobs(jobs_table: Any) -> None:
     response = lambda_handler(event, _generate_lambda_context())
 
     assert response['statusCode'] == 403
+
+
+def test_active_subscription_bypasses_exhausted_trial_on_create_job(jobs_table: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A subscribed user must not be blocked by a stale, exhausted trial record.
+
+    Regression for a duplicate quota check: _check_create_job_access ran
+    QuotaService.check_access (which correctly skips trial enforcement for an
+    active subscriber) and THEN unconditionally re-ran trial_service.check_
+    trial_status on the same request — which knows nothing about
+    subscriptions and blocked with trial_exhausted regardless. Reproduced via
+    the journey harness against CareerVpCrudDevx: a real active-subscription
+    user with 3/3 trial credits already used got a 403 on every POST /jobs.
+    """
+    from careervp.dal.subscription_repository import SubscriptionRepository
+    from careervp.handlers.job_handler import _reset_handler_caches, lambda_handler
+    from careervp.logic.trial_service import TrialExhaustedException
+    from careervp.logic.utils.domain_validator import DomainValidation
+
+    monkeypatch.setenv('USERS_TABLE_NAME', 'test-users-table')
+    _reset_handler_caches()
+
+    exhausted_trial_service = MagicMock()
+    exhausted_trial_service.check_trial_status.side_effect = TrialExhaustedException('user-1', 3)
+    exhausted_trial_service.get_usage.return_value = {
+        'trial_active': True,
+        'credits_remaining': 0,
+        'days_remaining': 10,
+    }
+
+    active_subscription_repo = MagicMock(spec=SubscriptionRepository)
+    active_subscription_repo.get_subscription.return_value = MagicMock(
+        success=True,
+        data={'status': 'active', 'plan': 'monthly'},
+    )
+
+    access_token = _create_access_token(user_id='user-1', email='user1@example.com')
+    event = _generate_api_gw_event(
+        path='/jobs',
+        method='POST',
+        headers={'Authorization': f'Bearer {access_token}'},
+        body={
+            'title': 'Senior Backend Engineer',
+            'company_name': 'Acme Corp',
+            'description': 'Design and build backend services.',
+            'url': 'https://jobs.acme.example/backend-1',
+        },
+        user_id='user-1',
+    )
+
+    with (
+        patch('careervp.handlers.job_handler._get_trial_service', return_value=exhausted_trial_service),
+        patch('careervp.handlers.job_handler.SubscriptionRepository', return_value=active_subscription_repo),
+        patch(
+            'careervp.handlers.job_handler.validate_job_url',
+            return_value=MagicMock(
+                success=True,
+                data=DomainValidation(
+                    classification='valid',
+                    domain='jobs.acme.example',
+                    normalized_url='https://jobs.acme.example/backend-1',
+                ),
+            ),
+        ),
+    ):
+        response = lambda_handler(event, _generate_lambda_context())
+
+    assert response['statusCode'] == 201
+    exhausted_trial_service.check_trial_status.assert_not_called()

@@ -232,18 +232,29 @@ export default function ApplicationHubPage() {
     } else if (moduleType === 'gapAnalysis') {
       onClick = () => router.push(`/applications/${jobId}/gap-analysis`);
     } else if (moduleType === 'companyResearch') {
-      if (companyResearchError) {
+      // The CTA must do what its label says. This branch used to navigate to the
+      // research page unconditionally, so a card reading "Generate" only ever
+      // opened an empty page carrying its own separate "Research this company"
+      // button — nothing was ever generated from the hub, and the card never
+      // left "Generate". Only the error path (Retry) was wired to generate.
+      const generates =
+        companyResearchError || ['Generate', 'Regenerate', 'Retry'].includes(primaryAction.label);
+
+      if (generates) {
         return {
           ...primaryAction,
-          label: 'Retry',
+          label: companyResearchError ? 'Retry' : primaryAction.label,
           variant: 'primary' as const,
           onClick: () => void handleGenerate('companyResearch'),
         };
       }
-      onClick = () => router.push(`/applications/${jobId}/company-research`);
-      if (companyResearchId) {
-        return { ...primaryAction, label: 'View', variant: 'secondary' as const, onClick };
-      }
+
+      return {
+        ...primaryAction,
+        label: 'View',
+        variant: 'secondary' as const,
+        onClick: () => router.push(`/applications/${jobId}/company-research`),
+      };
     } else if (status === 'ready' || status === 'complete' || status === 'final') {
       const moduleRoutes: Partial<Record<ModuleType, string>> = {
         vpr: `/applications/${jobId}/vpr${resultUrl ? `?id=${resultUrl}` : ''}`,

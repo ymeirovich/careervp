@@ -90,7 +90,7 @@ describe('401 retry-once pattern', () => {
     expect(result.data).toEqual({ user_id: 'u1' });
   });
 
-  it('does not retry a second time on consecutive 401s — calls signOut and rejects', async () => {
+  it('test_p07_401_contract_still_refreshes_once', async () => {
     mockGetCurrentToken.mockResolvedValue('original-jwt');
 
     const mockRefreshSession = vi.fn().mockResolvedValue('new-jwt');

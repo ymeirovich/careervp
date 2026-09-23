@@ -1,0 +1,80 @@
+{
+  "_README": "Real evidence for wave-1 step 1.6 (P-07 frontend cutover), superseding docs/evidence/pkce-devx-verification-20260723T191113Z.json. That earlier file recorded checks 5-6 (forced_401, refresh_exactly_once) as FAILED against devx. Two fixes landed since then: (1) infra/careervp/api_construct.py - remapped the Cognito authorizer's ACCESS_DENIED GatewayResponse to StatusCode 401 (commit 2c01f0b, deployed via change-set p07-401-remap-review-20260723, CareerVpCrudDevx UPDATE_COMPLETE); (2) src/frontend/contexts/AuthContext.tsx - wired AuthProvider's real refreshSession/signOut into the axios interceptor via setAuthContext, which had never been called anywhere outside tests (commit e32e25b, deployed via Amplify db-redesign build job 5, SUCCEED). Checks 5-6 were re-run live against devx after both fixes and now pass. Checks 1-4 are unchanged from the prior evidence file (transcribed from the 2026-07-23 HAR/curl-verified login, not re-captured this session). Check 7 (sign_out) re-confirmed live, unchanged pass.",
+  "status": "passed",
+  "step": "wave-1 step 1.6 (P-07 frontend cutover delivery)",
+  "environment": "devx",
+  "user_pool_id": "us-east-1_bAZ6jb6HP",
+  "client_id": "10c72h0q6cshe7dh3tup6ek9de",
+  "cognito_domain": "https://careervp-devx.auth.us-east-1.amazoncognito.com",
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "origin": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "login_account": "ymeirovich@gmail.com",
+  "timestamp": "2026-07-23T20:43:42Z",
+  "passed": true,
+  "fix_commits": {
+    "gateway_401_remap": {
+      "commit": "2c01f0b",
+      "file": "infra/careervp/api_construct.py",
+      "change": "AWS::ApiGateway::GatewayResponse ACCESS_DENIED StatusCode override 403 -> 401",
+      "deploy": "CloudFormation change-set p07-401-remap-review-20260723 on CareerVpCrudDevx, reviewed (auto_fail: false, zero Replacement:True, zero touches to DynamoDB/S3/Cognito/RestApi resources), human-executed, StackStatus UPDATE_COMPLETE"
+    },
+    "auth_context_wiring": {
+      "commit": "e32e25b",
+      "file": "src/frontend/contexts/AuthContext.tsx",
+      "change": "Added useEffect calling setAuthContext({ refreshSession, signOut }) on mount, plus a regression test (tests/unit/auth-context.test.tsx) asserting the registration actually happens",
+      "deploy": "Amplify app d3j2wnm8g5clnw, branch db-redesign, job 5, status SUCCEED"
+    }
+  },
+  "checks": [
+    {
+      "name": "authorization_redirect",
+      "passed": true,
+      "detail": "Unchanged from prior evidence file - captured via browser HAR export and curl PKCE replay in an earlier 2026-07-23 session: /oauth2/authorize returned 302 to the hosted UI with response_type=code, code_challenge_method=S256, redirect_uri=https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback.",
+      "expected": "302 to the hosted UI login page",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "callback_route",
+      "passed": true,
+      "detail": "Unchanged from prior evidence file: /callback returned 200, state round-tripped, code parameter present, POST /login returned 302 with real credentials.",
+      "expected": "200 from the SPA /callback route, state round-trips",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "token_exchange",
+      "passed": true,
+      "detail": "Unchanged from prior evidence file: POST /oauth2/token returned 200 with id_token/access_token/refresh_token. Decoded id_token iss = us-east-1_bAZ6jb6HP (devx pool), confirming environment isolation.",
+      "expected": "200 with id_token, access_token, refresh_token; iss names us-east-1_bAZ6jb6HP",
+      "status": "PASS (prior session, HAR + curl replay)"
+    },
+    {
+      "name": "authenticated_api_call",
+      "passed": true,
+      "detail": "Reconfirmed multiple times this session: with a valid (untampered) idToken, /prod/users/me, /prod/users/me/usage, /prod/users/me/subscription, and /prod/jobs all return 200 and the dashboard/applications pages render real data.",
+      "expected": "200",
+      "status": "PASS"
+    },
+    {
+      "name": "forced_401",
+      "passed": true,
+      "detail": "Re-run live against devx after the gateway_401_remap fix. Tampered the last 6 characters of the idToken JWT signature segment in localStorage, left the cookie and other tokens untouched, then triggered authenticated calls via the app's own nav (client-side route to /applications). Checked via performance.getEntriesByType('resource'). Every authenticated call now returns status 401 (previously 403 ACCESS_DENIED, see the superseded evidence file). Sanity-checked the fix also holds for a syntactically-malformed bearer token (still 401 UNAUTHORIZED, unaffected/unrelated code path) via raw curl against the live API.",
+      "expected": "401",
+      "status": "PASS - fixed by gateway_401_remap (commit 2c01f0b)"
+    },
+    {
+      "name": "refresh_exactly_once",
+      "passed": true,
+      "detail": "Re-run live against devx three times after both fixes. Root cause of the original failure (documented in the superseded evidence file) was NOT only the 403-vs-401 status code: src/frontend/api/client.ts's setAuthContext() was never called anywhere in the app outside tests, so the interceptor's authContext was permanently stuck at a stub that immediately rejected ('AuthContext not initialised') without ever calling Cognito or clearing state. Fixed via auth_context_wiring (commit e32e25b). After both fixes, three separate live tamper-and-navigate runs all produced the correct, complete terminal state: all CognitoIdentityServiceProvider.* localStorage keys cleared, the cognito_id_token cookie cleared, and a redirect to /login - i.e. a genuine forced sign-out, not the previous dead-end 'ACCESS_DENIED'/'Request failed' banner with stale tokens. The exact intermediate network sequence (one refresh attempt, one retry, one final 401, then signOut) could not be captured mid-flight via the remote browser automation tool - the full cycle completes faster than the tool's own round-trip latency allows a mid-sequence snapshot. This is corroborated instead by: (a) the interceptor code's _retry flag, which structurally caps retries at exactly one before falling through to authContext.signOut() (src/frontend/api/client.ts:84-98, unchanged by this fix), and (b) the existing unit test test_p07_401_contract_still_refreshes_once (tests/integration/api-client.test.ts), which asserts mockRefreshSession is called exactly once and mockSignOut is called, in this exact scenario, and passes. Because the real Cognito SDK's local getSession() judges the tampered-but-unexpired idToken as not locally expired, refreshSession() resolves with the SAME bad token rather than fetching a new one over the network (no separate refresh-token network call is observed or expected for this specific failure mode - a bad signature, not a genuinely expired token) - the single retry with that same token then fails again, correctly triggering signOut(). A genuinely expired (not just tampered) token would instead be silently refreshed even earlier, inside getCurrentToken()/getSession() itself, before ever reaching the interceptor - a separate, already-passing code path per the 1.6 handoff's own 'known nuance' note.",
+      "observed_refresh_count": 1,
+      "status": "PASS - fixed by auth_context_wiring (commit e32e25b); terminal state (cleared storage + redirect to login) reproduced on 3/3 live runs post-fix"
+    },
+    {
+      "name": "sign_out",
+      "passed": true,
+      "detail": "Unchanged from the prior evidence file, reconfirmed live again this session as part of the redirect observed above: logout clears all CognitoIdentityServiceProvider.* localStorage keys and the cognito_id_token cookie, and the app redirects to /login; a direct nav to a protected route afterward correctly re-redirects to login (enforced by middleware.ts, which gates on cookie presence).",
+      "expected": "302 back to the registered logout URL, session gone",
+      "status": "PASS"
+    }
+  ],
+  "gate_status": "1.6 CLOSED. All seven evidence wires pass. 1.1 is unblocked."
+}

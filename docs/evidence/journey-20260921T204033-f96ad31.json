@@ -1,0 +1,64 @@
+{
+  "kind": "journey",
+  "journey_reached": 4,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "pass",
+    "J5": "fail: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "browser_diagnostics": {
+    "J2": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=ww2kp — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/?_rsc=ck3ub — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cv-center/4638efb2-9cf9-443c-aa83-165e73a3ba37/?_rsc=ww2kp — net::ERR_ABORTED"
+    ],
+    "J3": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=1r4si — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/tailored-cvs/?_rsc=wc04j — net::ERR_ABORTED",
+      "console.error: Failed to load resource: the server responded with a status of 504 ()",
+      "http 504: POST https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/gap-analysis/questions — {\"error\": \"DEFAULT_5XX\", \"code\": \"DEFAULT_5XX\", \"request_id\": \"a8c428db-f497-4d86-8e92-4b878f235512\"}"
+    ],
+    "J4": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/65c0ac52-e1c2-4d8c-a109-6c9519d884a2/?_rsc=19g26 — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/company-research/65c0ac52-e1c2-4d8c-a109-6c9519d884a2 — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/jobs/65c0ac52-e1c2-4d8c-a109-6c9519d884a2/gap-questions — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/users/me/cv — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/applications/65c0ac52-e1c2-4d8c-a109-6c9519d884a2 — net::ERR_ABORTED"
+    ],
+    "J5": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/?_rsc=1qbny — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=zfjtl — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=10w3o — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=ix3ia — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=1jlzx — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/?_rsc=1yzki — net::ERR_ABORTED"
+    ]
+  },
+  "git_sha": "f96ad318b69a3275a46578251dd2f298e5d97428",
+  "git_short": "f96ad31",
+  "git_dirty": true,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "7c08d89286d181885ebefd49702159c0d5d08667-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260921T204033-f96ad31",
+  "timestamp": "2026-09-21T20:46:13.157Z"
+}

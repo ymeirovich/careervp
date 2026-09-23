@@ -1,0 +1,15 @@
+{
+  "command": [
+    "rg",
+    "-n",
+    "quality_warning",
+    "src/backend/careervp",
+    "--glob",
+    "*.py"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T14:04:15.386648+00:00",
+  "exit_code": 0,
+  "stdout": "src/backend/careervp/logic/vpr_generator.py:87:MAX_STAGE6_RETRIES = 1  # 1 retry; on second failure accept with quality_warning\nsrc/backend/careervp/logic/vpr_generator.py:159:    quality_warning: bool = field(default=False)\nsrc/backend/careervp/logic/vpr_generator.py:262:        # Accept stage-5 output with quality_warning rather than failing the user\nsrc/backend/careervp/logic/vpr_generator.py:272:            quality_warning=True,\n",
+  "stderr": ""
+}

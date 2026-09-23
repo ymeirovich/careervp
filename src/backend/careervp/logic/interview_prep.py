@@ -30,6 +30,29 @@ DEFAULT_GENERATION_TEMPERATURE = 0.3
 PARSE_RETRY_MAX_QUESTIONS = 5
 PARSE_RETRY_TEMPERATURE = 0.1
 
+# Output budget for one generation.
+#
+# This prompt asks for up to MAX_QUESTIONS answers of ANSWER_MAX_WORDS each, so the
+# worst-case body alone is 15 x 300 = 4500 words ~= 6000 tokens, before question text,
+# STAR fields and JSON scaffolding. LLMClient.generate() used to cap every caller at a
+# hardcoded 4096, which is below that floor: the model stopped mid-string and the JSON
+# never closed, so BOTH parse attempts failed with "Unterminated string" and the whole
+# generation was returned as INTERNAL_ERROR. Halving the question count on retry did not
+# help, because the cap -- not the question count -- was the binding constraint.
+#
+# 16000 is sized against THIS caller's own model, not a borrowed number. generate()
+# runs on LLMClient.DEFAULT_MODEL -- claude-haiku-4-5-20251001 -- whose ceiling is 64K
+# output tokens (200K context), so 16000 leaves 4x headroom. Do not read the identical
+# 16000 in vpr_generator as the precedent: that caller pins claude-sonnet-4-6, a
+# different tier with a different ceiling.
+#
+# 16000 is also the practical CEILING here, and the constraint is transport, not the
+# model: _invoke_model uses a non-streaming messages.create, which starts risking SDK
+# HTTP timeouts above ~16000 output tokens. Raising this further requires moving
+# generate() to streaming FIRST. If the budget is ever too small, reduce the ask
+# instead -- MAX_QUESTIONS is 15 while V1 scope is 10.
+GENERATION_MAX_TOKENS = 16000
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,6 +120,7 @@ async def generate_interview_prep(
                 llm_client.generate(
                     prompt=generation_prompt,
                     temperature=float(attempt['temperature']),
+                    max_tokens=GENERATION_MAX_TOKENS,
                 )
             )
         except TimeoutError as exc:

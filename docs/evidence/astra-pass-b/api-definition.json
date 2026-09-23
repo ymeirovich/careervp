@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigateway",
+    "get-rest-api",
+    "--rest-api-id",
+    "ymzhvcxod0"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:32.528271+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"id\": \"ymzhvcxod0\",\n    \"name\": \"careervp-core-api-devx\",\n    \"description\": \"CareerVP API - AI-powered job application assistant\",\n    \"createdDate\": \"2026-07-20T22:32:04+03:00\",\n    \"apiKeySource\": \"HEADER\",\n    \"endpointConfiguration\": {\n        \"types\": [\n            \"EDGE\"\n        ],\n        \"ipAddressType\": \"ipv4\"\n    },\n    \"tags\": {\n        \"aws:cloudformation:logical-id\": \"CareerVpCrudDevxCrudservicerestapi2258A47A\",\n        \"aws:cloudformation:stack-id\": \"arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071\",\n        \"aws:cloudformation:stack-name\": \"CareerVpCrudDevx\",\n        \"feature\": \"crud\",\n        \"owner\": \"yitzchak-meirovich\",\n        \"service\": \"CareerVP\"\n    },\n    \"disableExecuteApiEndpoint\": false,\n    \"rootResourceId\": \"bxtycz4eub\",\n    \"securityPolicy\": \"TLS_1_0\",\n    \"apiStatus\": \"AVAILABLE\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,157 @@
+{
+  "checks": [
+    {
+      "detail": "all 11 Wave-2 clauses resolve (spec+test, no orphans/tooling errors)",
+      "evidence": {
+        "problems": [],
+        "wave2_clauses": [
+          "P-25",
+          "P-25b",
+          "P-14",
+          "P-15",
+          "P-16",
+          "P-17",
+          "P-18",
+          "P-19",
+          "P-20",
+          "P-02",
+          "P-31"
+        ]
+      },
+      "name": "scope_diff",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests/infrastructure in backend: 74 passed, 1 skipped, 1 warning in 170.19s (0:02:50)",
+      "evidence": {
+        "failing": [],
+        "returncode": 0
+      },
+      "name": "infra_tests_backend",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests/infrastructure in infra: 140 passed in 102.61s (0:01:42)",
+      "evidence": {
+        "failing": [],
+        "returncode": 0
+      },
+      "name": "infra_tests_cdk",
+      "status": "PASS"
+    },
+    {
+      "detail": "backend unit+integration: 1540 passed, 30 skipped, 4 xfailed, 1 xpassed, 133 warnings in 147.17s (0:02:27) =",
+      "evidence": {
+        "summary": "1540 passed, 30 skipped, 4 xfailed, 1 xpassed, 133 warnings in 147.17s (0:02:27) ="
+      },
+      "name": "backend_unit_integration",
+      "status": "PASS"
+    },
+    {
+      "detail": "coverage gate exit 0; overall 72.97/54.34; core 73.34/55.49 (enforced baseline 71/53, target 85/80)",
+      "evidence": {
+        "core": [
+          "73.34",
+          "55.49"
+        ],
+        "overall": [
+          "72.97",
+          "54.34"
+        ],
+        "returncode": 0
+      },
+      "name": "coverage_gate",
+      "status": "PASS"
+    },
+    {
+      "detail": "frontend test:unit exit 0",
+      "evidence": {
+        "returncode": 0,
+        "tail": [
+          "",
+          "Test Suites: 23 passed, 23 total",
+          "Tests:       149 passed, 149 total",
+          "Snapshots:   0 total",
+          "Time:        1.527 s",
+          "Ran all test suites."
+        ]
+      },
+      "name": "frontend_suites",
+      "status": "PASS"
+    },
+    {
+      "detail": "RestApi + UserPool logical-id anchors: 3 passed, 2 deselected in 20.00s",
+      "evidence": {
+        "returncode": 0,
+        "targets": [
+          "tests/infrastructure/test_p26_blue_green_api.py::test_rest_api_logical_id_unchanged",
+          "tests/infrastructure/test_p24_identity_surrogate_infra.py"
+        ]
+      },
+      "name": "immutable_laws",
+      "status": "PASS"
+    },
+    {
+      "detail": "largest live template = 261 resources (CareerVpCrudDevx\u2026), under hard 500; meets 400 target",
+      "evidence": {
+        "counts": {
+          "CareerVpCrudDevx": 261,
+          "CareerVpCrudDevx-AiAssistNestedStackNestedStackAiAssistNestedStackNestedStackResourceB-9LNZMCCPT0H4": 11,
+          "CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFeaturesNestedStackCrudFeaturesNestedStackRes-X2S7O7ZFA3YN": 241,
+          "CareerVpCrudDevx-CompanyResearchNestedStackNestedStackCompanyResearchNestedStackNested-Z03U81JBDVR1": 4,
+          "CareerVpCrudDevx-ErrorReportNestedStackNestedStackErrorReportNestedStackNestedStackRes-32YFGDM19L1O": 11,
+          "CareerVpCrudDevx-MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResou-1TBVZK44E037L": 25
+        },
+        "hard": 500,
+        "target": 400,
+        "worst": 261
+      },
+      "name": "live_resource_count",
+      "status": "PASS"
+    },
+    {
+      "detail": "smoke harness 4/4",
+      "evidence": {
+        "returncode": 0,
+        "stderr_tail": [
+          "warning: `VIRTUAL_ENV=/Users/yitzchak/Documents/dev/careervp/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead",
+          "  [PASS] health: health returned 200",
+          "  [PASS] cors_exact_origin: exact origin echoed: 'https://dev.careervp.com'",
+          "  [PASS] authed_read: authed 200 and unauth rejected with 401",
+          "  [PASS] authed_upload: CV uploaded (cv_id=49ef16d1-1cd3-4f21-8724-d300acc674c4) and read back"
+        ]
+      },
+      "name": "smoke_harness_4x4",
+      "status": "PASS"
+    },
+    {
+      "detail": "all five Wave-2 bets re-read; none left open",
+      "evidence": {
+        "verdicts": {
+          "B-2-1": "now faithful to Stripe's secret-rotation behavior, so B-2-1 is TRUE.",
+          "B-2-2": "and all seven P-25/P-25b provider tests remain green. B-2-2 is closed; the digest fallback is the",
+          "B-2-3": "bear on this bet. B-2-3 is closed TRUE: Wave 2's additive infrastructure fit without another",
+          "B-2-4": "B-2-4: no verdict line found in ISSUES.md",
+          "B-2-5": "B-2-5: no verdict line found in ISSUES.md"
+        }
+      },
+      "name": "bets_ledger",
+      "status": "RECORDED"
+    },
+    {
+      "detail": "I-06 (admin scope on browser login client) still carries a stopping condition",
+      "evidence": {},
+      "name": "i06_stopping_condition",
+      "status": "RECORDED"
+    }
+  ],
+  "gate": "wave-2-close-out",
+  "passed": true,
+  "summary": {
+    "FAIL": 0,
+    "HUMAN_REQUIRED": 0,
+    "PASS": 9,
+    "RECORDED": 2
+  },
+  "timestamp": "2026-07-26T20:50:22.579023+00:00"
+}

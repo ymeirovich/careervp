@@ -1,0 +1,308 @@
+{
+  "handoff": "05",
+  "doc": "docs/handoff/2026-09-20-HANDOFF-05-merge-the-gate-and-finish-hermeticity.md",
+  "git_sha": "03497a80b4bac9ffe22d6279bd34da660c9f38a5",
+  "git_dirty": true,
+  "git_dirty_adjudication": "The same four docs/handoff/*.md files flagged by handoff 04 were already modified when this session opened and are the operator's to handle. The handoff's ground rules name them and forbid safe_commit.sh (git add -A) for this reason. Every path this session touched is committed: `git status --porcelain -uno -- . ':!docs/handoff'` returns 0 lines. No claim in this file depends on an uncommitted change.",
+  "branch": "tools/proof-harness",
+  "timestamp_utc": "2026-09-20T19:49:06Z",
+  "model": "Opus 5",
+  "commits_this_handoff": [
+    "84f73ca test(hermetic): restore vpr_handler env via monkeypatch instead of deleting it",
+    "cf146aa test(hermetic): use monkeypatch for env in the three remaining manual-restore sites",
+    "03497a8 test(async): patch the coroutine, not asyncio.run, and make the leak fail the suite"
+  ],
+
+  "step0_verification_of_handoff_04": {
+    "verdict": "All 8 claims verified. One benign numeric delta, explained below.",
+    "results": {
+      "0.1_collect_only": {"recorded": "2118 tests collected", "measured": "2118 tests collected", "status": "PASS"},
+      "0.2_full_suite_fixed_order": {"recorded": "2058 passed, 48 skipped, 12 xfailed", "measured": "2058 passed, 48 skipped, 12 xfailed", "status": "PASS"},
+      "0.3_mypy": {"recorded": "Success: no issues found in 137 source files", "measured": "Success: no issues found in 137 source files", "status": "PASS"},
+      "0.4_hermeticity": {"recorded": "1429 passed, 16 skipped, 4 xfailed (0 failed)", "measured": "1430 passed, 15 skipped, 4 xfailed (0 failed)", "status": "PASS", "delta_explained": "Totals are identical at 1445. One test moved skip -> pass: tests/unit/infra/test_p03_api_surface.py skips when infra/cdk.out is absent (commit 0a52bdc). infra/cdk.out is present on this machine, so the assertion ran instead of skipping. An environment difference, not a code difference. The number that matters, 0 failed, reproduces."},
+      "0.5_run_35528608346": {"recorded": "8 jobs, all success", "measured": "8 jobs, all success (Vitest, Deployed Parity Gate, Ruff, Jest, Pytest, Evidence Integrity Gate, Mypy, CDK Synth)", "status": "PASS"},
+      "0.6_run_35527733635_pytest": {"recorded": "success", "measured": "success", "status": "PASS"},
+      "0.7_gate_on_main": {"recorded": "0 if #222 unmerged", "measured": "0", "status": "PASS — #222 is still unmerged"},
+      "0.8_pr_222": {"recorded": "OPEN MERGEABLE", "measured": "OPEN MERGEABLE", "status": "PASS"}
+    },
+    "order_independence_guard_requested_by_the_handoff": {
+      "instruction": "Run 0.2 at least twice without -p no:randomly.",
+      "measured": "Two unpinned random-order full-suite runs: 2058 passed, 48 skipped, 12 xfailed both times. Then two PINNED distinct seeds on tests/unit for reproducibility: seed=11111 and seed=99999 both give 1430 passed, 15 skipped, 4 xfailed.",
+      "note": "Pinned seeds were used in addition because an unpinned run cannot evidence WHICH seeds ran — see new_findings.ci_random_order_failures_are_not_reproducible."
+    }
+  },
+
+  "step1_merge_pr_222": {
+    "status": "BLOCKED ON OPERATOR — this session cannot merge, by the handoff's own instruction and because merging to main is the operator's call.",
+    "pr_state_measured": {
+      "number": 222,
+      "title": "ci: run the real PR gate on every PR to main",
+      "base": "main",
+      "head": "ci/gate-on-main",
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "UNSTABLE",
+      "diff": "1 file changed, +95 -6 — .github/workflows/pr-validation.yml only"
+    },
+    "all_nine_gate_jobs_green": [
+      "CDK Synth", "CV Tailoring Delete Observability", "Deployed Parity Gate (pre_merge)",
+      "Evidence Integrity Gate (pre_merge)", "Jest (unit + integration)", "Mypy Type Check",
+      "Pytest", "Ruff Lint", "Vitest"
+    ],
+    "the_two_red_checks_are_unrelated_VERIFIED_not_assumed": {
+      "python-security": "Fails on main itself. security.yml run 29650252509 at head ee78796 (main's tip) reports python-security: failure, node/auth/code/iac-security all success. Pre-existing, independent of #222.",
+      "cdk-diff": "Fails at the 'Comment CDK diff' step with `Validation Failed: ... Body is too long (maximum is 65536 characters)`. The diff itself succeeded. cdk-diff is a pull_request-only workflow so it has no main-branch runs to compare against; the stronger argument is structural — #222 changes one GitHub Actions workflow file and cannot alter CDK synth output or Python dependency CVEs.",
+      "cdk_diff_history": "Succeeded on tools/proof-harness PR runs (35529188154, 35528608351, 35527733628, 35524902811, 35524435497) and failed on ci/gate-on-main (35528215476). Outcome depends on comment size, which depends on base branch, not on the PR's own content."
+    },
+    "command_for_the_operator": "gh pr merge 222 --squash   # run from the feature branch; do NOT pass --delete-branch (CLAUDE.md)",
+    "proof_after_merge": "git fetch origin main && git show origin/main:.github/workflows/pr-validation.yml | grep -c 'tests/regression'   # -> 1"
+  },
+
+  "step2_hermeticity": {
+    "counts_reproduce_exactly": {
+      "files_using_os_environ_assignment": {"handoff": 10, "measured": 10},
+      "files_that_also_manually_delete": {"handoff": 4, "measured": 4},
+      "file_list_matches": true
+    },
+    "THE_HANDOFF_PREMISE_WAS_PARTLY_FALSE": {
+      "handoff_05_claimed": "The 4 that both set and manually delete carry the exact defect that fired.",
+      "what_is_actually_true": "Exactly ONE of the four carries the defect. The other three already snapshot prior values and restore them, which is semantically what monkeypatch does.",
+      "per_file_verdict": {
+        "tests/unit/test_vpr_handler.py": "DEFECT — CONFIRMED. autouse fixture set DYNAMODB_TABLE_NAME, POWERTOOLS_SERVICE_NAME and LOG_LEVEL, then os.environ.pop()'d all three unconditionally. Two of them are the tests/conftest.py session baseline (lines 68-69), so the pop destroyed the baseline for the rest of the session.",
+        "tests/integration/conftest.py": "NOT THE DEFECT. `previous = {key: os.environ.get(key) for key in keys}` before mutating, restored in a finally block. Correct save/restore.",
+        "tests/integration/p05_seeding.py": "NOT THE DEFECT. patched_env() snapshots into `previous` before os.environ.update(env) and restores in finally. The handoff flagged `os.environ.update(env)` as 'wholesale', which is true, but it is bracketed by a correct restore.",
+        "tests/unit/test_llm_client.py": "NOT THE DEFECT. setup_method captures original values into self.original_env; teardown_method restores or pops per key. Correct."
+      },
+      "evidence": "A probe test asserting POWERTOOLS_SERVICE_NAME == 'careervp-test' and LOG_LEVEL == 'DEBUG', run last: passes alone; after test_vpr_handler.py -> 1 failed, 7 passed; after test_llm_client.py -> 26 passed; after tests/integration/test_vpr_e2e.py (which loads both integration files) -> 4 passed, 1 skipped."
+    },
+    "A_SECOND_FALSE_PREMISE_THE_PRESCRIBED_REPRODUCER_DOES_NOT_DETECT_THIS": {
+      "handoff_05_prescribed": "uv run pytest <the-file> tests/unit/test_l3_state_recovery.py -q -p no:randomly",
+      "measured": "19 passed — BEFORE the fix and after it. The prescribed reproducer reports the one genuinely polluting file as clean.",
+      "why": "test_l3_state_recovery is credential-sensitive. test_vpr_handler.py deletes Powertools keys, not AWS credentials, so the victim never fails. A pollution probe has to assert on the keys the file under test actually deletes.",
+      "why_it_matters": "This is the same shape of error the chain has repeated: a detection method inherited from the previous defect, applied to a new defect it cannot see. Had this handoff trusted the named reproducer, it would have recorded all four files as harmless."
+    },
+    "fix_applied": {
+      "commit": "84f73ca",
+      "before": "1 failed, 7 passed (probe: POWERTOOLS_SERVICE_NAME lost)",
+      "after": "8 passed"
+    },
+    "uniformity_conversion": {
+      "commit": "cf146aa",
+      "rationale": "The other three files were converted to pytest.MonkeyPatch even though none carried a live defect. Stated plainly: this is uniformity, not a bug fix. It buys two things — MonkeyPatch unwinds keys already applied if setup throws partway (the hand-rolled versions only unwound once the whole block was entered), and it takes the audit grep to zero so the next handoff's signal is not noise.",
+      "subtlety": "test_llm_client.py needed its two direct os.environ assignments converted as well. Swapping only setup/teardown would have REGRESSED it: monkeypatch.delenv on an absent key records nothing to restore, so the test-body assignments would then have leaked forward."
+    },
+    "proof_obligation_met": {
+      "command": "grep -rln \"os\\.environ\\[\" tests/ | xargs grep -ln \"environ\\.pop\\|del os\\.environ\" | wc -l",
+      "before": 4,
+      "after": 0
+    },
+    "ci_seed_trade_COSTED_NOT_PICKED": {
+      "context": "pr-validation.yml runs `uv run pytest \"$d\" -q --tb=short -rs` with no seed control, so pytest-randomly (5.0.0, confirmed active, seed is time-derived and differs every invocation) reorders every run.",
+      "NEW_FINDING_THAT_CHANGES_THE_TRADE": "The gate passes -q, and -q suppresses pytest-randomly's `Using --randomly-seed=N` header line. Measured: `pytest tests/models -q | grep -c randomly-seed` -> 0; without -q -> 1. So today CI has random ordering WITHOUT a recorded seed. A random-order failure in CI is currently not reproducible at all — the information needed to replay it is never written down. This is the worst corner of the trade space, and neither option the handoff named describes it.",
+      "options": {
+        "A_pin_a_fixed_seed": {
+          "change": "add `-p randomly --randomly-seed=<n>` to the gate's pytest invocation",
+          "cost": "one line in pr-validation.yml",
+          "buys": "every CI failure replays exactly; bisecting works",
+          "loses": "the suite then only ever exercises ONE order. Pollution that fires under other orders becomes permanently invisible. Handoff 04's central finding (3, 22 and 23 failures were one defect seen from three orders) is exactly the class this would hide."
+        },
+        "B_keep_it_random": {
+          "change": "none",
+          "cost": "zero",
+          "buys": "ordering defects keep surfacing over time",
+          "loses": "as measured above, a failure cannot currently be reproduced, because the seed is not logged. Option B as it stands is not 'detection without reproducibility' — it is detection with the evidence discarded."
+        },
+        "C_random_but_log_the_seed": {
+          "change": "drop -q from the gate's pytest call, or echo the seed in a preceding step",
+          "cost": "one line; noisier logs if -q is dropped",
+          "buys": "keeps random detection AND makes each failure replayable via --randomly-seed=<the logged value>",
+          "note": "Recorded because the measurement above showed the seed is currently discarded. Presented as a costed third option, not a recommendation — HARNESS.md rule 5."
+        }
+      },
+      "decision": "NOT MADE. Operator's call."
+    }
+  },
+
+  "step3_three_red_gates_COSTED_NOT_CHANGED": {
+    "note": "No gate was changed. The handoff says to pick up whichever the operator authorises; no authorisation was given in this session.",
+
+    "gate_1_python_security_cves": {
+      "reproduced_locally": "uvx --python 3.13 pip-audit -r lambda_requirements.txt -> Found 23 known vulnerabilities in 4 packages. Matches exactly.",
+      "CORRECTION_the_23_double_counts": "23 is a ROW count. There are 16 distinct (package, advisory-id) pairs; pip-audit emits several twice. Any 'we fixed N CVEs' claim should say which count it means.",
+      "CORRECTION_the_handoff_split_does_not_reproduce": {
+        "handoff_said": "10 clear with patch/minor bumps, 8 more with pypdf 6.16.1, last 5 need cryptography 50.0.0.  (10+8=18 clear, 5 left)",
+        "measured": "16 rows clear within current majors, 7 rows left. Not 18 and 5."
+      },
+      "measured_ladder": [
+        {"action": "no change", "rows_remaining": 23},
+        {"action": "in-major bumps only: anyio 4.12.1->4.14.2, soupsieve 2.8.4->2.9.0, cryptography 46.0.5->46.0.7, pypdf 6.14.2->6.16.1", "rows_remaining": 7, "risk": "low — all stay within the current major"},
+        {"action": "+ cryptography -> 48.0.1", "rows_remaining": 6, "distinct_left": ["PYSEC-2026-3552", "PYSEC-2026-3553", "PYSEC-2026-3554"]},
+        {"action": "+ cryptography -> 49.0.0", "rows_remaining": 2, "distinct_left": ["PYSEC-2026-3552"]},
+        {"action": "+ cryptography -> 50.0.0", "rows_remaining": 0, "risk": "four majors; suite compatibility UNMEASURED"}
+      ],
+      "why_the_ladder_matters": "The handoff framed the residual as all-or-nothing at cryptography 50. It is not. 49.0.0 clears 5 of the 7 remaining rows and 3 of the 4 remaining advisories, leaving a single advisory (PYSEC-2026-3552) that needs 50. That is a materially cheaper stopping point than the handoff offered.",
+      "dependency_fact": "cryptography==46.0.5 is pinned in lambda_requirements.txt (line 91) and is pulled in `via aws-lambda-handler-cookbook`, i.e. a first-order dependency of the project package rather than a deep transitive.",
+      "standing_constraint_from_handoff_04": "Do not bump uv.lock as a side effect of other work. Whether cryptography 48/49/50 passes the suite is UNMEASURED and needs its own branch.",
+      "decision": "NOT MADE."
+    },
+
+    "gate_2_infra_spec_consistency": {
+      "what_it_does": ".github/workflows/refactoring-validation.yml lines 123-149 open('infra/careervp/dynamodb_stack.py') and check each spec constant appears as `constants.<NAME>` in that file.",
+      "FALSIFIED_the_file_is_not_a_file_that_never_existed": {
+        "handoff_said": "reads infra/careervp/dynamodb_stack.py, which has never existed",
+        "measured": "It existed. Added in a529038 ('refactor: Add spec registry and execution runbook'), deleted in 567320d ('feat: RETAIN stateful DynamoDB/S3 resources, remove dead RETAIN stacks (P-12/P-13)'). 4 commits touch the path; 1 adds, 1 deletes.",
+        "why_this_changes_the_costing": "This is not an aspirational path or a typo. It is a gate pointed at a file the project deliberately deleted as dead code. The thing the gate was written to check was itself declared dead — which argues for deleting the gate more strongly than the handoff's framing did."
+      },
+      "the_four_constants": {
+        "measured": "4/4 of the spec's `tables:` constants are referenced under infra/careervp/ — confirming the handoff's count.",
+        "SHARPER_FACT": "All four (CVS_TABLE_NAME, APPLICATIONS_TABLE_NAME, GAP_RESPONSES_TABLE_NAME, KNOWLEDGE_TABLE_NAME) live in ONE file: infra/careervp/api_db_construct.py. Not scattered across the directory.",
+        "THE_REAL_INCONSISTENCY": "dynamodb_spec.yaml separates `existing_tables` ('managed_by: ApiDbConstruct', with the comment 'DO NOT duplicate these in DynamoDBStack') from `tables`. All four `tables` constants are nonetheless in api_db_construct.py. The spec's intended split between DynamoDBStack and ApiDbConstruct has collapsed. The gate is stale against the architecture, not merely against a filename."
+      },
+      "options": {
+        "repoint_at_api_db_construct.py": "cheapest; passes today; and because all four are in one file this is closer to the original single-file intent than a directory grep would be. Still only proves the string appears, not that the table is declared correctly.",
+        "delete_the_gate": "strengthened by the finding above — it guards a file the project intentionally removed, for a spec split that no longer holds.",
+        "leave_it_red": "no work; keeps a permanently-red gate, which trains readers to ignore red."
+      },
+      "decision": "NOT MADE."
+    },
+
+    "gate_3_cdk_diff": {
+      "confirmed": "Fails at 'Comment CDK diff' (marocchino/sticky-pull-request-comment@v2) with `Body is too long (maximum is 65536 characters)`. The cdk diff step itself succeeds. So on exactly the large PRs where a diff would matter most, it has never delivered output.",
+      "CORRECTION_ON_THE_CREDENTIALS_CLAIM": {
+        "handoff_said": "it runs with real AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY on the pull_request event",
+        "measured": "The workflow contains NO static AWS keys. `grep -n 'AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|secrets\\.|id-token' .github/workflows/cdk-diff.yml` returns only `id-token: write` (line 10) and `role-to-assume: ${{ secrets.AWS_CDK_DIFF_ROLE_ARN }}` (line 41). It uses OIDC role assumption via aws-actions/configure-aws-credentials@v4.",
+        "why_the_log_looks_otherwise": "That action EXPORTS AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN into the job env after assuming the role, which is why they appear (masked) in the step's env block. They are short-lived STS session credentials, not long-lived secrets.",
+        "residual_risk_stated_honestly": "Still worth a decision: this is `pull_request` (not pull_request_target), so it checks out and executes the PR's own CDK Python with the diff role's permissions. GitHub withholds secrets from fork PRs, so a fork PR gets no credentials and the step simply fails — the exposure is bounded to same-repo branches. That is a meaningfully smaller problem than 'real static keys on pull_request'."
+      },
+      "options": {
+        "truncate_or_summarise_the_comment": "post the first N KB plus a link to the job log, or post only the resource-change summary; fixes the only observed failure mode",
+        "upload_the_diff_as_an_artifact": "no size limit, no comment; loses at-a-glance PR review",
+        "leave_it": "gate stays red on large PRs"
+      },
+      "decision": "NOT MADE."
+    }
+  },
+
+  "step4_asyncio_run_patches": {
+    "commit": "03497a8",
+    "outcome": "Suite-wide 'coroutine ... was never awaited' RuntimeWarnings: 6 -> 0. Full suite unchanged at 2058 passed, 48 skipped, 12 xfailed.",
+    "FOUR_COUNT_CORRECTIONS": {
+      "site_count": {"handoff": "3 + 3 + 1 = 7", "measured": "4 + 4 + 2 = 10"},
+      "warning_count": {"handoff": 8, "measured": 6},
+      "third_file_mischaracterised": {
+        "handoff_said": "tests/unit/test_company_research_worker_handler.py:451 — 1 occurrence (+1 AsyncMock residue)",
+        "measured": "Two sites (lines 436 and 451), and both patch the handler module's own `asyncio` attribute — `patch('careervp.handlers.company_research_worker_handler.asyncio')` — not the stdlib entry point process-wide. The 'AsyncMock residue' the handoff flagged is `new_callable=AsyncMock` on research_company, which is the established CORRECT pattern in that file, used at 10 other sites. It is not residue.",
+        "but_they_were_still_a_real_leak": "Replacing the whole asyncio module means `asyncio.run(_async_process_record(...))` still constructs the real coroutine and never awaits it. That is the source of the `_async_process_record was never awaited` warning. Fixed by patching _async_process_record itself."
+      },
+      "a_file_the_handoff_did_not_name": "tests/unit/test_p14_p15_billing_idempotency.py:185 also patches asyncio.run — but module-scoped, and alongside `_async_process_record` replaced by a plain MagicMock, so no coroutine is ever constructed and nothing leaks. Left alone deliberately."
+    },
+    "warning_attribution_caveat": "The 6 warnings surfaced against test_interview_prep_roundtrip.py, test_corr_canonical_vpr.py and test_gap_q02_real_cv.py — none of which patch anything. Un-awaited-coroutine warnings fire from the coroutine's __del__ at GC time, so the reporting test is whichever test was running when the collector ran, not the test that leaked. This is why the handoff attributed 8 warnings to 3 files: the attribution shifts with ordering.",
+    "fix_shape": "patch() auto-creates an AsyncMock when the target is an `async def`, so patching careervp.handlers.gap_handler.generate_gap_questions lets the REAL asyncio.run execute and await it. This is what the other seven gap test files already do.",
+    "THE_PRESCRIBED_GUARD_DOES_NOT_WORK_ON_ITS_OWN": {
+      "handoff_said": "Then promote RuntimeWarning in filterwarnings so this cannot come back.",
+      "measured_by_deliberately_reintroducing_the_defect": {
+        "filterwarnings = [\"error::RuntimeWarning\"]": "38 passed — NOT CAUGHT",
+        "filterwarnings = [\"error::RuntimeWarning\", \"error::pytest.PytestUnraisableExceptionWarning\"]": "1 failed — CAUGHT"
+      },
+      "why": "The warning is emitted inside the coroutine's __del__. error::RuntimeWarning does raise it there, but an exception raised inside __del__ is unraisable: Python routes it to sys.unraisablehook and the test still passes. pytest's unraisableexception plugin converts that into PytestUnraisableExceptionWarning; promoting THAT is what fails the run.",
+      "action_taken": "Both filters are set in src/backend/pyproject.toml, with the mechanism and the verification recorded in a comment there. There was no filterwarnings section at all before this commit.",
+      "caveat_recorded_in_the_config": "The failure is attributed to whichever test was running at GC time, not the test that leaked. The guard detects the class; it does not localise it.",
+      "measured_safe": "The suite emits zero RuntimeWarnings of any kind, so promoting to error breaks nothing today."
+    },
+    "pinned_test_still_passing": "tests/unit/test_l0_gap_analysis_generation.py::TestGapAnalysisLLMGeneration::test_handler_returns_questions_from_llm_generation -> 1 passed, 9 deselected."
+  },
+
+  "step5_integration_problem_COSTED_NOT_DECIDED": {
+    "re_measured_at_03497a8": {
+      "src/backend/careervp/": "57 files changed, 3599 insertions(+), 703 deletions(-)",
+      "infra/": "53 files changed, 4854 insertions(+), 706 deletions(-)",
+      "docs/": "444 files changed, 651000 insertions(+), 53 deletions(-)",
+      "whole_branch": "772 files changed, 699948 insertions(+), 3568 deletions(-)",
+      "docs_share_of_all_inserted_lines": "93.0%"
+    },
+    "why_these_differ_slightly_from_handoff_04": "Two reasons, both benign. (1) Three commits have landed since d61ec4b. (2) Handoff 04 used a two-dot diff. Measured both: `git diff origin/main HEAD -- infra/` gives 52 files / +4643 / -706, which reproduces handoff 04's recorded infra numbers exactly; `git diff origin/main...HEAD -- infra/` (merge-base) gives 53 / +4854 / -706. The conclusion is unchanged either way.",
+    "the_conclusion_is_stable": "The product change is ~7% of the diff. docs/ is ~93% of everything inserted.",
+    "main_has_not_moved": "origin/main tip is still ee78796; merge-base with HEAD is 8013618f. The gate is still not on main (grep count 0).",
+    "the_gating_question": "What happens to the 23.3 MB IAM dump at docs/evidence/astra-pass-b/iam-authorization-details.json. It is NOT on main. Every option except leaving the branch unmerged puts it on main permanently.",
+    "decision": "NOT MADE. Four options with costs remain in the handoff-04 proof file at step3_integration_problem_costed_not_decided."
+  },
+
+  "proof_obligations_declared_in_the_handoff": [
+    {"claim": "The gate is on main", "before": "0", "after": "0", "status": "NOT MET — BLOCKED. Requires the operator to merge PR #222."},
+    {"claim": "A real PR is gated by it", "before": "empty", "after": "n/a", "status": "NOT MET — BLOCKED. Depends on the merge above."},
+    {"claim": "Remaining env polluters fixed", "before": "4", "after": "0", "status": "MET"},
+    {"claim": "Still hermetic", "before": "0 failed", "after": "1430 passed, 15 skipped, 4 xfailed, 0 failed", "status": "MET"},
+    {"claim": "Order-independence", "before": "unmeasured", "after": "seed=11111 and seed=99999 both give 1430 passed, 15 skipped, 4 xfailed — identical", "status": "MET (pinned seeds used so the result is itself reproducible)"},
+    {"claim": "No regression", "before": "2058 passed, 0 failed", "after": "2058 passed, 48 skipped, 12 xfailed, 0 failed", "status": "MET"},
+    {"claim": "Churn stays fixed", "before": "empty", "after": "empty", "status": "MET — `git status --short docs/beta/ src/frontend/` returns 0 lines"}
+  ],
+
+  "new_findings_not_in_any_prior_handoff": {
+    "ci_random_order_failures_are_not_reproducible": "pr-validation.yml runs pytest with -q, and -q suppresses pytest-randomly's `Using --randomly-seed=N` line. Measured: with -q, 0 matches; without -q, 1 match. CI therefore randomises order and then discards the only thing that would let you replay a failure. This reframes the Step 2 trade the handoff posed as binary.",
+    "filterwarnings_cannot_fail_a_gc_time_warning": "error::RuntimeWarning does not fail a test on 'coroutine ... was never awaited', because the warning is raised inside __del__ and an exception there is unraisable. error::pytest.PytestUnraisableExceptionWarning is required. Verified in both directions by reintroducing the defect.",
+    "a_pollution_probe_must_target_the_keys_actually_deleted": "The handoff's two-file reproducer (victim = test_l3_state_recovery) passes against test_vpr_handler.py before and after the fix, because the victim is credential-sensitive and the polluter deletes Powertools keys. Reproducers do not transfer between defects of the same class; the probe has to assert on the specific keys.",
+    "dynamodb_stack.py_was_deleted_not_never_written": "Added a529038, deleted 567320d as part of removing dead RETAIN stacks. The Infra Spec Consistency gate guards a file the project intentionally removed.",
+    "the_dynamodb_spec_architectural_split_has_collapsed": "dynamodb_spec.yaml says the four `tables:` constants belong in DynamoDBStack and that `existing_tables` must NOT be duplicated there. All four `tables:` constants are in infra/careervp/api_db_construct.py. The spec is stale against the architecture, not just against a filename.",
+    "cdk_diff_uses_oidc_not_static_keys": "The workflow declares id-token: write and role-to-assume: ${{ secrets.AWS_CDK_DIFF_ROLE_ARN }}. The AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY visible in the job log are short-lived STS credentials exported by aws-actions/configure-aws-credentials@v4, not long-lived secrets. Fork PRs receive no secrets at all.",
+    "the_23_cve_figure_double_counts": "23 rows, 16 distinct (package, advisory) pairs.",
+    "cryptography_49_is_a_real_stopping_point": "46.0.7 leaves 7 rows; 48.0.1 leaves 6; 49.0.0 leaves 2 (one advisory, PYSEC-2026-3552); 50.0.0 leaves 0. The handoff presented only the 50.0.0 cliff.",
+    "iam_dump_contents_characterised_without_reading_it": {
+      "method": "grep -c only; no value was ever printed except one line with the key ID regex-masked.",
+      "AKIA_matches": 1,
+      "ASIA_matches": 0,
+      "SecretAccess_matches": 0,
+      "arn:aws:iam_matches": 456,
+      "field_name_correction": "The handoff calls it an 'AWS Access Key ID' at line 15; the JSON field is named \"Key\", not \"AccessKeyId\" (a grep for AccessKeyId returns 0 and could be misread as 'no key present').",
+      "materially_important_nuance": "One AKIA-prefixed long-lived Access Key ID is present; NO secret access key is present. An Access Key ID alone is an identifier, not a usable credential — closer to a username than a password. The exposure is account/principal disclosure plus 456 IAM ARNs mapping the authorization topology, which enables targeted attack, rather than direct account access. It is still worth rotating. This does not lower the priority to zero, but it is a different risk than 'a live credential is public'."
+    }
+  },
+
+  "deviations_from_the_handoff": {
+    "converted_three_files_that_were_not_broken": "The handoff said all four carried the defect; three did not. They were converted anyway because the declared proof obligation is the grep going 4 -> 0, and because MonkeyPatch is strictly more robust on partial-setup failure. Recorded as uniformity, not as a bug fix, in the commit message and here.",
+    "added_a_filter_the_handoff_did_not_name": "error::pytest.PytestUnraisableExceptionWarning was added alongside error::RuntimeWarning because measurement showed the latter alone does not fail the suite.",
+    "no_gate_in_step_3_was_changed": "The handoff conditions Step 3 on operator authorisation. None was given, so all three were costed only.",
+    "pinned_seeds_in_addition_to_unpinned_runs": "The handoff asked for two runs without -p no:randomly. Those were run (identical counts). Two pinned distinct seeds were also run, because an unpinned run cannot evidence which seeds it used."
+  },
+
+  "carried_forward_not_fixed": {
+    "operator_actions": [
+      "PR #222 needs a human to review and merge. It is the whole point of the last five handoffs and everything downstream of it is blocked.",
+      "The AWS Access Key ID in docs/evidence/astra-pass-b/iam-authorization-details.json is still on the PUBLIC remote origin/tools/proof-harness and still not rotated. Present in the repo since 2026-09-14. See the nuance above: key ID only, no secret.",
+      "Four feature-branch workflows (company-research, cover-letter, cv-tailoring, gap-analysis) still deploy on push via the ungated dev environment — explicitly accepted in handoff 03.",
+      "production and gap-remediation environments do not exist; GitHub auto-creates a referenced environment with no protection on first use."
+    ],
+    "mechanics_worth_keeping": [
+      "env -u does not neutralise ~/.aws/credentials. Any no-credential proof must also set AWS_SHARED_CREDENTIALS_FILE and AWS_CONFIG_FILE.",
+      "A failure count under random ordering is a sample, not a property.",
+      "pytest exits 4 for a missing directory and 5 for one that collects nothing. Neither is a test failure.",
+      "gh api repos/:owner/:repo/... resolves placeholders from the current directory's git remote.",
+      "git worktree add is how you measure another branch with the operator's files dirty.",
+      "Running the suite in a clean main worktree dirties 7 tracked files.",
+      "A conflicting PR gets no merge ref, so no pull_request workflow runs; use gh run list --branch <b> --event pull_request.",
+      "Retargeting a PR fires action `edited`, which is not in types: [opened, synchronize, reopened]. Use gh pr close && gh pr reopen.",
+      "zsh does not word-split unquoted $VAR; use a shell function.",
+      "`timeout` is not available on this machine (GNU coreutils not installed).",
+      "-q suppresses the pytest header, including the pytest-randomly seed line and the plugin list."
+    ],
+    "from_earlier_handoffs_unchanged": [
+      "The eviction dance may be deletable outright; careervp_root() may be unnecessary. Needs its own proof.",
+      "careervp/logic/auth_service.py:84 has a never-cleared @lru_cache(maxsize=1); ~28 test files sys.path.insert(0, INFRA_SRC) without restoring.",
+      "vpr_handler.py is dead code; the real path is vpr_submit_handler.py -> SQS -> vpr_worker_handler.py. (Note: its test file was still fixed this handoff, because it still runs and still polluted the session.)",
+      "CVTailoringRequest.vpr_id has no = None default. Quarantined xfail(strict=True).",
+      "DynamoDalHandler API mismatch in test_dal_migration_integration.py and the renamed interview_prep_prompt API. Both quarantined.",
+      "48 unit + 7 integration files call now()/utcnow()/today() with freezegun available but unused.",
+      "preflight.py:366 and scripts/ci/changeset_replacement_report.py query AWS::DynamoDB::Table while every table is AWS::DynamoDB::GlobalTable — the deploy gate's DynamoDB auto-fail can never trigger. Load-bearing.",
+      "31 of 32 devx Lambdas have 1-day log retention.",
+      "careervp/handlers/knowledge_base_handler.py is routed to nothing.",
+      "Five jest e2e billing files are pure tautologies; npm run test:e2e is deliberately out of the PR gate.",
+      "CLAUDE.md's naming-check command uses `python`, which does not exist on this machine (python3 / uv run python only)."
+    ]
+  },
+
+  "what_success_looked_like_vs_what_happened": {
+    "the_handoff_asked_for": "Merge PR #222; fix four env-polluting files; cost three red gates; fix the asyncio.run patches and guard them; restate the integration decision.",
+    "what_happened": "Everything except the merge, which this session cannot do. One of the four files was actually broken and is fixed with a before/after proof; the other three were already correct and were converted for uniformity with that stated plainly. The asyncio work covered 10 sites rather than the 7 named and took the warnings to zero, and the guard the handoff prescribed was measured NOT to work and was replaced with one that does. All three gates were costed and three of the handoff's factual claims about them were falsified.",
+    "the_pattern_this_chain_keeps_hitting": "Handoff 04 falsified three of five premises it was handed. Handoff 05 falsified six more: that all four env files carried the defect; that the prescribed two-file reproducer would detect it; that filterwarnings error::RuntimeWarning would guard the coroutine leak; that dynamodb_stack.py never existed; that cdk-diff runs on static AWS keys; and the CVE split arithmetic. The instruction 'do not trust a stated cause' continues to pay for itself on every step where it is applied.",
+    "the_one_thing_still_blocking_everything": "PR #222. Five handoffs have now ended with the gate not on main."
+  }
+}

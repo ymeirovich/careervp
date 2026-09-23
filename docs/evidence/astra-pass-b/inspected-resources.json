@@ -1,0 +1,1308 @@
+[
+  {
+    "receipt": "docs/evidence/astra-pass-b/E005-jobs-corrected.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "scan",
+      "--table-name",
+      "careervp-jobs-table-devx",
+      "--projection-expression",
+      "job_id,#t,created_at,updated_at,#s,result_key,completed_at",
+      "--expression-attribute-names",
+      "{\"#s\":\"status\",\"#t\":\"ttl\"}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:04:59.806215+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E005-jobs.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "scan",
+      "--table-name",
+      "careervp-jobs-table-devx",
+      "--projection-expression",
+      "job_id,ttl,created_at,updated_at,#s,result_key,completed_at",
+      "--expression-attribute-names",
+      "{\"#s\":\"status\"}"
+    ],
+    "exit_code": 254,
+    "timestamp": "2026-09-13T09:03:27.392786+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E005-ttl.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-time-to-live",
+      "--table-name",
+      "careervp-jobs-table-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:26.609089+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E006-applications.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "scan",
+      "--table-name",
+      "careervp-applications-table-devx",
+      "--projection-expression",
+      "#s,created_at,updated_at,entity_type",
+      "--expression-attribute-names",
+      "{\"#s\":\"state\"}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:28.159875+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E008-Errors.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "cloudwatch",
+      "get-metric-statistics",
+      "--namespace",
+      "AWS/Lambda",
+      "--metric-name",
+      "Errors",
+      "--dimensions",
+      "Name=FunctionName,Value=careervp-artifact-cleanup-lambda-devx",
+      "--start-time",
+      "2026-08-30T00:00:00Z",
+      "--end-time",
+      "2026-09-13T00:00:00Z",
+      "--period",
+      "86400",
+      "--statistics",
+      "Sum"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:43.661206+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E008-Invocations.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "cloudwatch",
+      "get-metric-statistics",
+      "--namespace",
+      "AWS/Lambda",
+      "--metric-name",
+      "Invocations",
+      "--dimensions",
+      "Name=FunctionName,Value=careervp-artifact-cleanup-lambda-devx",
+      "--start-time",
+      "2026-08-30T00:00:00Z",
+      "--end-time",
+      "2026-09-13T00:00:00Z",
+      "--period",
+      "86400",
+      "--statistics",
+      "Sum"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:44.669208+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E015-http-apis.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigatewayv2",
+      "get-apis"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:29.761289+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E015-rest-apis.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-rest-apis"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:30.575830+00:00",
+    "returned_arns": [
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDev/6dfdbe70-0504-11f1-b797-0afffba4f579",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudStaging/0ef88df0-1167-11f1-a4e4-0afff98af577"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E016-knowledge-count.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "scan",
+      "--table-name",
+      "careervp-knowledge-table-devx",
+      "--select",
+      "COUNT"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:28.922123+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/E022-submit.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function-configuration",
+      "--function-name",
+      "careervp-vpr-submit-lambda-devx",
+      "--query",
+      "{FunctionName:FunctionName,FunctionArn:FunctionArn,LastModified:LastModified,CodeSha256:CodeSha256,RevisionId:RevisionId,Sha:Environment.Variables.DEPLOYED_GIT_SHA}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:19.407358+00:00",
+    "returned_arns": [
+      "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/api-authorizers.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-authorizers",
+      "--rest-api-id",
+      "ymzhvcxod0"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:34.104446+00:00",
+    "returned_arns": [
+      "arn:aws:cognito-idp:us-east-1:788159322332:userpool/us-east-1_bAZ6jb6HP"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/api-definition.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-rest-api",
+      "--rest-api-id",
+      "ymzhvcxod0"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:32.528271+00:00",
+    "returned_arns": [
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/api-resources.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-resources",
+      "--rest-api-id",
+      "ymzhvcxod0"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:31.758346+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/api-stages.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-stages",
+      "--rest-api-id",
+      "ymzhvcxod0"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:33.312387+00:00",
+    "returned_arns": [
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071",
+      "arn:aws:logs:us-east-1:788159322332:log-group:CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E",
+      "arn:aws:wafv2:us-east-1:788159322332:regional/webacl/careervp-core-waf-devx/99274f5b-0a2b-4696-86ac-24316fdccf82"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/cleanup-errors-log.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "logs",
+      "filter-log-events",
+      "--log-group-name",
+      "/aws/lambda/careervp-artifact-cleanup-lambda-devx",
+      "--filter-pattern",
+      "\"MissingTableEnvError\"",
+      "--limit",
+      "3",
+      "--no-paginate",
+      "--query",
+      "events[].{timestamp:timestamp,message:message}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:09.233529+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-api-export-command.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-export",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--stage-name",
+      "prod",
+      "--export-type",
+      "oas30",
+      "--parameters",
+      "extensions=integrations",
+      "/Users/yitzchak.meirovich/Documents/code5/careervp/docs/evidence/astra-pass-b/deployed-api-oas.json"
+    ],
+    "exit_code": 0,
+    "timestamp": null,
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/export-aliases.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "list-aliases",
+      "--function-name",
+      "careervp-export-lambda-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:03.685827+00:00",
+    "returned_arns": [
+      "arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/export-policy-live-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-export-lambda-devx",
+      "--qualifier",
+      "live-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:04.446092+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/iam-local-policies.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "iam",
+      "list-policies",
+      "--scope",
+      "Local"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:06.841215+00:00",
+    "returned_arns": [
+      "arn:aws:iam::788159322332:policy/Cognito_Admin_Delete_User",
+      "arn:aws:iam::788159322332:policy/service-role/AWSLambdaBasicExecutionRole-4700c9ff-ab77-4ad1-8e0b-453f8506408f",
+      "arn:aws:iam::788159322332:policy/service-role/AWSLambdaBasicExecutionRole-c1a74da1-fa92-4663-910e-1f88f4407e68",
+      "arn:aws:iam::788159322332:policy/service-role/AWSLambdaMicroserviceExecutionRole-d49645a7-afc4-4a16-b804-f467a93fe521",
+      "arn:aws:iam::788159322332:policy/service-role/AWSLambdaS3ExecutionRole-0a0602cb-3696-4c43-a333-cbcd7254d20e",
+      "arn:aws:iam::788159322332:policy/service-role/AWSLambdaVPCAccessExecutionRole-4b3d60d7-7114-4b93-8b6a-bb57f6dc4810",
+      "arn:aws:iam::788159322332:policy/service-role/AmplifySSRLoggingPolicy-265f54b3-d8c7-438e-962f-fa1a11319957",
+      "arn:aws:iam::788159322332:policy/service-role/Cognito-1558629790074"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/iam-roles.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "iam",
+      "list-roles",
+      "--query",
+      "Roles[].{RoleName:RoleName,Arn:Arn,AssumeRolePolicyDocument:AssumeRolePolicyDocument}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:08.111198+00:00",
+    "returned_arns": [
+      "arn:aws:iam::788159322332:oidc-provider/token.actions.githubusercontent.com",
+      "arn:aws:iam::788159322332:role/AWSAmplifyDomainRole-Z01014791EGUGL4O7OQJ1",
+      "arn:aws:iam::788159322332:role/CareerVP-Deploy",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-BucketNotificationsHandler050a0587b-ttGzkOB2eJNE",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudArtifactChainArt-MhcF7qBfnOIq",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudArtifactCleanupL-qdVpj0fFTnc3",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudBillingLambdaSer-qdrywxPmiw68",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudBillingReconcile-LOViRka9vmC4",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudCoverLetterWorke-B1kusmr75p9z",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudCvTailorWorkerLa-89xcihmOVK7r",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudCvUploadWorkerLa-gbFqEiKTCjcp",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudExportLambdaServ-SB8iHjNI4zAb",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudInterviewPrepWor-m4ymycsg591h",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudservicerestapiCl-P9vaxEBIyGDu",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudservicerestapiCl-sBHSRq4SFf9K",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDev-CareerVpCrudDevCrudvprworkerService-NNcGKrgwqoyh",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-BucketNotificationsHandler050a0587-YkOlq7uYjK62",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-ArtifactChainArtifactChai-bbZz8fnu1P00",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-ArtifactCleanupLambdaServ-uVAPOEDTqhOy",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-BillingLambdaServiceRoleB-YOfSod3M91Z2",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-BillingReconcileLambdaSer-KCB6xzVUYj1l",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CoverLetterWorkerLambdaSe-fWnfplBgfgMd",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CvTailorWorkerLambdaServi-vzlckjrP6quK",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CvUploadWorkerLambdaServi-zIcBCaqP1qPL",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-ExportLambdaServiceRoleB1-DqzLchMUroRK",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-InterviewPrepWorkerLambda-MI7aErJXA8Wb",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-vprworkerServiceRoleE056A-JN9lz8etG1U5",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVpCrudDevxCrudservicerestapi-JFtzQHvHHNZG",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVpCrudDevxCrudservicerestapi-dMIWr2jHXpzZ",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVpCrudDevxCrudservicerestapi-ziPREHMMXVdB",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-BucketNotificationsHandler050a0-Y52mraHZjkns",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudBillingL-vY0lJeCFvBiW",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudBillingR-Taanb3sAdOYX",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudCoverLet-TmTb9J5tDspF",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudCvTailor-FxIPnfwhjdOC",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudCvUpload-h5mQggKBS9b8",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudIntervie-Qx574niAJ09X",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudservicer-fLN2FufqUBvG",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CareerVpCrudStagingCrudvprworke-eUOkoaIPPzP2",
+      "arn:aws:iam::788159322332:role/CareerVpCrudStaging-CustomS3AutoDeleteObjectsCustom-Pf2AccgXcH7K",
+      "arn:aws:iam::788159322332:role/CareerVpFrontend-Dev-CustomS3AutoDeleteObjectsCusto-yAHwhd6uqide",
+      "arn:aws:iam::788159322332:role/Cognito_Manage_Users",
+      "arn:aws:iam::788159322332:role/Cognito_PwdMgrIdpAuth_Role",
+      "arn:aws:iam::788159322332:role/Cognito_PwdMgrIdpUnauth_Role",
+      "arn:aws:iam::788159322332:role/DataPipelineDefaultResourceRole",
+      "arn:aws:iam::788159322332:role/DataPipelineDefaultRole",
+      "arn:aws:iam::788159322332:role/DataPipelineDefaultRole2",
+      "arn:aws:iam::788159322332:role/Lambda-Logs-DynamoDB",
+      "arn:aws:iam::788159322332:role/PHP-EC2-Role",
+      "arn:aws:iam::788159322332:role/PresGenLightsailRole",
+      "arn:aws:iam::788159322332:role/SNSSuccessFeedback",
+      "arn:aws:iam::788159322332:role/TpsPriExternalIdPDemo-APIFunctionServiceRole411B6D-1SAYQ2R42GITS",
+      "arn:aws:iam::788159322332:role/TpsPriExternalIdPDemo-PreTokenGenerationServiceRol-EBKNP266789L",
+      "arn:aws:iam::788159322332:role/TpsPriExternalIdPDemo-TpsPriExternalIdPDemoAPIClou-1OC7QTCO7OMT6",
+      "arn:aws:iam::788159322332:role/ask-lambda-Bank-Records",
+      "arn:aws:iam::788159322332:role/ask-lambda-Space-Facts",
+      "arn:aws:iam::788159322332:role/aws-ec2-spot-fleet-tagging-role",
+      "arn:aws:iam::788159322332:role/aws-serverless-repository-simplemobilebackendRole-1VUKB5XY59A8E",
+      "arn:aws:iam::788159322332:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling",
+      "arn:aws:iam::788159322332:role/aws-service-role/clientvpn.amazonaws.com/AWSServiceRoleForClientVPN",
+      "arn:aws:iam::788159322332:role/aws-service-role/cloud9.amazonaws.com/AWSServiceRoleForAWSCloud9",
+      "arn:aws:iam::788159322332:role/aws-service-role/contributorinsights.dynamodb.amazonaws.com/AWSServiceRoleForDynamoDBCloudWatchContributorInsights",
+      "arn:aws:iam::788159322332:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable",
+      "arn:aws:iam::788159322332:role/aws-service-role/elasticloadbalancing.amazonaws.com/AWSServiceRoleForElasticLoadBalancing",
+      "arn:aws:iam::788159322332:role/aws-service-role/elasticmapreduce.amazonaws.com/AWSServiceRoleForEMRCleanup",
+      "arn:aws:iam::788159322332:role/aws-service-role/guardduty.amazonaws.com/AWSServiceRoleForAmazonGuardDuty",
+      "arn:aws:iam::788159322332:role/aws-service-role/ops.apigateway.amazonaws.com/AWSServiceRoleForAPIGateway",
+      "arn:aws:iam::788159322332:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS",
+      "arn:aws:iam::788159322332:role/aws-service-role/resource-explorer-2.amazonaws.com/AWSServiceRoleForResourceExplorer",
+      "arn:aws:iam::788159322332:role/aws-service-role/support.amazonaws.com/AWSServiceRoleForSupport",
+      "arn:aws:iam::788159322332:role/aws-service-role/trustedadvisor.amazonaws.com/AWSServiceRoleForTrustedAdvisor",
+      "arn:aws:iam::788159322332:role/bank-data-scraper-role",
+      "arn:aws:iam::788159322332:role/careervp-cdk-diff-github-oidc",
+      "arn:aws:iam::788159322332:role/careervp-role-codedeploy-api-canary-dev",
+      "arn:aws:iam::788159322332:role/careervp-role-codedeploy-api-canary-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-ai-assist-dev",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-ai-assist-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-core-dev",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-core-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-core-staging",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-error-report-dev",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-error-report-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-failure-handler-dev",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-failure-handler-devx",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-cfn-exec-role-788159322332-eu-west-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-cfn-exec-role-788159322332-us-east-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-deploy-role-788159322332-eu-west-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-deploy-role-788159322332-us-east-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-file-publishing-role-788159322332-eu-west-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-file-publishing-role-788159322332-us-east-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-image-publishing-role-788159322332-eu-west-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-image-publishing-role-788159322332-us-east-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-lookup-role-788159322332-eu-west-1",
+      "arn:aws:iam::788159322332:role/cdk-hnb659fds-lookup-role-788159322332-us-east-1",
+      "arn:aws:iam::788159322332:role/lambda_basic_execution",
+      "arn:aws:iam::788159322332:role/password-manager",
+      "arn:aws:iam::788159322332:role/rds-monitoring-role",
+      "arn:aws:iam::788159322332:role/serverlessrepo-cognito-sync-cognitosynctriggerRole-TKDDG7NLMX4L",
+      "arn:aws:iam::788159322332:role/service-role/AmplifySSRLoggingRole-265f54b3-d8c7-438e-962f-fa1a11319957",
+      "arn:aws:iam::788159322332:role/service-role/PwdMgr-SMS-Role",
+      "arn:aws:iam::788159322332:role/service-role/S3-Object-Read-Only",
+      "arn:aws:iam::788159322332:role/service-role/SimpleMicroservicePermissions",
+      "arn:aws:iam::788159322332:role/service-role/aws-codestar-service-role",
+      "arn:aws:iam::788159322332:root"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/identity.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "sts",
+      "get-caller-identity"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:18.510390+00:00",
+    "returned_arns": [
+      "arn:aws:iam::788159322332:user/presgen_user"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/integration-jobs.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-integration",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "jevqwf",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:38.848411+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/integration-knowledge-base.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-integration",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "8b5vfu",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:35.672256+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/integration-vpr.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-integration",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "fbukqc",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:37.260721+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/lambda-inventory.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "list-functions",
+      "--query",
+      "Functions[?ends_with(FunctionName, '-devx')].{FunctionName:FunctionName,Handler:Handler,Role:Role,CodeSha256:CodeSha256,LastModified:LastModified,Environment:Environment.Variables.{DYNAMODB_TABLE_NAME:DYNAMODB_TABLE_NAME,ARTIFACTS_TABLE_NAME:ARTIFACTS_TABLE_NAME,VPR_RESULTS_BUCKET_NAME:VPR_RESULTS_BUCKET_NAME,DEPLOYED_GIT_SHA:DEPLOYED_GIT_SHA}}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:21.866631+00:00",
+    "returned_arns": [
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-ArtifactCleanupLambdaServ-uVAPOEDTqhOy",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-BillingLambdaServiceRoleB-YOfSod3M91Z2",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-BillingReconcileLambdaSer-KCB6xzVUYj1l",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CoverLetterWorkerLambdaSe-fWnfplBgfgMd",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CvTailorWorkerLambdaServi-vzlckjrP6quK",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-CvUploadWorkerLambdaServi-zIcBCaqP1qPL",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-ExportLambdaServiceRoleB1-DqzLchMUroRK",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-InterviewPrepWorkerLambda-MI7aErJXA8Wb",
+      "arn:aws:iam::788159322332:role/CareerVpCrudDevx-CareerVp-vprworkerServiceRoleE056A-JN9lz8etG1U5",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-ai-assist-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-core-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-error-report-devx",
+      "arn:aws:iam::788159322332:role/careervp-role-lambda-failure-handler-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/method-jobs.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-method",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "jevqwf",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:38.073669+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/method-knowledge-base.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-method",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "8b5vfu",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:34.902061+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-company-research-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/method-vpr.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "apigateway",
+      "get-method",
+      "--rest-api-id",
+      "ymzhvcxod0",
+      "--resource-id",
+      "fbukqc",
+      "--http-method",
+      "GET"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:36.464746+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx/invocations"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/policy-careervp-artifact-cleanup-lambda-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-artifact-cleanup-lambda-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:46.994848+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/policy-careervp-export-lambda-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-export-lambda-devx"
+    ],
+    "exit_code": 254,
+    "timestamp": "2026-09-13T09:03:45.448766+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/policy-careervp-vpr-status-lambda-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-vpr-status-lambda-devx"
+    ],
+    "exit_code": 254,
+    "timestamp": "2026-09-13T09:03:46.230937+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/policy-careervp-vpr-worker-lambda-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-vpr-worker-lambda-devx"
+    ],
+    "exit_code": 254,
+    "timestamp": "2026-09-13T09:03:47.743481+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/results-lifecycle.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "s3api",
+      "get-bucket-lifecycle-configuration",
+      "--bucket",
+      "careervp-devx-vpr-results-use1-747cad"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:10.939666+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/results-objects.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "s3api",
+      "list-objects-v2",
+      "--bucket",
+      "careervp-devx-vpr-results-use1-747cad",
+      "--prefix",
+      "results/",
+      "--query",
+      "{Contents:Contents[].{Key:Key,LastModified:LastModified,Size:Size},IsTruncated:IsTruncated,NextContinuationToken:NextContinuationToken}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:10.107764+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/schema-applications.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-table",
+      "--table-name",
+      "careervp-applications-table-devx",
+      "--query",
+      "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:23.510688+00:00",
+    "returned_arns": [
+      "arn:aws:dynamodb:us-east-1:788159322332:table/careervp-applications-table-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/schema-artifacts.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-table",
+      "--table-name",
+      "careervp-artifacts-table-devx",
+      "--query",
+      "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:24.285774+00:00",
+    "returned_arns": [
+      "arn:aws:dynamodb:us-east-1:788159322332:table/careervp-artifacts-table-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/schema-gap-responses.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-table",
+      "--table-name",
+      "careervp-gap-responses-table-devx",
+      "--query",
+      "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:25.045649+00:00",
+    "returned_arns": [
+      "arn:aws:dynamodb:us-east-1:788159322332:table/careervp-gap-responses-table-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/schema-jobs.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-table",
+      "--table-name",
+      "careervp-jobs-table-devx",
+      "--query",
+      "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:22.698426+00:00",
+    "returned_arns": [
+      "arn:aws:dynamodb:us-east-1:788159322332:table/careervp-jobs-table-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/schema-knowledge.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "dynamodb",
+      "describe-table",
+      "--table-name",
+      "careervp-knowledge-table-devx",
+      "--query",
+      "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:25.833651+00:00",
+    "returned_arns": [
+      "arn:aws:dynamodb:us-east-1:788159322332:table/careervp-knowledge-table-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/stack-resources.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "cloudformation",
+      "list-stack-resources",
+      "--stack-name",
+      "CareerVpCrudDevx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:41.769917+00:00",
+    "returned_arns": [
+      "arn:aws:apigateway:us-east-1::/restapis/ymzhvcxod0/stages/prod|arn:aws:wafv2:us-east-1:788159322332:regional/webacl/careervp-core-waf-devx/99274f5b-0a2b-4696-86ac-24316fdccf82",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx-AiAssistNestedStackNestedStackAiAssistNestedStackNestedStackResourceB-9LNZMCCPT0H4/ef7371c0-8470-11f1-be2e-12e3e10c7ccb",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFeaturesNestedStackCrudFeaturesNestedStackRes-X2S7O7ZFA3YN/ef740e00-8470-11f1-a8eb-0e335c046cd7",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx-CompanyResearchNestedStackNestedStackCompanyResearchNestedStackNested-Z03U81JBDVR1/ef665260-8470-11f1-a26f-0affce36bd89",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx-ErrorReportNestedStackNestedStackErrorReportNestedStackNestedStackRes-32YFGDM19L1O/ef6bf7b0-8470-11f1-a7a8-0e5d1ca0132b",
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx-MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResou-1TBVZK44E037L/ef687540-8470-11f1-b1de-12744fe94c4d",
+      "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-devx",
+      "arn:aws:sns:us-east-1:788159322332:careervp-monitoring-topic-devx:67244900-d619-4e12-b879-3551a6dbf874",
+      "arn:aws:wafv2:us-east-1:788159322332:regional/webacl/careervp-core-waf-devx/99274f5b-0a2b-4696-86ac-24316fdccf82"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/stack-stamp.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "cloudformation",
+      "describe-stacks",
+      "--stack-name",
+      "CareerVpCrudDevx",
+      "--query",
+      "Stacks[].{StackId:StackId,LastUpdatedTime:LastUpdatedTime,Stamp:Outputs[?OutputKey=='DeployedGitSha']}"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:42.579296+00:00",
+    "returned_arns": [
+      "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/tailor-aliases.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "list-aliases",
+      "--function-name",
+      "careervp-cvtailor-lambda-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:02.923896+00:00",
+    "returned_arns": [
+      "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/tailor-policy.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-cvtailor-lambda-devx"
+    ],
+    "exit_code": 254,
+    "timestamp": "2026-09-13T09:05:02.131645+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/vpr-status-aliases.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "list-aliases",
+      "--function-name",
+      "careervp-vpr-status-lambda-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:05.261347+00:00",
+    "returned_arns": [
+      "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/vpr-status-policy-live-devx.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-policy",
+      "--function-name",
+      "careervp-vpr-status-lambda-devx",
+      "--qualifier",
+      "live-devx"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:05:06.031911+00:00",
+    "returned_arns": [],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/waf-prod.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "wafv2",
+      "get-web-acl-for-resource",
+      "--resource-arn",
+      "arn:aws:apigateway:us-east-1::/restapis/ymzhvcxod0/stages/prod"
+    ],
+    "exit_code": 0,
+    "timestamp": "2026-09-13T09:03:39.763378+00:00",
+    "returned_arns": [
+      "arn:aws:wafv2:us-east-1:788159322332:regional/webacl/careervp-core-waf-devx/99274f5b-0a2b-4696-86ac-24316fdccf82"
+    ],
+    "inspection": "Raw read-only service response, including failures."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-export-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:24.414234+00:00",
+    "function": "careervp-export-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-export-lambda-devx",
+      "--qualifier",
+      "16"
+    ],
+    "timestamp": "2026-09-13T09:09:32.576642+00:00",
+    "function": "careervp-export-lambda-devx",
+    "qualifier": "16",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-vpr-status-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:34.250340+00:00",
+    "function": "careervp-vpr-status-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-vpr-status-lambda-devx",
+      "--qualifier",
+      "16"
+    ],
+    "timestamp": "2026-09-13T09:09:35.091878+00:00",
+    "function": "careervp-vpr-status-lambda-devx",
+    "qualifier": "16",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-vpr-worker-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:36.751598+00:00",
+    "function": "careervp-vpr-worker-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-cv-parser-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:38.376135+00:00",
+    "function": "careervp-cv-parser-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-cv-parser-lambda-devx",
+      "--qualifier",
+      "16"
+    ],
+    "timestamp": "2026-09-13T09:09:39.610271+00:00",
+    "function": "careervp-cv-parser-lambda-devx",
+    "qualifier": "16",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-cvtailor-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:41.271191+00:00",
+    "function": "careervp-cvtailor-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-cvtailor-lambda-devx",
+      "--qualifier",
+      "16"
+    ],
+    "timestamp": "2026-09-13T09:09:42.166310+00:00",
+    "function": "careervp-cvtailor-lambda-devx",
+    "qualifier": "16",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  },
+  {
+    "receipt": "docs/evidence/astra-pass-b/deployed-bundle-comparison.json",
+    "command": [
+      "aws",
+      "--region",
+      "us-east-1",
+      "--output",
+      "json",
+      "lambda",
+      "get-function",
+      "--function-name",
+      "careervp-artifact-cleanup-lambda-devx",
+      "--qualifier",
+      "$LATEST"
+    ],
+    "timestamp": "2026-09-13T09:09:43.802251+00:00",
+    "function": "careervp-artifact-cleanup-lambda-devx",
+    "qualifier": "$LATEST",
+    "inspection": "Configuration and deployment ZIP/application source comparison."
+  }
+]

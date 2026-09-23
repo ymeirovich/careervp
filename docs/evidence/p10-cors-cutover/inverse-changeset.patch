@@ -1,0 +1,13 @@
+diff --git b/infra/careervp/api_construct.py a/infra/careervp/api_construct.py
+index 307025b..6927892 100644
+--- b/infra/careervp/api_construct.py
++++ a/infra/careervp/api_construct.py
+@@ -488,7 +488,7 @@ class ApiConstruct(Construct):
+                 allow_origins=(
+                     [self.allowed_origins]
+                     if self.scratch_mode
+-                    else self.allowed_origins.split(",")
++                    else aws_apigateway.Cors.ALL_ORIGINS
+                 ),
+                 allow_methods=aws_apigateway.Cors.ALL_METHODS,
+                 allow_headers=[

@@ -1,0 +1,72 @@
+{
+  "kind": "journey",
+  "journey_reached": 7,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "pass",
+    "J5": "pass",
+    "J6": "pass",
+    "J7": "pass",
+    "J8": "fail: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "browser_diagnostics": {
+    "J3": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cv-center/?_rsc=6e3ie — net::ERR_ABORTED"
+    ],
+    "J4": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=1ecdt — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=1p7dj — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/users/me/cv — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/applications/888796d6-a820-496b-abad-e232d0f09408 — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/jobs/888796d6-a820-496b-abad-e232d0f09408/gap-questions — net::ERR_ABORTED",
+      "requestfailed: GET https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod/company-research/888796d6-a820-496b-abad-e232d0f09408 — net::ERR_ABORTED"
+    ],
+    "J5": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=y8hm2 — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=1gydu — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/?_rsc=s51ws — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/_next/static/chunks/11xza913i~1nb.js — net::ERR_ABORTED"
+    ],
+    "J6": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=1y3tn — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/billing/?_rsc=4bm10 — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=y8hm2 — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=g9hfd — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=18rjw — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=gsy3a — net::ERR_ABORTED"
+    ],
+    "J7": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/applications/?_rsc=1y3tn — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/cover-letters/?_rsc=4bm10 — net::ERR_ABORTED"
+    ],
+    "J8": [
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/settings/?_rsc=1f6va — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/dashboard/?_rsc=1y3tn — net::ERR_ABORTED",
+      "requestfailed: GET https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/tailored-cvs/?_rsc=4bm10 — net::ERR_ABORTED"
+    ]
+  },
+  "git_sha": "7fb3cf62e82c60928d89b1466cba788f19db6a53",
+  "git_short": "7fb3cf6",
+  "git_dirty": true,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "2ce05bcd32e1300d2323c329cdcac582f3323203-dirty",
+  "base_url": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260922T132504-7fb3cf6",
+  "timestamp": "2026-09-22T13:35:39.894Z"
+}

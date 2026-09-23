@@ -27,10 +27,24 @@ def _request(gap_response_ids: list[str] | None = None) -> CoverLetterRequest:
 
 def _dal() -> MagicMock:
     dal = MagicMock()
-    # Provide a VPR owned by 'user-1' so the ownership check in _resolve_vpr_payload passes.
-    mock_vpr = MagicMock()
-    mock_vpr.user_id = 'user-1'
-    dal.get_vpr.return_value = Result(success=True, data=mock_vpr, code=ResultCode.SUCCESS)
+    # F-DEVX-1: the VPR is read from the canonical artifacts table, so seed a canonical
+    # artifact owned by 'user-1' rather than a legacy DAL get_vpr response.
+    canonical_vpr = {
+        'applicationId': 'job-1',
+        'artifactId': 'vpr-1',
+        'artifact_id': 'vpr-1',
+        'artifactType': 'vpr',
+        'user_id': 'user-1',
+        'status': 'completed',
+        'version': 1,
+        'created_at': '2026-08-01T09:00:00+00:00',
+        'updated_at': '2026-08-01T09:00:00+00:00',
+        'vpr': {'application_id': 'job-1', 'user_id': 'user-1', 'executive_summary': 'Strong candidate.'},
+    }
+    mock_table = MagicMock()
+    mock_table.get_item.return_value = {'Item': canonical_vpr}
+    mock_table.query.return_value = {'Items': [canonical_vpr]}
+    dal._get_db_handler.return_value = mock_table
     dal.get_gap_responses.return_value = Result(
         success=True,
         data=[

@@ -4,10 +4,27 @@ import json
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 from botocore.exceptions import ClientError
 
 from careervp.handlers import vpr_worker_handler
 from careervp.models.result import Result, ResultCode
+
+
+@pytest.fixture(autouse=True)
+def stub_core_repository(monkeypatch: Any) -> MagicMock:
+    """Stub the canonical VPR repository for every test in this module.
+
+    F-DEVX-1 made the canonical artifact write part of the worker's completion
+    boundary. These are task-token tests, so the repository is stubbed to keep them
+    free of DynamoDB I/O; the canonical write itself is covered by
+    ``test_corr_canonical_vpr.py``.
+    """
+    repository = MagicMock()
+    repository.next_vpr_version.return_value = 1
+    repository.save_vpr_artifact.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
+    monkeypatch.setattr(vpr_worker_handler, 'CoreRepository', MagicMock(return_value=repository))
+    return repository
 
 
 def _repo(*, processing_success: bool = True) -> MagicMock:

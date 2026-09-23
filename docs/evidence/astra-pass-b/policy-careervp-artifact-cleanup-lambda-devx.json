@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "get-policy",
+    "--function-name",
+    "careervp-artifact-cleanup-lambda-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:46.994848+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Policy\": \"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Id\\\":\\\"default\\\",\\\"Statement\\\":[{\\\"Sid\\\":\\\"CareerVpCrudDevx-CareerVpCrudDevxCrudArtifactCleanupScheduleAllowEventRuleCareerVpCrudD-jOHg3v2HS8UT\\\",\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"events.amazonaws.com\\\"},\\\"Action\\\":\\\"lambda:InvokeFunction\\\",\\\"Resource\\\":\\\"arn:aws:lambda:us-east-1:788159322332:function:careervp-artifact-cleanup-lambda-devx\\\",\\\"Condition\\\":{\\\"ArnLike\\\":{\\\"AWS:SourceArn\\\":\\\"arn:aws:events:us-east-1:788159322332:rule/CareerVpCrudDevx-CareerVpCrudDevxCrudArtifactCleanu-Dr6AjImnUHKx\\\"}}}]}\",\n    \"RevisionId\": \"5e7ded17-af9a-450f-b680-99fa626d42eb\"\n}\n",
+  "stderr": ""
+}

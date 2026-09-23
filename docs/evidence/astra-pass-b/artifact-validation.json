@@ -1,0 +1,193 @@
+{
+  "validated_at_utc": "2026-09-13T18:38:29.652504+00:00",
+  "input_ids": [
+    "S0a",
+    "S0b",
+    "S11d",
+    "S25",
+    "S1",
+    "S2",
+    "S6",
+    "S7",
+    "S8",
+    "S10",
+    "S11",
+    "S23",
+    "S26",
+    "K9",
+    "G1",
+    "G4",
+    "PREMISE-P2",
+    "PREMISE-P3",
+    "PREMISE-P4",
+    "PREMISE-P5"
+  ],
+  "processed_ids": [
+    "S0a",
+    "S0b",
+    "S11d",
+    "S25",
+    "S1",
+    "S2",
+    "S6",
+    "S7",
+    "S8",
+    "S10",
+    "S11",
+    "S23",
+    "S26",
+    "K9",
+    "G1",
+    "G4",
+    "PREMISE-P2",
+    "PREMISE-P3",
+    "PREMISE-P4",
+    "PREMISE-P5"
+  ],
+  "missing": [],
+  "extra": [],
+  "order_matches": true,
+  "records": [
+    {
+      "id": "S0a",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 12
+    },
+    {
+      "id": "S0b",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 8
+    },
+    {
+      "id": "S11d",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 9
+    },
+    {
+      "id": "S25",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 5
+    },
+    {
+      "id": "S1",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 1
+    },
+    {
+      "id": "S2",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 5
+    },
+    {
+      "id": "S6",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 1
+    },
+    {
+      "id": "S7",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 2
+    },
+    {
+      "id": "S8",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 5
+    },
+    {
+      "id": "S10",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 1
+    },
+    {
+      "id": "S11",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 2
+    },
+    {
+      "id": "S23",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 3
+    },
+    {
+      "id": "S26",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 3
+    },
+    {
+      "id": "K9",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 7
+    },
+    {
+      "id": "G1",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 3
+    },
+    {
+      "id": "G4",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 1
+    },
+    {
+      "id": "PREMISE-P2",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 2
+    },
+    {
+      "id": "PREMISE-P3",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 2
+    },
+    {
+      "id": "PREMISE-P4",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 12
+    },
+    {
+      "id": "PREMISE-P5",
+      "schema": true,
+      "exact_manifest_claim": true,
+      "rerun_receipts": 8
+    }
+  ],
+  "summary_local_links_resolve": true,
+  "prior_conclusion_counts": {
+    "UPHELD": 12,
+    "OVERTURNED": 4,
+    "UNPROVABLE-WITHOUT-DEPLOY": 4
+  },
+  "overturned_without_new_raw_evidence": 0,
+  "production_code_changes": false,
+  "output_files": [
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-PASS-B-results.yaml",
+      "sha256": "fe0ca242404df93aa6d228d7d57b3f3eb8e322900ae70c5d3c27149e227be8ab",
+      "bytes": 592764
+    },
+    {
+      "path": "docs/handoff/2026-09-13-ASTRA-PASS-B-results.md",
+      "sha256": "a0e8f8902a4fd869b2b200d47f31da98a95b04487de2538d1e4363b526f46c35",
+      "bytes": 17737
+    }
+  ],
+  "errors": []
+}

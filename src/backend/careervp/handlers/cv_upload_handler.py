@@ -30,7 +30,7 @@ from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
 from careervp.handlers.models.env_vars import CVUploadEnvVars
-from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.cv_parser import create_cv_parse_response, parse_cv
 from careervp.models.api_models import CVUploadRequest
@@ -199,17 +199,29 @@ def upload_cv() -> Response[str]:  # noqa: C901
             body=response.model_dump_json(),
         )
 
-    # Also persist to the dedicated CVs table so AI Assist and other services
-    # that query CVS_TABLE_NAME can find the CV without depending on the async
-    # S3-triggered worker (which may not be reachable when text_content is used).
+    # Also persist to the dedicated CVs table. Since the Stage 1 repoint, every CV
+    # reader resolves from CVS_TABLE_NAME, so this write is the one that decides
+    # whether the CV exists to anybody. It must NOT be swallowed: a warning here
+    # plus a 201 produces a CV the user believes was stored and no reader can find,
+    # which is how the users-table/cvs-table row drift accumulated in the first
+    # place. Fail the request instead and let the caller retry.
     cvs_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
     if cvs_table_name and cvs_table_name != env_vars.TABLE_NAME:
         try:
             cvs_dal = DynamoDalHandler(table_name=cvs_table_name)
             cvs_dal.save_cv(user_cv)
             logger.info('CV also saved to cvs_table', cvs_table=cvs_table_name)
-        except Exception as e:  # noqa: BLE001
-            logger.warning('Failed to save CV to cvs_table (non-fatal)', cvs_table=cvs_table_name, error=str(e))
+        except Exception as e:
+            logger.exception('Failed to save CV to cvs_table', cvs_table=cvs_table_name, error=str(e))
+            response = CVParseResponse(
+                success=False,
+                error='Failed to persist parsed CV',
+            )
+            return Response(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+                content_type=content_types.APPLICATION_JSON,
+                body=response.model_dump_json(),
+            )
 
     # Build success response
     parse_time_ms = int((time.time() - start_time) * 1000)
@@ -256,19 +268,23 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
     """
     Normalize request payload to legacy CVParseRequest shape.
 
-    Supports both:
-    - Legacy request: {request_user, file_content|text_content, file_type}
-    - OpenAPI request: {cv_content, file_name}
+    Supports both request-content shapes while taking identity exclusively from
+    the authenticated API Gateway authorizer.
     """
     if not isinstance(body, dict):
         raise TypeError('Request body must be a JSON object')
 
+    user_id = _extract_user_id()
+    if not user_id:
+        raise ValueError('Authenticated user_id is required for /users/me/cv')
+
+    # `/users/me/cv` is an authenticated self-service route. Never pass a
+    # caller-supplied identity through to CVParseRequest, S3, or persistence.
+    request_body = {key: value for key, value in body.items() if key != 'user_id'}
+
     # OpenAPI request shape
-    if {'cv_content', 'file_name'}.issubset(body):
-        openapi_request = CVUploadRequest.model_validate(body)
-        user_id = _extract_user_id()
-        if not user_id:
-            raise ValueError('Authenticated user_id is required for /users/me/cv')
+    if {'cv_content', 'file_name'}.issubset(request_body):
+        openapi_request = CVUploadRequest.model_validate(request_body)
         if openapi_request.file_type:
             return {
                 'user_id': user_id,
@@ -282,7 +298,7 @@ def _normalize_request_payload(body: Any) -> dict[str, Any]:
             '_file_name': openapi_request.file_name,
         }
 
-    return body
+    return {'user_id': user_id, **request_body}
 
 
 def _extract_user_id() -> str | None:
@@ -372,6 +388,7 @@ def _build_openapi_parsed_data(response: CVParseResponse) -> dict[str, Any]:
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for CV upload."""
     set_request_origin(event)

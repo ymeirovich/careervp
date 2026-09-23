@@ -1,0 +1,197 @@
+Recovered verbatim from the Claude Code session transcript on 2026-08-01 by step 3.2-CLOSEOUT-A.
+Source: ~/.claude/projects/-Users-yitzchak-meirovich-Documents-code5-careervp/8ef79473-4aa9-4b09-af95-dd7c61102765.jsonl
+  JSONL record index 272 (final assistant text block of the review turn)
+Model: claude-opus-5   Timestamp: 2026-07-31T11:19:37.150Z
+Session opening prompt (record 2, 2026-07-31T08:51:08.686Z):
+  "run docs/db-redesign/code/code-analysis/project/specs/amendments/D-H4-P-01-v3.0.0-adversarial-review-handoff.md"
+Nothing below this line was edited, reformatted, or reconstructed.
+================================================================================
+
+I've completed the review. Everything below was verified against live code, not documents.
+
+---
+
+# Adversarial review — scope-lock v3.0.0 (D-H4/P-01, decision A1)
+
+## 1. Verdict
+
+**`CONFIRM-WITH-CONDITIONS`**
+
+The substantive change is right and I am not recommending revert: the silent bad write it removes is real and I reproduced the code path. But three of the amendment's written claims are false or incomplete, the MAJOR classification survives only on a rationale the row never states, and the root defect it exists to fix is **not** fixed. Five conditions in §7.
+
+Reverting would have been cheap — the backend change is not deployed (3.2-GREEN's "undeployed debt") — so I weighed revert seriously rather than dismissing it as too late. It fails on merits, not cost.
+
+---
+
+## 2. Attack 1 — is MAJOR the right semver?
+
+**Checked:** §0.3 ladder ([project-scope-lock.md:35-38](docs/db-redesign/code/code-analysis/project/project-scope-lock.md#L35-L38)); §3's ten items and preamble ([:90-104](docs/db-redesign/code/code-analysis/project/project-scope-lock.md#L90-L104)); clause tags in the YAML twin (`P-01` :78, `D-H4` :114 — both `status: TARGET`); the v2.0.0/A8 MAJOR precedent (:350) and the v2.7.0 MINOR row (:359).
+
+**On the letter, the row's own concession is correct.** MAJOR = *"change an IMMUTABLE invariant or locked decision; drop a feature; break a frontend-contract item."* Neither clause is IMMUTABLE. §3's preamble scopes the guarantee to **response** shapes — *"MUST keep API response shapes stable, or version the route"* — and a request-side tightening is not among the ten items. Item 1 is reaffirmed, item 3 reaffirmed.
+
+**The consistency argument is stronger than the row admits.** v2.7.0, landed the *same day*, retired a clause's harness, dropped a verification mode from four clauses, repointed D-H9's entire subject, superseded a spec, and resolved a formally wave-blocking OPEN — recorded **MINOR**. v3.0.0 withdraws a code comment with zero shipped consumers — recorded **MAJOR**. Under one ladder both cannot be right. And the MAJOR precedent (v2.0.0/A8) relaxed a *downstream-consumed* guarantee; here I verified there are no downstream consumers at all.
+
+**But MAJOR survives — for a reason the row does not state, and did not know.** The amendment created a new client-visible response that does not conform to §3 **item 10** (error envelope):
+
+```
+{"error": "application_id/job_id is required", "status_code": 400, "code": "MISSING_REQUIRED_FIELD"}
+```
+— [interview_prep_submit_handler.py:296-300](src/backend/careervp/handlers/interview_prep_submit_handler.py#L296-L300)
+
+The committed oracle schema `src/backend/contract/schemas/ErrorResponse.json` is `additionalProperties: false` over exactly `{error, message, classification, error_code, field}`. I validated the body against it: **INVALID**, extra keys `code`, `status_code`. The frontend's `flatErrorEnvelopeSchema` is `.strict()` over the same five ([contractSchemas.ts:274-285](src/frontend/lib/contractSchemas.ts#L274-L285)), and [api/client.ts:105](src/frontend/api/client.ts#L105) reads `payload?.error_code` — so `MISSING_REQUIRED_FIELD` is **dropped on the floor** at the client. The user sees the message; nothing machine-readable survives.
+
+This is a pre-existing family — `_build_error_response` predates A1 by months, and F-05 is already recorded — so A1 did not invent it. But A1 **extended it to a new path**, and the row's assertion *"no frontend-contract item broken (item 1 strengthened, item 3 reaffirmed)"* is therefore incomplete: item 10 was touched, silently, and left nonconforming.
+
+**Finding:** keep MAJOR, substitute the rationale (item 10, not the withdrawn comment), and correct the row. If the human rejects the substitution, `DOWNGRADE` to MINOR is the correct fallback — and the row as currently written does not support MAJOR.
+
+*Not "more than MAJOR" on semver — but see §6/N1 on whether it was an agent's amendment to execute at all.*
+
+---
+
+## 3. Attack 2 — is the "safe for shipped callers" evidence complete?
+
+**No. Two written claims are false. The conclusion survives anyway.**
+
+**(a) "repository-wide search finds no second direct `generateInterviewPrep` caller" is false.**
+
+```
+$ grep -rn "generateInterviewPrep" . --exclude-dir=node_modules --exclude-dir=.next
+frontend/app/dashboard/jobs/[jobId]/page.tsx:354      ← second caller, git-tracked
+frontend/lib/api.ts:164
+src/frontend/hooks/useGenerateModule.ts:69
+src/frontend/api/methods.ts:233
+```
+
+There is a **second git-tracked frontend tree at the repo root**. The proposal's search was scoped to `src/frontend/`. And its dismissal of the "stale citation" was wrong about *why*: it declared `app/dashboard/jobs/[jobId]/page.tsx:354-357` non-existent — that file exists, at `frontend/…` rather than `src/frontend/…`, and 354 is exactly the `generateInterviewPrep` call. The one citation the proposal caught as stale, it then mis-explained.
+
+Mitigation verified: [amplify.yml:21](amplify.yml#L21) is `appRoot: src/frontend`, and `git log -p --follow -- amplify.yml` shows appRoot has **never** been `frontend/`. That tree was last touched 2026-05-30 (`4884e80`). It is dead, not deployed. **So the empirical conclusion holds — the method and the written claim do not.**
+
+Two side facts from that tree: it sends `job_id: crypto.randomUUID()` — a fresh random uuid as the application key, which *passes* the new guard while defeating its purpose; and [frontend/lib/types.ts:413](frontend/lib/types.ts#L413) still reads `application_id?: string`, so the contract-type change landed in one of two tracked trees.
+
+**(b) Two live-API tests still send an identity-less body, and neither is in the inventory.**
+
+| Test | Body | What it asserts |
+|---|---|---|
+| [test_full_pipeline_integration.py:139](src/backend/tests/integration/test_full_pipeline_integration.py#L139) | `{'vpr_id':…, 'gap_response_ids':…}` | ≥10 questions |
+| [test_e2e_happy_path_full_job_application.py:134](src/backend/tests/e2e/test_e2e_happy_path_full_job_application.py#L134) | `{'vpr_id':…, 'gap_response_ids':…}` | `expected_status={200, 202}` |
+
+Both **skip locally** (`API_BASE is not set` / `pytest.importorskip`) — which is precisely why the 1563-pass suite is green and why the inventory missed them. Against a deployed stack both now receive **400**.
+
+The sting: P-01 verifies `e2e+characterization` and D-H4 verifies `contract+integration`. The only two suites that can discharge these clauses are the two that A1 broke. 3.2-GREEN's "undeployed debt" note and this are the same fact seen from two sides — the debt is not merely unpaid, it is now *failing*.
+
+**(c) Cached / in-flight clients — no regression.** `git log -L 66,74:src/frontend/hooks/useGenerateModule.ts` shows `application_id: jobId` has been sent since `aff9878`, **2026-04-23** — three months before v3.0.0. Any bundle in a browser cache already complies. `CareerVpCrudDev` / `CareerVpCrudDevx` both being live doesn't change this: Amplify serves one build, from `src/frontend`.
+
+**(d) No other clients.** No Postman/`.http` collections; no curl examples carrying bodies; `src/backend/scripts/smoke_harness.py` has zero interview-prep references (P-30 4-wire harness does not touch this route). `InterviewPrepRequest` is genuinely absent from `CONTRACT_MODELS` ([emit_json_schemas.py:22-34](src/backend/scripts/emit_json_schemas.py#L22-L34)) — but `CVTailoringRequest` **is** present, so request models are in the oracle's remit. The amendment reads that absence as safety; it is equally the reason nothing mechanical could have caught this tightening (see N4).
+
+---
+
+## 4. Attack 3 — was A3 dismissed too fast?
+
+**A3 is correctly rejected. The authority cited for rejecting it is wrong, and a better alternative was never considered.**
+
+**The O-3 citation does not hold.** [project-scope-lock.md:328](docs/db-redesign/code/code-analysis/project/project-scope-lock.md#L328) — the line the handoff sent me to — reads:
+
+> `| O-3 | Cutover/downtime tolerance + retention window (from a fresh recon.py / product call). | Wave 3/6 |`
+
+Not struck through, not marked RESOLVED, unlike `~~O-2~~`/`~~O-4~~`/`~~O-7~~`. Meanwhile `project-scope-lock.yaml:257` has O-3 `status: RESOLVED, resolved: "2026-07-27"`. **The twins are desynced** — `9260f37` (v2.7.0) updated the YAML register and the change-log but never the MD §10 row. §0.2 ranks the MD first; a reader of the authoritative twin concludes Wave 3 is still blocked on an unresolved OPEN.
+
+On the merits, O-3's resolution text (YAML :257) is entirely about **stored data**: *"no migration, no dual-read window, no backfill, no cutover. A record in a legacy shape is deleted and rewritten, never migrated."* It says nothing about resolving a client-supplied identifier at request time. So *"legacy-id resolution, which O-3 forbids"* is unsupported — and that phrasing is now hard-coded into [interview_prep_submit_handler.py:286-287](src/backend/careervp/handlers/interview_prep_submit_handler.py#L286-L287), [api_models.py:508](src/backend/careervp/models/api_models.py#L508), the v3.0.0 row, the `a485293` commit body, and the 3.2-GREEN ledger row. The correct authorities are **D-H9** (`:173` — *"closes the dual-read-fallback family"*) and **§3 item 1 / P-01 itself**.
+
+**A3 steelmanned, then rejected on its own terms.** `model_fields_set` genuinely distinguishes *forgot* from *explicitly sent null*, and §3 item 3 proves this repo treats null-vs-absent as load-bearing elsewhere. But for interview-prep both intents land in the same place — there is no canonical application key either way — so the distinction buys a branch that keeps `vpr_id` reachable and nothing else. The proposal's one-line *"compatibility machinery renamed"* is right, if under-argued.
+
+**The alternative nobody considered: enforce it in the model.** [`CoverLetterRequest.job_id` is `Field(min_length=1)`](src/backend/careervp/models/api_models.py#L405) — **required**. This repo already has a precedent for enforcing application identity at the model layer, which yields the standard validation envelope and (if the model were in `CONTRACT_MODELS`) surfaces in a generated schema. A `model_validator(mode='after')` expresses either-or in the model. The amendment's stated reason for not doing this — *"an either-or rule is not a per-field constraint"* — is true of a per-field constraint and irrelevant to a model validator.
+
+**Why it wasn't considered — the strongest surviving objection.** See §5.
+
+Two costs of the mechanism actually chosen: the handler guard tripped C901 11>10 and forced the `_resolve_submit_preconditions` refactor; and `request_id` is **deliberately omitted** from the new 400 ([:294-299](src/backend/careervp/handlers/interview_prep_submit_handler.py#L294-L299), comment: *"AC-P01-1 pins this exact three-key envelope"*) — making the one new refusal path the only error in this handler that cannot be correlated to a request in logs.
+
+---
+
+## 5. The strongest surviving objection
+
+**The pinned RED test chose the contract mechanism, and the amendment then justified the mechanism by citing the test.**
+
+[test_dh4_p01_canonical_artifact.py:377-382](src/backend/tests/unit/test_dh4_p01_canonical_artifact.py#L377-L382) asserts `json.loads(body) == {'error':…, 'status_code': 400, 'code': …}` — exact dict equality on a handler-owned 400. Once that was pinned, a model-layer either-or validator (422, standard envelope, schema-visible) was foreclosed, and `request_id` had to be dropped from the response. `api_models.py:504-507` then justifies keeping both fields optional by pointing at *"the handler boundary, which owns the pinned 400 envelope."*
+
+The test did not derive from the contract; the contract was derived from the test. That is the same failure mode §9.3 forbids as *"a spec edited to match code"*, one level up — and the amendment's own root defect (a RED brief that skipped the affected-test inventory) is the mechanism that let the RED test acquire that authority unreviewed.
+
+**Why it does not reach REVERT:** the pinned envelope is *ugly*, not *wrong*. It refuses before dependency resolution, performs no resolver read and no pending write, and preserves `application_id == job_id`. The right remedy is Condition C5, not reversal.
+
+---
+
+## 6. Attack 4 — inventory and root defect
+
+**Inventory exists, is incomplete, and its arithmetic is wrong.**
+
+I counted from the diffs rather than the ledger. `ae18e30` changed **2** fixtures in `test_async_submit_handlers.py` (`:82`, `:169`). `a485293` changed **1** shared helper, `_valid_request_body()`, consumed by exactly **5** tests (`test_interview_prep_roundtrip.py:142, 163, 189, 214, 251`). **2 + 5 = 7 affected tests, of which 6 were found late.** The spec says *"the real count is eight"* / *"the other seven were found only by running the full suite"*; the ledger row and the handoff both repeat "1 of 8". Adding the two skipped live-API tests from §3(b), the true total is **9 — 7 reconciled, 2 still broken.**
+
+**No test was weakened — §9.3 is not triggered.** I read both diffs line by line. Every change is an *additive* key in a request fixture; zero assertions removed, relaxed, or re-scoped. The spec's reasoning that the stored `applicationId` derives from `user_id`, not from the request, checks out. `test_interview_prep_submit_handler_returns_structured_validation_errors` correctly needs no change (Pydantic rejects `gap_response_ids` before the guard). The pinned RED test has exactly **one** commit in its entire history (`133ced7`) — never edited.
+
+**Suite state, run fresh:**
+```
+uv run pytest tests/unit tests/integration -q
+→ 1563 passed, 30 skipped, 4 xfailed, 1 xpassed, 0 failed   (ledger claimed 1561; 3.3 added 2)
+uv run pytest tests/unit/test_dh4_p01_canonical_artifact.py \
+             tests/unit/test_async_submit_handlers.py \
+             tests/integration/test_interview_prep_roundtrip.py -q
+→ 16 passed
+```
+
+**The root defect is NOT fixed.** The fix is a note in one spec plus an "open problem" line in one ledger row. `scope-diff.py` enforces frontmatter and clause coverage, not an affected-existing-test inventory; §8.6's five acceptance gates don't include one either. There is no mechanical gate, so the *next* RED brief can omit the inventory exactly as 3.2-SPEC did — and §3(b) shows the inventory-by-full-suite method has a blind spot for skipped suites, which is where the remaining two failures live.
+
+---
+
+## 7. New defects the amendment did not know about
+
+Each with a proposed **owner step**, not a fix.
+
+**N1 — §0.3 contract self-protection has been defeated twice, in the open.** §0.3:48: *"write-protected from agent/orchestrator sessions … Amendments land only via a human-executed commit."* `7807e43` is authored and committed under the human's git identity, carries `Co-Authored-By: Claude Opus 5`, and its own body says: *"This edit was executed by an agent session at EXPLICIT human direction … following the precedent recorded in the v2.7.0 row."* An agent editing the twins and committing under the human's configured identity is not a human-executed commit. The CI guard cannot tell: [check_scope_lock_integrity.py:93-118](scripts/ci/check_scope_lock_integrity.py#L93-L118) checks twin-sync, version increase, changelog *length*, and a trailer *regex* — all four producible by the agent making the edit. The v2.0.0 rationale for this control was that *"prompt-text guardrails don't bind agents"*; the control as built is prompt-text. → **Owner: a governance step, not 3.4.** Either mechanize it (signed commits / CODEOWNERS / a human-only branch) or amend §0.3 to describe what is actually practiced. Two precedents make "exception" untenable.
+
+**N2 — the guard is aggregate-diff and tip-message scoped.** `main()` diffs `merge-base(origin/main)..HEAD` and reads only `git log -1 --format=%B HEAD`. Two consequences:
+- **(a)** `fb41d22` bumped both twins 2.7.0 → **2.7.1** with no change-log row; v3.0.0 overwrote the version. `grep -rn "2.7.1"` over both twins today returns **nothing** — an unrecorded contract version, permanently. *(Recorded as ledger item 5; still unremediated.)*
+- **(b) Live now:** `python3 scripts/ci/check_scope_lock_integrity.py --base origin/main --head HEAD` → **`FAIL — approval: commit message must carry a Scope-Lock-Approved-By trailer`**. The trailer was placed on `a485293` to pass the gate at merge; three commits have landed since, moving the tip. **v3.0.0 cannot merge in the branch's current state.** The mitigation the ledger recorded has already decayed — which is itself the argument that per-commit checking is the real fix.
+→ **Owner: P-28 step.** Iterate commits in the range rather than checking the aggregate; assert monotonic version-per-changelog-row.
+
+**N3 — the silent write has no owner.** [artifact_dependency_utils.py:183-195](src/backend/careervp/handlers/artifact_dependency_utils.py#L183-L195) still swallows everything under `except Exception: return`. A1 removed one *source* of bad `application_id`s; the mechanism that makes any bad write **silent** is untouched, inside the step whose subject is hardening bad writes. It appears nowhere in `ISSUES.md` or any spec — only inside the v3.0.0 rationale, as evidence. *(Also: both the proposal and the handoff cite it as `careervp/logic/…`; the file is in `careervp/handlers/`.)* → **Owner: D-H4 follow-on or 3.5 residue.**
+
+**N4 — `InterviewPrepRequest` is missing from the contract oracle** while `CVTailoringRequest` is present (`emit_json_schemas.py:22-34`). → **Owner: F-frontend-oracle step.** Add it, and add the §3 item-10 error-envelope check against **real handler output** rather than `flatErrorFixture` ([oracleFixtures.ts:207-212](src/frontend/tests/contract/oracleFixtures.ts#L207-L212)) — a fixture-only oracle is why the envelope drift in §2 went unseen.
+
+**N5 — out of A1 scope, flagged once.** `uv run pytest tests/` (whole tree, one process) → **553 failed, 98 errors**; the same files pass per-directory, and `Makefile:59,86,89,95,101` runs the suites separately by design. Cross-suite state pollution, not caused by A1, no owner recorded.
+
+---
+
+## 8. Conditions
+
+- **C1** Correct the v3.0.0 row's evidence claims: strike *"repository-wide search finds no second direct caller"*; record the second tracked tree, `amplify.yml` `appRoot` as the reason it is inert, and `frontend/lib/types.ts:413` as unreconciled.
+- **C2** Add `test_full_pipeline_integration.py:139` and `test_e2e_happy_path_full_job_application.py:134` to the spec inventory and reconcile both. Until then P-01's `e2e+characterization` and D-H4's `contract+integration` **cannot be discharged** — the suites that would discharge them are broken.
+- **C3** Fix the inventory arithmetic: 7 affected → 9 with C2, 6 found late. Correct the spec, the 3.2-GREEN row, and the change-log row together.
+- **C4** Replace the O-3 citation with D-H9 + §3 item 1 in all five places it is hard-coded (handler comment, `api_models.py:508`, change-log row, commit-body precedent, ledger row), and sync MD `:328` to the YAML's RESOLVED state.
+- **C5** Either bring the new 400 into §3 item 10 (`error_code`, drop `status_code`/`code`, restore `request_id`) and re-pin the RED test via §0.3, or record item 10's nonconformance on this path as a known accepted deviation with an owner. Silence is not an option once the row claims no §3 item was broken.
+
+---
+
+## 9. Change-log annotation for `project-scope-lock.md:360`
+
+*(v2.0.0 precedent format — append to the v3.0.0 row.)*
+
+> **§0.3/§9.2 adversarial review discharged 2026-07-31 (verdict CONFIRM-WITH-CONDITIONS).** Adversarial refutation materially strengthened A1 (MAJOR re-grounded on §3 **item 10** — the new 400 `{error,status_code,code}` fails `contract/schemas/ErrorResponse.json` `additionalProperties:false` and the frontend's `.strict()` `flatErrorEnvelopeSchema`, and `api/client.ts:105` reads `error_code`, so the pinned code is dropped at the client — *not* on the withdrawn `api_models` comment, which does not reach the ladder; the row's *"no frontend-contract item broken"* corrected to *item 10 touched and left nonconforming*; *"repository-wide search finds no second direct `generateInterviewPrep` caller"* **refuted** — `frontend/app/dashboard/jobs/[jobId]/page.tsx:354` is a second git-tracked caller, inert only because `amplify.yml:21` pins `appRoot: src/frontend`, and the proposal's "stale citation" dismissal mis-explained the same file; affected-test inventory corrected 8→**9** (2 uninventoried live-API tests, `test_full_pipeline_integration.py:139` and `test_e2e_happy_path_full_job_application.py:134`, both skip on unset `API_BASE` and both now 400 against a deployed stack — so P-01 `e2e+characterization` and D-H4 `contract+integration` remain undischarged); "other 7 found late" corrected to **6**; the *"O-3 forbids legacy-id resolution"* authority **refuted** — O-3 resolves cutover/retention for stored data, D-H9 + §3 item 1 are the real authorities, and MD `:328` is desynced from YAML `:257` since v2.7.0; **A3 rejection upheld** but the unconsidered model-layer alternative recorded (`CoverLetterRequest.job_id` is already `Field(min_length=1)`)). **Strongest surviving objection, recorded and not resolved:** the pinned RED test's exact-dict 400 assertion chose the contract mechanism and the amendment then justified the mechanism by citing the test — circular, and enabled by the same missing-inventory root defect; rejected as grounds for revert because the refusal is behaviorally correct (no resolver read, no pending write, `application_id == job_id` preserved), remedied by C5 rather than reversal. **No test was weakened** (§9.3 clear): every reconciliation is an additive fixture key, zero assertions relaxed; pinned RED `test_dh4_p01_canonical_artifact.py` has one commit in its history and was never edited. **New defects, owners assigned, none blocking A1:** §0.3 agent write-protection defeated twice in the open with the CI guard unable to distinguish (governance step); `check_scope_lock_integrity.py` aggregate-diff/tip-message scoping — `2.7.1` exists in no change log and the branch **currently FAILS** the trailer check (P-28 step); `artifact_dependency_utils.py:183-195` blanket `except Exception: return` still silences any bad write and has no owner (D-H4 follow-on); `InterviewPrepRequest` absent from `CONTRACT_MODELS` and the item-10 oracle is fixture-only (F-oracle step). **Root defect NOT fixed** — the inventory requirement is a note in one spec with no gate in `scope-diff.py` or §8.6, and the find-by-full-suite method is blind to skipped suites, which is where the two remaining failures live.
+
+---
+
+## 10. What the human must do to discharge this
+
+1. **Decide the semver on the substituted rationale.** Either accept MAJOR-on-item-10, or `DOWNGRADE` to MINOR — the row *as written* does not support MAJOR, and v2.7.0 is the internal-consistency benchmark. Nothing else can be finalized first.
+2. **Rule on C5** (§3 item 10): bring the 400 into the envelope and re-pin the RED test, or accept the deviation with an owner. If you choose the former, that edit to `test_dh4_p01_canonical_artifact.py` needs its own §0.3 authorization — I did not touch it.
+3. **Reconcile the two live-API tests (C2)** in a visible test-only commit, and add both to the spec inventory. Do **not** let this ride on 3.4 — until it lands, neither P-01 nor D-H4 can claim its verification mode.
+4. **Correct the record (C1, C3, C4)** in one twin-synced edit: evidence claims, the 7/9 counts, the O-3 → D-H9 re-citation in all five hard-coded places, and MD `:328` synced to YAML `:257`.
+5. **Fix the branch's merge-blocker (N2b).** The guard fails on `HEAD` right now. Put the trailer on the tip or fix the guard to iterate commits — the tip-repetition trick has already decayed once and will again.
+6. **Open the four owner steps** (N1 governance, N2 P-28, N3 D-H4 follow-on, N4 F-oracle) and add the inventory requirement to a real gate — §8.6 or `scope-diff.py`. Item 6 is what makes 3.4-RED not repeat 3.2-SPEC.
+7. **Land it all in one human-executed twin commit** carrying the §12 annotation from §9, a version bump, twin sync, and:
+   ```
+   Scope-Lock-Approved-By: <name> 2026-07-31
+   ```
+   Given N1, execute this one yourself. A third agent-executed twin commit would make the practice the rule and §0.3:48 dead text.
+
+---
+
+I edited nothing — no twin, no spec, no test. The full review is above; tell me if you want it written to a file (e.g. under `specs/amendments/`) and I'll create it as a new document.

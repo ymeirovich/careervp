@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-c",
+    "import sys,pathlib\nsys.path.insert(0,str(pathlib.Path.cwd()))\nfrom unittest.mock import patch\nfrom botocore.exceptions import ClientError\nimport pytest\nwith patch('botocore.httpsession.URLLib3Session.send', side_effect=ClientError({'Error':{'Code':'UnrecognizedClientException','Message':'AUDIT fake credentials'}},'Query')):\n raise SystemExit(pytest.main(sys.argv[1:]))\n",
+    "tests/unit/test_application_state.py::TestRecoveryCompanyResearch::test_recovery_includes_company_research_artifact",
+    "-q",
+    "--tb=short",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend",
+  "exit_code": 0,
+  "stdout": ".                                                                        [100%]\n=============================== warnings summary ===============================\ntests/unit/test_application_state.py::TestRecoveryCompanyResearch::test_recovery_includes_company_research_artifact\n  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/lib/python3.14/site-packages/aws_lambda_powertools/metrics/provider/base.py:211: UserWarning: No application metrics to publish. The cold-start metric may be published if enabled. If application metrics should never be empty, consider using 'raise_on_empty_metrics'\n    self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.08s\n",
+  "stderr": ""
+}

@@ -1,0 +1,886 @@
+[
+  [
+    "S0a",
+    "CONFIRMED \u2014 proven by execution, no deploy required.",
+    "GET /jobs/{jobId}/artifacts/vpr/export has no ownership check",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/handlers/export_handler.py",
+    124,
+    "Identity is authenticated, then omitted from the VPR S3 read; export creates a DOCX and presigned URL containing another owner's VPR.",
+    "_read_artifact('vpr', job_id, user_id) calls _read_vpr(job_id). The real function under moto returns 200 and a DOCX containing the planted secret for both owner and attacker.",
+    [
+      "E-001",
+      "E-013",
+      "E-018",
+      "E-022"
+    ],
+    "S0a",
+    "Victim identity requests the victim's VPR.",
+    "Only claims.sub becomes attacker; object, jobId, moduleType and format stay fixed.",
+    "claims.sub",
+    "Both 200; both DOCX files contain INDEPENDENT SECRET.",
+    false,
+    "moto handler plus deployed REST stage / export live-devx alias version 16",
+    "handler",
+    "deployed authenticated cross-tenant export",
+    "Prior handler proof is sound and P1 separately admits no HTTPS proof. The live integration, alias permissions, ZIP contents and WAF were checked independently. These add deployment correspondence, not an executed Cognito attack.",
+    "n/a",
+    "P1's 'real Cognito claims' means a synthetic claims-shaped event, not token validation.",
+    "End-to-end two-user HTTPS behavior and presigned URL retrieval under deployed IAM were not exercised.",
+    "A two-user HTTPS denial attributable to an owner-aware edge control, or a deployed owner-scoped read, would change the deployed-exploitability assessment.",
+    [
+      [
+        "VPR branch lacks ownership enforcement",
+        "CONFIRMED"
+      ],
+      [
+        "moto attacker receives victim DOCX",
+        "CONFIRMED"
+      ],
+      [
+        "two-user HTTPS exploitation was executed",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S0b",
+    "mechanism CONFIRMED by execution. Stated trigger (24h TTL) REFUTED.",
+    "VPR status S3 fallback sits above the ownership check",
+    "UPHELD",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/handlers/vpr_status_handler.py",
+    543,
+    "Missing jobs row bypasses ownership; P1 replaces the universal 24h trigger with a year or a DynamoDB read failure.",
+    "get_job catches ClientError and returns None. The fallback returns S3 content before owner comparison. A matched throttle injection changes 403 to 200. The completed-result population currently has ten matching jobs rows with one-year TTLs.",
+    [
+      "E-002",
+      "E-005",
+      "E-022"
+    ],
+    "S0b",
+    "Same victim job and result, successful DynamoDB get_item.",
+    "Same get_item raises ProvisionedThroughputExceededException.",
+    "get_item outcome",
+    "403 without throttle; 200 plus secret with throttle.",
+    true,
+    "jobs table job_id; results/ prefix; get_job and S3 fallback",
+    "handler",
+    "row-absent leak and universal TTL timing",
+    "The core proof and refutation of 'any VPR older than 24h' stand. However, S3 upload precedes canonical persistence and the TTL extension: failed completion can leave an S3 result without the one-year extension. P1's universal completed-only assumption is too strong. Live results-bucket lifecycle expires objects after 365 days; a year-old leak additionally requires the object to survive lifecycle deletion. The read-error trigger does not require any expiry.",
+    "n/a",
+    "The one-year window is not a guarantee that every S3 object has an extended job row.",
+    "Exact writers of the 26 non-TTL rows were not attributed historically. All have status active; _build_api_job_record produces this shape without TTL. Historical failure cohorts remain unknown. DynamoDB TTL deletion and S3 lifecycle removal ordering at one year was not observed.",
+    "A complete write-path trace showing S3 survival with a 24h job row would establish that narrower trigger; an owner check in fallback would refute the leakage mechanism.",
+    [
+      [
+        "fallback leak on missing/error row",
+        "CONFIRMED"
+      ],
+      [
+        "every VPR older than 24h is exposed because the row has expired",
+        "REFUTED"
+      ],
+      [
+        "every S3 result necessarily received a one-year job extension",
+        "REFUTED"
+      ],
+      [
+        "S3 results persist indefinitely under current lifecycle",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "S11d",
+    "CONFIRMED at the DAL layer. Live user impact UNPROVABLE-WITHOUT-DEPLOY.",
+    "CV upload 500s whenever the parser extracts a GPA",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/dal/dynamo_dal_handler.py",
+    99,
+    "Float GPA survives JSON model dump and escapes the DAL catch; live parser output was not tested. P1 calls save_vpr's matching omission unreachable.",
+    "Changing only GPA None to 3.8 causes TypeError before DynamoDB serialization completes. The first save_cv was already inside a fatal upload catch at 7cdc5e5^; therefore this float failure was not introduced by the later second-write change.",
+    [
+      "E-003",
+      "E-019",
+      "E-010",
+      "E-022"
+    ],
+    "S11d",
+    "Fixed CV id, user, education and schema; GPA None.",
+    "Identical CV with GPA 3.8.",
+    "education.gpa",
+    "No-GPA item persists; GPA raises TypeError: Float types are not supported.",
+    true,
+    "UserCV -> DynamoDalHandler.save_cv, not the live parser",
+    "handler",
+    "DAL serialization, historical cause and live upload impact",
+    "The DAL verdict stands and live impact remains uncertain as P1 stated. The original causal 'since 7cdc5e5' conjunct is contradicted by the parent's already-fatal first write. Zero callers does not refute save_vpr's serialization omission, which P1 itself calls real.",
+    "n/a",
+    "The label REFUTED for the save_vpr sibling describes reachability, not the stated same-serialization omission.",
+    "No live GPA-bearing document or parser output was inspected; deployment byte identity does not establish the input distribution.",
+    "A captured real parser GPA output and upload response would settle live impact. An earlier handler lacking the first fatal catch would change the historical-cause conclusion.",
+    [
+      [
+        "float GPA breaks save_cv",
+        "CONFIRMED"
+      ],
+      [
+        "save_vpr has the same serialization omission",
+        "CONFIRMED"
+      ],
+      [
+        "7cdc5e5 introduced this GPA failure",
+        "REFUTED"
+      ],
+      [
+        "live parser emits triggering GPA",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S25",
+    "CONFIRMED (the call is broken). \"Never advanced\" REFUTED as written.",
+    "the gap-analysis state machine has never advanced",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "high",
+    "src/backend/careervp/handlers/gap_handler.py",
+    874,
+    "Empty user_id makes the pending transition fail; P1 interprets eight later-state live rows as bypass via update_gap_responses.",
+    "The broken call is reproducible. update_gap_responses uses if_not_exists(state,...): it creates an absent application at gap_responses_submitted, but preserves cv_selected on an existing application. A state-only scan cannot identify the writer or demonstrate a transition from cv_selected.",
+    [
+      "E-004",
+      "E-006",
+      "E-022"
+    ],
+    "S25",
+    "Same application key absent before update_gap_responses.",
+    "Same key exists with state cv_selected.",
+    "prior existence of application row",
+    "Absent -> gap_responses_submitted; existing cv_selected -> cv_selected.",
+    true,
+    "ApplicationRepository.update_state / update_gap_responses and 12 projected live rows",
+    "handler",
+    "broken transition plus universal historical state progression",
+    "P1's local control is sound. Its live refutation and writer attribution do not follow from state snapshots. The upsert bypass is real for absent rows, but it does not repair or advance an existing stalled row.",
+    "n/a",
+    "Calling this 'worse' is an opinion and does not decide which records stalled.",
+    "No per-application state history or writer event was obtained. Empty-key service error may be ValidationException rather than moto's conditional error; either fails to update the real row.",
+    "A trace from cv_selected through this endpoint and subsequent writes, with before/after keys, would settle the stalled cohort and writer attribution.",
+    [
+      [
+        "empty-user transition cannot update real owner row",
+        "CONFIRMED"
+      ],
+      [
+        "upsert initializes absent rows at submitted",
+        "CONFIRMED"
+      ],
+      [
+        "upsert advances existing cv_selected rows",
+        "REFUTED"
+      ],
+      [
+        "all applications historically never advanced / never stalled",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S1",
+    "CONFIRMED",
+    "Cross-tenant VPR read in CV tailoring; cover-letter handler does it correctly",
+    "OVERTURNED",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    418,
+    "Caller-supplied vpr_id reaches an unowned DAL read and job_posting fields flow to the artifact.",
+    "The real dependency resolver requires an owned non-null VPR before returning ready for cv_tailored. That object becomes resolved_vpr, so the subsequent if vpr is None fallback is not reached. Changing only dependency owner causes ready processing versus 409, and get_vpr has zero calls in both cases. The DAL VPR model also does not expose JobPosting; JobPosting belongs to VPRRequest.",
+    [],
+    "S1",
+    "Owned upstream VPR, same body-supplied victim vpr_id.",
+    "Only upstream VPR owner becomes victim.",
+    "upstream artifact owner",
+    "Owned case reaches downstream sentinel; foreign case returns 409; unsafe fallback called zero times.",
+    false,
+    "Full _handle_openapi_async_generate dependency path, not isolated lines 418-422",
+    "handler",
+    "reachable user-controlled cross-tenant VPR read",
+    "P1 omitted the dominating dependency guard at lines 338-380 and treated dead fallback code as a reachable read. This is a control-flow contradiction, not failure to reproduce.",
+    "mechanism_false",
+    "none",
+    "Direct isolated DAL calls remain unowned; this finding does not establish that every other caller is safe. Live byte comparison covers this handler and resolver.",
+    "A reachable production ready resolution with resolved_upstream['vpr'].artifact=None, or a route bypassing the resolver into that fallback, would change the verdict.",
+    [
+      [
+        "DAL get_vpr itself is unscoped",
+        "CONFIRMED"
+      ],
+      [
+        "the cited normal CV-tailoring path reaches that fallback using attacker-supplied vpr_id",
+        "REFUTED"
+      ],
+      [
+        "cover-letter explicitly checks VPR owner",
+        "CONFIRMED"
+      ]
+    ]
+  ],
+  [
+    "S2",
+    "Mechanism CONFIRMED / exploitability REFUTED",
+    "Unauthenticated identity via the SFN-invoke branch, reachable through HTTP API v2 payloads",
+    "UPHELD",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/handlers/cv_tailoring_handler.py",
+    301,
+    "Direct-invoke branch trusts event identity but ordinary proxy envelopes do not satisfy its entire discriminator.",
+    "The guard requires no httpMethod and user_id/cv_id/job_id at top level. The same fields inside an HTTP-v2 JSON body fail it; moving them to top level succeeds. Account/region HTTP API inventory is empty, and the deployed route is REST AWS_PROXY.",
+    [
+      "E-015",
+      "E-022"
+    ],
+    "S2",
+    "HTTP-v2 event with three fields in JSON body.",
+    "Same event with those fields placed at event top level.",
+    "field placement",
+    "v2 body false; direct/top-level true; REST httpMethod false.",
+    false,
+    "REST/v2 proxy envelope versus direct Lambda invoke; IAM grants for actual cvtailor name",
+    "handler",
+    "internet-facing unauthenticated identity bypass",
+    "The omitted discriminator conjunct independently refutes the stated normal HTTP-v2 vector. No HTTP API today is only point-in-time corroboration. IAM inventory also identifies the chain role and broader administrative/deployment invoke grants; direct invocation is not restricted to SFN alone.",
+    "n/a",
+    "none",
+    "No effective-policy simulation including SCP/session restrictions was performed. Candidate allow statements are not proof that every principal can currently assume/invoke.",
+    "A custom integration mapping that lifts arbitrary body identity into top-level fields would reopen the internet vector.",
+    [
+      [
+        "direct invoke trusts top-level identity",
+        "CONFIRMED"
+      ],
+      [
+        "ordinary HTTP-v2 proxy body reaches it",
+        "REFUTED"
+      ],
+      [
+        "only SFN can invoke the function",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "S6",
+    "CONFIRMED",
+    "Gap analysis fabricates 10 questions on LLM failure and returns 200",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/logic/gap_analysis.py",
+    299,
+    "LLM parse failure is converted to successful fallback questions.",
+    "Malformed returned content takes _extract_questions failure -> [] -> _ensure_question_count -> ten templates and GAP_QUESTIONS_GENERATED. A transport RuntimeError instead returns failure/LLM_API_ERROR before parsing.",
+    [],
+    "S6",
+    "LLM returns an empty valid questions object.",
+    "Only returned payload becomes non-JSON text.",
+    "LLM returned payload",
+    "Both produce ten fallback questions and success; separate transport exception returns explicit failure.",
+    false,
+    "generate_gap_questions with mocked LLM return/exception",
+    "handler",
+    "parse failure concealed as generated questions",
+    "The exact parse-failure mechanism is upheld. P1's 'total LLM failure' phrase must be limited to unusable returned content; it does not describe transport exceptions.",
+    "n/a",
+    "'Total LLM failure' is overbroad; the tested defect is specifically parse/output failure.",
+    "Handler persistence/HTTP behavior is source-derived and covered by existing tests, not a live LLM run.",
+    "A malformed response returning an explicit failure instead of fabricated questions would change the mechanism verdict.",
+    [
+      [
+        "unparseable returned content becomes successful ten-question fallback",
+        "CONFIRMED"
+      ],
+      [
+        "transport/API exception is also reported as success",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "S7",
+    "CONFIRMED, understated",
+    "VPR degrades to a placebo report, billed, with no error signal",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/logic/vpr_generator.py",
+    262,
+    "Validation fallbacks generate boilerplate; failed final gate still returns success and quality_warning is unused.",
+    "Ten ValidationError fallbacks remain; minimal executive summary assigns score 50. Flipping only final passed_gate from true to false keeps Result.success true and sets quality_warning. generate_vpr maps the accepted VPR to its response without consuming the warning.",
+    [
+      "E-021"
+    ],
+    "S7",
+    "Same pipeline stages and final object with gate passed.",
+    "Only final gate outcome becomes failed on both attempts.",
+    "passed_gate",
+    "Both successful Result; failed case has passed_gate false and quality_warning true.",
+    false,
+    "VPRSixStagePipeline.run gate decision and warning consumer search",
+    "handler",
+    "silent quality acceptance and monetary consequence",
+    "The successful acceptance mechanism and missing warning consumption are directly supported. Cost fields/LLM usage are not proof that a particular user was charged. The boilerplate includes a validation concern, so 'no error signal' is not literally no textual hint.",
+    "n/a",
+    "'Placebo' and 'understated' are severity rhetoric; not grounds to overturn.",
+    "Actual live billing and frequency of degraded outputs were not measured.",
+    "A surfaced warning/failure on failed gates would refute silence; a billing ledger linked to a degraded output would establish charging.",
+    [
+      [
+        "ten section validation fallbacks and canned score 50",
+        "CONFIRMED"
+      ],
+      [
+        "failed gate accepted with unused quality_warning",
+        "CONFIRMED"
+      ],
+      [
+        "specific degraded output billed to a user",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S8",
+    "CONFIRMED (live schema proof)",
+    "Cover letters silently generated without gap answers (wrong table)",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/handlers/cover_letter_handler.py",
+    302,
+    "Cover-letter gap reader uses artifacts DAL with gap-table key names and converts lookup failure to empty context.",
+    "Actual live schemas differ exactly as claimed. With the same seeded response, selecting the artifact table gives TABLE_SCHEMA_MISMATCH and []; selecting the correct gap table yields the answer. Interview prep explicitly resolves GAP_RESPONSES_TABLE_NAME.",
+    [
+      "E-014",
+      "E-022"
+    ],
+    "S8-corrected",
+    "get_gap_responses on artifact-table DAL.",
+    "Same read through gap-table DAL with canonical gap sort key.",
+    "DAL table selection",
+    "Artifact table: false/TABLE_SCHEMA_MISMATCH/[]; gap table: true and secret-answer.",
+    false,
+    "Two actual table schemas; real moto DAL query and cover-letter context adapter",
+    "handler",
+    "wrong-table loss of gap context",
+    "The code/schema mechanism is sound. My first control used an incorrect gap sort-key prefix and returned empty even on the right table; the corrected control uses _build_gap_responses_sort_key and returns the planted answer. Both raw runs are retained.",
+    "n/a",
+    "none",
+    "Representative live cover-letter generation with existing gap answers was not invoked.",
+    "Correct-table context lookup, or explicit failure rather than empty fallback, would change the finding.",
+    [
+      [
+        "artifact table cannot satisfy gap key query",
+        "CONFIRMED"
+      ],
+      [
+        "failure becomes empty context",
+        "CONFIRMED"
+      ],
+      [
+        "interview prep uses dedicated gap table",
+        "CONFIRMED"
+      ]
+    ]
+  ],
+  [
+    "S10",
+    "CONFIRMED in substance / mechanism partly misstated",
+    "Cancel reports success with every write swallowed",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/handlers/vpr_status_handler.py",
+    415,
+    "Chain-stop errors are swallowed; main status Result is ignored rather than caught here.",
+    "Changing only update_job_status.success from true to false leaves the exact same HTTP 200 cancelled body. _do_stop_chain returns normally when all three operations raise.",
+    [],
+    "S10",
+    "Primary update returns successful Result.",
+    "Only Result.success becomes false/DYNAMODB_ERROR.",
+    "write Result outcome",
+    "Both HTTP 200 {status: cancelled}; all chain-write exceptions also disappear.",
+    false,
+    "_handle_vpr_cancel and _do_stop_chain with controlled failures",
+    "handler",
+    "false cancellation acknowledgement",
+    "P1 correctly distinguishes ignored Result from swallowed exception. Uncaught arbitrary exceptions can still surface; the proof concerns the expected Result failure path.",
+    "n/a",
+    "none",
+    "Continued live generation and billing after an actual failed cancellation were not observed.",
+    "Checking the Result or propagating failed chain stop to the caller would change the false-acknowledgement verdict.",
+    [
+      [
+        "failed DAL Result acknowledged as cancelled",
+        "CONFIRMED"
+      ],
+      [
+        "three chain-operation failures swallowed",
+        "CONFIRMED"
+      ],
+      [
+        "live billing continued for a measured cancelled request",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S11",
+    "CONFIRMED",
+    "Phantom-write cancel (upsert + TOCTOU)",
+    "OVERTURNED",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/handlers/cover_letter_handler.py",
+    1470,
+    "Legacy-found items allegedly fall back to canonical keys and create a second phantom row, symmetrically for CV tailoring.",
+    "Cover-letter get/query/update all use canonical keys; CV cancel get/query/update all use legacy keys. Changing only the selected schema yields 500 on the wrong schema before an update, not 200 and a different-row upsert. A separate delete-between-read-and-write control does recreate the same key with only CANCELLED, so non-atomic upsert/race remains real.",
+    [],
+    "S11",
+    "Each cancel handler reads/writes its matching physical schema.",
+    "Same logical record under the opposite physical key schema.",
+    "physical table schema",
+    "Matching schema 200/CANCELLED; wrong schema 500/PROCESSING. Deletion race separately recreates the same key.",
+    false,
+    "Actual cancel read/query/write path on real moto schemas",
+    "handler",
+    "cross-schema phantom write plus race",
+    "The claimed legacy-read premise is absent from the cited cancel functions. P1 inferred cross-schema reachability from fallback expressions on the update alone. The surviving race does not validate that particular phantom mechanism.",
+    "mechanism_false",
+    "none",
+    "Other write paths do contain schema fallbacks; those are not these cancel paths. Concurrent worker completion remains a real separate race.",
+    "A reachable cancel read that returns a foreign-schema item and then writes a distinct valid key would change the phantom verdict.",
+    [
+      [
+        "update lacks condition and can race/recreate deleted item",
+        "CONFIRMED"
+      ],
+      [
+        "legacy lookup feeds canonical phantom update on cited cancel path",
+        "REFUTED"
+      ],
+      [
+        "symmetric opposite-schema phantom in CV cancel",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "S23",
+    "mechanism CONFIRMED. \"On the request path\" REFUTED. Severity REFUTED.",
+    "O(n\u00d7m) tokenizer on the request path",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "REFUTED",
+    "medium",
+    "src/backend/careervp/logic/vpr_generator.py",
+    977,
+    "Repeated tokenization exists, but async location and a synthetic microbenchmark supposedly refute severity.",
+    "_select_best_evidence tokenizes requirement once plus every evidence item; calling for each requirement gives n*m+n tokenizations. 3x2 produces nine calls. At fixed 60x500, extending evidence length tenfold changes measured time from about 58ms to 330ms. The deployed /vpr/generate route targets submit, not the legacy synchronous handler.",
+    [
+      "E-017",
+      "E-022"
+    ],
+    "S23",
+    "60 requirements, 500 evidence strings with 12 padding words.",
+    "Only evidence string length rises to 120 padding words.",
+    "evidence text length",
+    "About 58ms versus 330ms in this run; synthetic values are not production percentiles.",
+    false,
+    "Real _select_best_evidence on synthetic text; deployed submit/worker route",
+    "handler",
+    "asymptotic work, synchronous route location and operational severity",
+    "The mechanism and asynchronous route distinction stand. The supplied benchmark does not identify its generated text or show representative CV sizes, and a timing value cannot establish a severity threshold. That portion remains uncertain.",
+    "n/a",
+    "Severity and 'not worth an engineering hour' are opinions, not behavioral refutations.",
+    "Production input-size distribution, tail latency, worker resource limits and cost effect were not measured.",
+    "Representative observed inputs with full worker timing would settle impact; memoization would alter the mechanism.",
+    [
+      [
+        "repeated O(n*m) evidence tokenization",
+        "CONFIRMED"
+      ],
+      [
+        "current public VPR generation runs synchronously behind API timeout",
+        "REFUTED"
+      ],
+      [
+        "synthetic 60x500 establishes harmless production severity",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "S26",
+    "6 of 7 sub-claims CONFIRMED / \"unbounded\" REFUTED",
+    "Prompt injection, unbounded and undelimited",
+    "UPHELD",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/logic/company_research.py",
+    479,
+    "Six source exposure claims hold; scraped text is capped at 2500 words.",
+    "Company raw_text is truncated before interpolation; company_name, JobPosting.description and GapResponse.answer accept 100000 characters. Gap/interview use generate(prompt=combined text), which lacks a system argument. The same client DOES expose complete(system_prompt=...), contradicting P1's stronger assertion that the client offers no privileged channel at all.",
+    [],
+    "S26",
+    "Company scrape under the cap, ordinary names/answers.",
+    "Only scrape length exceeds cap; separate model probes vary text length.",
+    "text length per independent probe",
+    "3000 scrape words become 2500; 100000-character name/job/answer values validate.",
+    false,
+    "Prompt builders, model validation, generate and complete signatures",
+    "handler",
+    "prompt-boundary source exposure and injection exploitability",
+    "P1's six-of-seven source assessment is upheld when 'unbounded' means scraped text. It cannot refute total company-prompt unboundedness while the name is uncapped. Its client-wide stronger statement is false: complete already has system_prompt.",
+    "n/a",
+    "Labels such as 'no delimiters' mean no trustworthy separation, not literally no headings/newlines.",
+    "No malicious prompt was sent to a real model. Source exposure alone does not prove successful model instruction override.",
+    "Bounded typed inputs, separated messages on these callers, and adversarial output tests would change the corresponding conjuncts.",
+    [
+      [
+        "scraped raw_text unbounded",
+        "REFUTED"
+      ],
+      [
+        "name/job/gap fields have no maximum length",
+        "CONFIRMED"
+      ],
+      [
+        "gap/interview generate calls combine instructions and input",
+        "CONFIRMED"
+      ],
+      [
+        "LLMClient has no separate-system API anywhere",
+        "REFUTED"
+      ],
+      [
+        "async CV-tailoring path calls legacy validate_job_description",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "K9",
+    "CONFIRMED (live metrics)",
+    "artifact_cleanup_handler raises on every invocation",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/handlers/artifact_cleanup_handler.py",
+    135,
+    "Cleanup requires an environment variable not deployed to that function.",
+    "_make_cleanup_deps requires DYNAMODB_TABLE_NAME outside the handler try. Missing variable raises; setting only that variable constructs dependencies. Live metrics give 336 errors/336 invocations across 14 full days and a raw log names MissingTableEnvError at line 135.",
+    [
+      "E-008",
+      "E-007",
+      "E-022"
+    ],
+    "K9",
+    "Cleanup environment lacks DYNAMODB_TABLE_NAME.",
+    "Only that variable is set to the jobs table.",
+    "required environment variable presence",
+    "MissingTableEnvError versus dependency construction; matching live error log.",
+    false,
+    "Correct cleanup function, deployed environment, Errors/Invocations and raw log",
+    "handler",
+    "reaper cannot initialize and all sampled invocations fail",
+    "Metrics alone do not identify cause, but the raw log and matching deployed source do. 'Never cleaned anything' outside the measured window is not established by fourteen days.",
+    "n/a",
+    "none",
+    "All-time cleanup history and effects of earlier deployments are unknown.",
+    "Successful invocations under a corrected variable or logs showing a different failure would change the scoped verdict.",
+    [
+      [
+        "missing env causes initialization exception",
+        "CONFIRMED"
+      ],
+      [
+        "all 336 sampled invocations failed",
+        "CONFIRMED"
+      ],
+      [
+        "every historical deployment never cleaned anything",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "G1",
+    "GOOD \u2014 and mutation-proven",
+    "auth_utils \u2014 identity from Cognito claims only, fails closed",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/handlers/auth_utils.py",
+    16,
+    "Only Cognito authorizer claims supply identity; reintroducing the header bypass is caught.",
+    "Keeping malicious header/body/query identities fixed and adding only authorizer claims changes extracted identity None -> real-user. CV upload strips body user_id before constructing the authenticated request. The header mutation is separately measured against the same isolated baseline.",
+    [
+      "E-012"
+    ],
+    "G1",
+    "Forged header/body/query with no claims.",
+    "Only claims.sub is set to real-user.",
+    "authenticated claims presence",
+    "None without claims; real-user with claims, never victim.",
+    true,
+    "extract_user_id and its mutation, plus CV request normalization",
+    "handler",
+    "identity extraction and CV-upload identity source",
+    "The local identity boundary is sound. Cognito signature validation is upstream, and the SFN direct-event contract is separate from browser identity extraction.",
+    "n/a",
+    "'Best-defended control in the repo' is a comparative opinion not established by this sample.",
+    "Mutation survival is scoped to the selected unit suite; Cognito validation itself was not exercised by moto.",
+    "A non-claims request returning a user identity, or body identity overriding the upload caller, would refute the claim.",
+    [
+      [
+        "extract_user_id accepts only authorizer claim shapes",
+        "CONFIRMED"
+      ],
+      [
+        "CV upload strips body identity",
+        "CONFIRMED"
+      ],
+      [
+        "all possible direct invocations validate JWTs",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "G4",
+    "GOOD",
+    "_list_cover_letter_items / _list_tailored_cv_items paginate correctly",
+    "UPHELD",
+    "CONFIRMED",
+    "high",
+    "src/backend/careervp/dal/dynamo_dal_handler.py",
+    728,
+    "List wrappers delegate to DAL loops that follow LastEvaluatedKey.",
+    "Both actual DAL methods query again with the returned ExclusiveStartKey and retain items from both pages. The control changes only cursor presence in the first response.",
+    [],
+    "G4",
+    "First response contains one item and no cursor.",
+    "Same first response gains LastEvaluatedKey; fixed next response contains second item.",
+    "first-page cursor presence",
+    "One query/one item versus two queries/two items; cursor forwarded.",
+    false,
+    "list_cover_letters_canonical and list_tailored_cvs, through their wrappers",
+    "handler",
+    "DynamoDB pagination in these list methods",
+    "The specifically named methods paginate. This says nothing about export_handler._read_cv_tailored's separate unpaginated query.",
+    "n/a",
+    "none",
+    "Real DynamoDB page size was simulated by controlled responses; mixed-schema fallback deployment is separate.",
+    "A page cursor ignored by either named method or missing second-page items would refute pagination.",
+    [
+      [
+        "both named DAL list paths follow LastEvaluatedKey",
+        "CONFIRMED"
+      ]
+    ]
+  ],
+  [
+    "PREMISE-P2",
+    "the two-cause framing STANDS. The cited anchor is WRONG.",
+    "~35 findings reduce to no-single-table-authority + two key schemes, rooted at api_db_construct.py:114",
+    "UPHELD",
+    "REFUTED",
+    "high",
+    "infra/careervp/api_db_construct.py",
+    114,
+    "Multiple table meanings and dual key grammars are distinct causes; the alias is not the root.",
+    "Changing only ARTIFACTS_TABLE_NAME presence switches the canonical resolver while the legacy resolver remains on DYNAMODB_TABLE_NAME. Removing self.db alone would not remove either resolver chain or either key grammar. Live 31-function distribution is 20 unset, 6 artifacts, 5 users.",
+    [
+      "E-007"
+    ],
+    "P2",
+    "ARTIFACTS_TABLE_NAME=artifacts and DYNAMODB_TABLE_NAME=users.",
+    "Only ARTIFACTS_TABLE_NAME is absent.",
+    "one environment variable presence",
+    "canonical/legacy: artifacts/users -> users/users.",
+    false,
+    "table_registry resolver chains, key builders and all 31 devx Lambda environment projections",
+    "handler",
+    "single-cause compression of roughly 35 findings",
+    "The two concrete source problems stand and the single-alias explanation is contradicted. This audit did not independently map all ~35 findings to those two causes.",
+    "n/a",
+    "'Three writer bindings' includes db and users_table that alias the same physical table; it is not three live table destinations.",
+    "Proportion of all inventory findings explained by these causes is not established.",
+    "A per-finding causal mapping or experiment fixing the alias alone would change the broader compression claim.",
+    [
+      [
+        "multiple table meanings and dual grammars coexist",
+        "CONFIRMED"
+      ],
+      [
+        "self.db alias alone is the root of all these failures",
+        "REFUTED"
+      ],
+      [
+        "all ~35 findings reduce to these two causes",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ],
+  [
+    "PREMISE-P3",
+    "the count is REFUTED. The characterisation is CONFIRMED and understated.",
+    "except Exception: pass is the default idiom, ~40 occurrences",
+    "OVERTURNED",
+    "REFUTED",
+    "high",
+    "src/backend/careervp/handlers/interview_prep_handler.py",
+    104,
+    "176 broad handlers: 12 pass, 144 no raise, 20 containing raise; P1 treats 144 no-raise handlers as returning success-shaped values.",
+    "Counts reproduce exactly, but the classifier does not measure error propagation via Result or HTTP. Forty-six of the 144 have explicit failure-valued source; a live logic control returns success=False/LLM_API_ERROR without raising. A nested caught raise is classified as surfacing although execution returns normally.",
+    [
+      "E-009"
+    ],
+    "PREMISE-P3",
+    "No-raise except block returns Result(success=True).",
+    "Only the Result success value becomes False; separate nested-raise example is executed.",
+    "returned Result.success",
+    "Same no-raise classification, opposite caller-visible outcome; nested raise is contained.",
+    false,
+    "AST syntax counts versus caller-observable failure semantics",
+    "handler",
+    "default silent-success error idiom",
+    "P1's numerical refutation is correct. Its load-bearing 144-success-shaped characterization is contradicted by source and the controlled return-value experiment. The any-Raise instrument has a material semantic defect.",
+    "harness_defect",
+    "none",
+    "Forty-six is a lower-bound source-pattern count, not a complete semantic taxonomy. Full caller tracing is needed to classify every handler.",
+    "A caller-aware census showing returned failures are systematically ignored would support that narrower downstream claim.",
+    [
+      [
+        "~40 literal bare-pass blocks",
+        "REFUTED"
+      ],
+      [
+        "12/144/20 AST categories",
+        "CONFIRMED"
+      ],
+      [
+        "144 no-raise blocks are success-shaped swallowing",
+        "REFUTED"
+      ],
+      [
+        "a raise anywhere proves an error surfaces",
+        "REFUTED"
+      ]
+    ]
+  ],
+  [
+    "PREMISE-P4",
+    "CONFIRMED, with a specific and severe instance \u2014 and the suite is stronger than feared in other places.",
+    "the suite contains self-closing tests that pass without the code they claim to test",
+    "OVERTURNED",
+    "CONFIRMED",
+    "high",
+    "src/backend/tests/integration/test_p05_cross_tenant_idor.py",
+    84,
+    "P-05 authenticates no attacker and misses the VPR branch; P1 also says no pre-existing test could catch 7cdc5e5 because the parent suite was already red.",
+    "The P-05 probe's nine 401 cases and cv_tailored pin reproduce. But unchanged parent tests have 9 failures before and 10 after applying only the handler change: test_openapi_payload_uses_bearer_token_for_user_id newly fails on the now-fatal CV-table write. Being already red does not prevent an additional test from detecting a regression.",
+    [
+      "E-010",
+      "E-011",
+      "E-012",
+      "E-013"
+    ],
+    "E013-owner-control",
+    "Parent tests and handler at 7cdc5e5^, fixed environment and interpreter.",
+    "Only cv_upload_handler.py becomes its 7cdc5e5 version; tests stay unchanged.",
+    "handler's second-write fatal behavior",
+    "9 failed/3 passed -> 10 failed/2 passed; a named pre-existing test catches the change.",
+    false,
+    "Exact historical source delta, verified mutations, nine-route identity and owner controls",
+    "handler",
+    "test adequacy, historical regression detection and ownership coverage",
+    "The headline P-05 inadequacy is upheld, but the historical no-test-could-catch conclusion is directly overturned. P1's E013 prose correction did not fix its shipped scratch assertion: two empty 200 cases still fail that assertion. Owner controls expose empty/missing seeded resources for gaps and export.",
+    "raw_contradiction",
+    "'Zero coverage' should mean mutation not killed by this selected unit suite; no execution-coverage measurement was supplied.",
+    "Isolated full baselines have environmental failures beyond P1's single CDK failure; mutations are assessed only by differences against the same controlled baseline. The broad unit suite contains unmocked AWS paths.",
+    "An exact rerun showing no new old-test failure under the single handler change would change the historical conclusion. Authenticated branch-complete probes with owner-positive controls would close the test gap.",
+    [
+      [
+        "P-05 probe stops at 401 and misses export VPR branch",
+        "CONFIRMED"
+      ],
+      [
+        "no pre-existing test could detect the fatal-write change",
+        "REFUTED"
+      ],
+      [
+        "status-only mutation survives selected unit suite",
+        "CONFIRMED"
+      ],
+      [
+        "cancel and header identity mutations are detected",
+        "CONFIRMED"
+      ]
+    ]
+  ],
+  [
+    "PREMISE-P5",
+    "CONFIRMED, and more strongly than claimed.",
+    "the knowledge table is entirely dead (zero live readers, zero live writers)",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "UNPROVABLE-WITHOUT-DEPLOY",
+    "medium",
+    "src/backend/careervp/handlers/knowledge_base_handler.py",
+    29,
+    "Unwired handler, zero knowledge rows and incompatible keys supposedly prove no readers/writers and justify deletion.",
+    "Source has one KnowledgeRepository caller in an unwired handler; live /knowledge-base routes to company research, and the table is empty. The same repository write succeeds with pk/sk schema but fails with deployed userEmail/knowledgeType. Empty rows and current route topology do not prove absence of other IAM readers/writers or historical use.",
+    [
+      "E-016",
+      "E-007",
+      "E-022"
+    ],
+    "PREMISE-P5",
+    "KnowledgeRepository writes to pk/sk schema.",
+    "Same repository and payload target userEmail/knowledgeType schema.",
+    "physical table schema",
+    "Success/count 1 versus ValidationException/count 0.",
+    false,
+    "Source caller search, deployed route, knowledge table schema and current count",
+    "handler",
+    "all live/historical readers and writers; deletion safety",
+    "The narrower unwired-source and incompatible-schema findings stand. The all-users/all-time zero-read/write assertion and delete-only scope are not established by a scan or grep. Shared environment/IAM grants exist.",
+    "n/a",
+    "'Never agreed' and 'nothing to preserve' go beyond a point-in-time empty table.",
+    "No CloudTrail data-event history, external-consumer inventory, or V1 feature rescope was provided.",
+    "Complete caller/data-event inventory and an explicit feature-scope decision would support deletion; any consumer or retained-data requirement would expand P5.",
+    [
+      [
+        "sole repository caller is not wired by this infra",
+        "CONFIRMED"
+      ],
+      [
+        "current devx knowledge table empty with incompatible keys",
+        "CONFIRMED"
+      ],
+      [
+        "zero possible live/historical readers and writers",
+        "UNPROVABLE-WITHOUT-DEPLOY"
+      ]
+    ]
+  ]
+]

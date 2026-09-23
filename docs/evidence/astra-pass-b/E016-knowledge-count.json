@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "scan",
+    "--table-name",
+    "careervp-knowledge-table-devx",
+    "--select",
+    "COUNT"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:28.922123+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Count\": 0,\n    \"ScannedCount\": 0,\n    \"ConsumedCapacity\": null\n}\n",
+  "stderr": ""
+}

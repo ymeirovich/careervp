@@ -27,6 +27,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -36,9 +37,10 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.company_research import ConfidentCompanyResearch, load_confident_company_research_artifact
 from careervp.logic.utils.constants import VPR_JOBS_QUEUE_NAME
+from careervp.logic.utils.env import resource_env
 from careervp.models.api_models import VPRGenerateRequest
 from careervp.models.result import ResultCode
 from careervp.models.vpr import VPRRequest
@@ -60,8 +62,7 @@ def _get_results_bucket() -> str:
     bucket_name = os.environ.get('VPR_RESULTS_BUCKET_NAME')
     if bucket_name:
         return bucket_name
-    env = os.environ.get('ENVIRONMENT', 'dev')
-    return f'careervp-{env}-vpr-results-us-east-1'
+    return f'careervp-{resource_env()}-vpr-results-us-east-1'
 
 
 def _completed_result_missing(job: dict[str, Any]) -> bool:
@@ -212,6 +213,7 @@ def _backfill_application_artifact(application_id: str, user_id: str, job_id: st
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:  # noqa: C901
     """
     Handle POST /vpr/generate requests for async VPR generation.
@@ -351,7 +353,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             artifact_type='vpr',
             application_id=application_id,
             user_id=str(normalized_request['user_id']),
-            dal=DynamoDalHandler(os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME', '')),
+            dal=DynamoDalHandler(table_registry.resolve_legacy_artifacts_table_name()),
         )
         if dependency_resolution.status != 'ready':
             if dependency_resolution.status == 'dependency_generating':

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-c",
+    "import sys, pathlib, json\nsys.path.insert(0,str(pathlib.Path.cwd().resolve()))\nfrom unittest.mock import patch\nimport pytest,careervp\nprint('AUDIT_SOURCE',careervp.__file__,flush=True)\nwith patch('botocore.httpsession.URLLib3Session.send',side_effect=AssertionError('AUDIT: unmocked AWS network blocked')):\n raise SystemExit(pytest.main(sys.argv[1:]))\n",
+    "tests/unit/",
+    "-q",
+    "--tb=short",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/private/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-head-0xc6quch/repo/src/backend",
+  "exit_code": 1,
+  "environment": {
+    "PYTHONPATH": "/private/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-head-0xc6quch/repo/src/backend",
+    "AWS": "fake creds, network denied before socket send",
+    "dependencies": "existing main .venv, no resolution or installation"
+  },
+  "timestamp": "2026-09-13T13:59:43.282428+00:00"
+}

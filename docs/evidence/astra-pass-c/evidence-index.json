@@ -1,0 +1,41 @@
+{
+  "C01": [
+    "docs/evidence/astra-pass-c/C01-independent.json"
+  ],
+  "C02": [
+    "docs/evidence/astra-pass-c/C02-additional.json"
+  ],
+  "C03": [
+    "docs/evidence/astra-pass-c/C03-parser-races-pagination.json"
+  ],
+  "C04": [
+    "docs/evidence/astra-pass-c/C04-page-error-knowledge.json"
+  ],
+  "C05": [
+    "docs/evidence/astra-pass-c/C05-receipt-integrity.json"
+  ],
+  "C06": [
+    "docs/evidence/astra-pass-c/C06-history-after.json",
+    "docs/evidence/astra-pass-c/C06-history-before.json"
+  ],
+  "C07": [
+    "docs/evidence/astra-pass-c/C07-existing-tests.json",
+    "docs/evidence/astra-pass-c/C07-integration-corrected.json",
+    "docs/evidence/astra-pass-c/C07-integration.json",
+    "docs/evidence/astra-pass-c/C07-unit.json"
+  ],
+  "C08": [
+    "docs/evidence/astra-pass-c/C08-p1-reproductions.json"
+  ],
+  "C09": [
+    "docs/evidence/astra-pass-c/C09-mutation-log-comparison.json"
+  ],
+  "C10": [
+    "docs/evidence/astra-pass-c/C10-targeted-controls.json"
+  ],
+  "C11": [
+    "docs/evidence/astra-pass-c/C11-classifier-counterexamples.json",
+    "docs/evidence/astra-pass-c/C11-source-excerpts.json"
+  ],
+  "prior_E_ids": "docs/handoff/2026-09-13-ASTRA-evidence-register.yaml; supporting raw outputs under docs/evidence/astra-pass-b. These were inspected, not all replayed."
+}

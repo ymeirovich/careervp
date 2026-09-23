@@ -163,6 +163,18 @@ def _resolved_cover_letter_context() -> dict[str, object]:
     }
 
 
+@pytest.fixture(autouse=True)
+def _bypass_artifact_dependencies(
+    mock_artifact_dependency_resolver: object,
+    mock_company_research_load: object,
+) -> None:
+    """Opt into the dependency-bypass fixtures retired from global autouse (T-02).
+
+    This module verifies artifact persistence, not resolver/routing behavior, so
+    it declares the upstream bypass explicitly.
+    """
+
+
 @pytest.mark.unit
 def test_cover_letter_generation_persists_to_dynamodb() -> None:
     from careervp.handlers.cover_letter_handler import lambda_handler
@@ -208,13 +220,22 @@ def test_interview_prep_persisted_item_contains_prefix_and_ttl() -> None:
         dal.get_cv.return_value = _user_cv()
         dal._get_db_handler.return_value = table
         dal.table_name = 'table'
-        # VPR mock must carry user_id so the ownership check in _resolve_interview_prep_context passes.
-        mock_vpr = MagicMock()
-        mock_vpr.user_id = 'user-123'
-        mock_vpr_result = MagicMock()
-        mock_vpr_result.success = True
-        mock_vpr_result.data = mock_vpr
-        dal.get_vpr.return_value = mock_vpr_result
+        # F-DEVX-1: the VPR is read as a canonical artifact from the artifacts table,
+        # so seed one owned by this user rather than mocking the legacy dal.get_vpr.
+        table.get_item.return_value = {
+            'Item': {
+                'applicationId': 'vpr-123',
+                'artifactId': 'vpr-123',
+                'artifact_id': 'vpr-123',
+                'artifactType': 'vpr',
+                'user_id': 'user-123',
+                'status': 'completed',
+                'version': 1,
+                'created_at': '2026-08-01T09:00:00+00:00',
+                'updated_at': '2026-08-01T09:00:00+00:00',
+                'vpr': {'application_id': 'vpr-123', 'user_id': 'user-123', 'executive_summary': 'Strong candidate.'},
+            }
+        }
         mock_get_dal.return_value = dal
 
         with patch('careervp.handlers.interview_prep_handler.generate_interview_prep') as mock_generate:
@@ -306,21 +327,25 @@ def test_cv_tailoring_async_generate_persists_with_artifact_prefix() -> None:
 def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> None:
     from careervp.handlers.gap_handler import lambda_handler
 
-    generated_questions = [
-        {'question_id': f'q-{idx}', 'question': 'Describe measurable impact.', 'impact': 'HIGH', 'probability': 'MEDIUM', 'tags': ['[CV IMPACT]']}
-        for idx in range(10)
-    ]
-
     with (
-        patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
         patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+        patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch('careervp.handlers.gap_handler.sqs'),
+        patch(
+            'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+            return_value={
+                'personal_info': {'full_name': 'Test User'},
+                'work_experience': [],
+                'skills': [],
+                'education': [],
+            },
+        ),
     ):
         dal = MagicMock()
         dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
         mock_get_dal.return_value = dal
-        mock_generate.return_value = Result(success=True, data=generated_questions, code=ResultCode.GAP_QUESTIONS_GENERATED)
         trial_service = MagicMock()
         trial_service.check_trial_status.return_value = {'is_active': True}
         trial_service.consume_credit.return_value = None
@@ -328,17 +353,21 @@ def test_gap_analysis_generation_persists_item_with_non_null_artifact_id() -> No
         mock_application_repository.return_value = MagicMock()
         response = lambda_handler(_gap_event(), MagicMock())
 
-    assert response['statusCode'] in [200, 201]
+    assert response['statusCode'] in [200, 201, 202]
     dal.save_gap_questions.assert_called_once()
     call_args = dal.save_gap_questions.call_args
     assert call_args is not None
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(
-    reason='Pending spec-03: vpr_generator._generate_output builds VPR with old flat fields (executive_summary as str, evidence_matrix, etc.)'
-)
-def test_vpr_generation_persists_via_save_vpr() -> None:
+def test_vpr_generation_does_not_persist_via_save_vpr() -> None:
+    """F-DEVX-1: generation is pure; the caller owns the canonical write.
+
+    Reconciled from ``test_vpr_generation_persists_via_save_vpr``, whose xfail marker
+    ("Pending spec-03 … old flat fields") had gone stale — the test was XPASSing. The
+    behaviour it asserted is now deliberately gone: persisting inside generation is what
+    made it impossible for the canonical artifact write to be the completion boundary.
+    """
     with patch('careervp.logic.vpr_generator.LLMClient') as mock_llm_cls:
         mock_llm = MagicMock()
         mock_llm.invoke.side_effect = [
@@ -363,7 +392,7 @@ def test_vpr_generation_persists_via_save_vpr() -> None:
         result = generate_vpr(_sample_vpr_request(), _user_cv(), dal)
 
     assert result.success is True
-    dal.save_vpr.assert_called_once()
+    dal.save_vpr.assert_not_called()
 
 
 @pytest.mark.unit

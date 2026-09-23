@@ -1,0 +1,278 @@
+[
+  {
+    "file": "careervp/logic/interview_prep.py",
+    "line": 104,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(\n                success=False,\n                error=f'LLM invocation failed: {exc}',\n                code=ResultCode.LLM_API_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/logic/cv_parser.py",
+    "line": 323,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to build UserCV model', error=str(e))\n        return Result(success=False, error=f'Failed to validate extracted data: {e}', code=ResultCode.INTERNAL_ERROR)"
+  },
+  {
+    "file": "careervp/logic/cover_letter.py",
+    "line": 85,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        return Result(\n            success=False,\n            error=f'LLM invocation failed: {exc}',\n            code=ResultCode.LLM_API_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_pipeline.py",
+    "line": 301,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        return Result(\n            success=False,\n            error=f'LLM call failed: {str(e)}',\n            code=ResultCode.LLM_API_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring_pipeline.py",
+    "line": 344,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        # Log the raw LLM response so the actual content is visible in CloudWatch\n        logger.error(\n            'Stage2 parse failed \u2014 raw LLM response follows',\n            extra={'raw_response': response_text[:2000]},\n        )\n        return Result(\n            success=False,\n            error=f'Failed to parse Stage2Output: {str(e)}',\n            code=ResultCode.PARSE_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/logic/cv_tailoring.py",
+    "line": 306,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(success=False, error=str(exc), code=ResultCode.LLM_API_ERROR)"
+  },
+  {
+    "file": "careervp/logic/gap_analysis.py",
+    "line": 290,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        error_msg = f'{type(exc).__name__}: {str(exc)}'\n        return Result(success=False, error=error_msg, code=ResultCode.LLM_API_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 56,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to save gap response: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 74,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to get gap responses: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 105,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to save company research: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/knowledge_repository.py",
+    "line": 116,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=f'Failed to get company research: {exc}', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/core_repository.py",
+    "line": 129,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(success=False, error=str(exc), code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 353,
+    "kind": "no_raise",
+    "body": "except Exception:\n            # Application record absent \u2014 create a minimal stub so artifact_id persists\n            # across page reloads (jobs are created before applications in the v1 flow).\n            try:\n                now = self._now_iso()\n                self._table().put_item(\n                    Item={\n                        'userId': user_id,\n                        'applicationId': application_id,\n                        'application_id': application_id,\n                        'user_id': user_id,\n                        'artifact_statuses': {},\n                        'state': 'created',\n                        'status': 'created',\n                        'created_at': now,\n                        'updated_at': now,\n                        'entity_type': 'APPLICATION',\n                    },\n                    ConditionExpression='attribute_not_exists(userId)',\n                )\n            except Exception as exc:\n                return Result(\n                    success=False,\n                    data=None,\n                    error=f'failed to initialise application artifact identity: {exc}',\n                    code=ResultCode.DYNAMODB_ERROR,\n                )"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 395,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            return Result(\n                success=False,\n                data=None,\n                error=f'failed to persist canonical artifact_id: {exc}',\n                code=ResultCode.DYNAMODB_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/dal/application_repository.py",
+    "line": 373,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n                return Result(\n                    success=False,\n                    data=None,\n                    error=f'failed to initialise application artifact identity: {exc}',\n                    code=ResultCode.DYNAMODB_ERROR,\n                )"
+  },
+  {
+    "file": "careervp/dal/dynamo_dal_handler.py",
+    "line": 941,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n            # Catch any other exceptions (e.g., TypeError, serialization errors)\n            logger.exception(\n                'Unexpected error saving gap questions',\n                error=str(exc),\n                exc_type=type(exc).__name__,\n            )\n            return Result(\n                success=False,\n                error=f'unexpected_error: {type(exc).__name__}: {str(exc)}',\n                code=ResultCode.DYNAMODB_ERROR,\n            )"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 879,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Cover letter persistence failed', user_id=user_id, error=str(exc), exc_info=True)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1443,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during cover letter cancel', error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/cover_letter_handler.py",
+    "line": 1534,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to update cover letter', cover_letter_id=cover_letter_id, error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to update cover letter', 'code': ResultCode.DYNAMODB_ERROR})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 162,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected register failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 193,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected login failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 215,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - defensive safeguard.\n        logger.exception('Unexpected refresh failure', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/auth_handler.py",
+    "line": 253,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Logout failed', error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Logout failed'})"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 531,
+    "kind": "no_raise",
+    "body": "except Exception:\n        persist_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/interview_prep_handler.py",
+    "line": 1257,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during interview prep cancel', error=str(exc))\n        return _build_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'})"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 190,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to save CV to DynamoDB', error=str(e))\n        response = CVParseResponse(\n            success=False,\n            error='Failed to persist parsed CV',\n        )\n        return Response(\n            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,\n            content_type=content_types.APPLICATION_JSON,\n            body=response.model_dump_json(),\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 116,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.warning('Failed to decode base64 content', error=str(e))\n            response = CVParseResponse(\n                success=False,\n                error='Invalid base64 file content',\n            )\n            return Response(\n                status_code=HTTPStatus.BAD_REQUEST.value,\n                content_type=content_types.APPLICATION_JSON,\n                body=response.model_dump_json(),\n            )"
+  },
+  {
+    "file": "careervp/handlers/cv_upload_handler.py",
+    "line": 214,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.exception('Failed to save CV to cvs_table', cvs_table=cvs_table_name, error=str(e))\n            response = CVParseResponse(\n                success=False,\n                error='Failed to persist parsed CV',\n            )\n            return Response(\n                status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,\n                content_type=content_types.APPLICATION_JSON,\n                body=response.model_dump_json(),\n            )"
+  },
+  {
+    "file": "careervp/handlers/validators.py",
+    "line": 83,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Unexpected error during request validation', error=str(exc))\n        return Result(\n            success=False,\n            error='Unexpected validation error',\n            code=ResultCode.INTERNAL_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/handlers/validators.py",
+    "line": 203,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Unexpected error during file validation', error=str(exc))\n        return Result(\n            success=False,\n            error='Unexpected validation error',\n            code=ResultCode.INTERNAL_ERROR,\n        )"
+  },
+  {
+    "file": "careervp/handlers/user_handler.py",
+    "line": 335,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Failed to reset trial', user_id=user_id, error=str(exc))\n        return _json_response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to reset trial'})"
+  },
+  {
+    "file": "careervp/handlers/application_handler.py",
+    "line": 238,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n        logger.exception('Failed to retrieve application', application_id=application_id, error=str(e), error_type=type(e).__name__)\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Failed to retrieve application', 'details': str(e)})"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 238,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Unexpected DAL exception while saving gap questions', error=str(exc), job_id=job_id)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/gap_handler.py",
+    "line": 383,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.exception('Unexpected DAL exception while saving gap responses', error=str(exc), job_id=job_id)\n        save_result = Result(success=False, error='persist failed', code=ResultCode.DYNAMODB_ERROR)"
+  },
+  {
+    "file": "careervp/handlers/export_handler.py",
+    "line": 91,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to read artifact', exc_info=exc)\n        return _json_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'message': 'Export failed. Please try again.'},\n        )"
+  },
+  {
+    "file": "careervp/handlers/export_handler.py",
+    "line": 103,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to generate or upload export', exc_info=exc)\n        return _json_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'message': 'Export failed. Please try again.'},\n        )"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 151,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - context resolution failure is a server error\n        logger.error('AI-assist context resolution failed', user_id=user_id, error=str(exc), exc_info=True)\n        return _build_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'error': 'Could not assemble assist context', 'code': ResultCode.INTERNAL_ERROR},\n        )"
+  },
+  {
+    "file": "careervp/handlers/ai_assist_handler.py",
+    "line": 207,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001 - unexpected failure must be a safe 500\n        logger.error('AI-assist generation failed', error=str(exc), exc_info=True)\n        return _build_response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {'error': 'AI-assist failed', 'code': ResultCode.INTERNAL_ERROR},\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 263,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n        logger.info('CV tailoring failed', request_id=getattr(context, 'aws_request_id', 'unknown'))\n        return _response(\n            HTTPStatus.INTERNAL_SERVER_ERROR,\n            {\n                'success': False,\n                'code': ResultCode.INTERNAL_ERROR,\n                'message': str(exc),\n            },\n            headers,\n        )"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 879,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during cv tailoring cancel', error=str(exc))\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'error': 'Internal server error'}, headers)"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 981,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('Failed to update cv_tailored', cv_tailoring_id=cv_tailoring_id, error=str(exc))\n        return _response(HTTPStatus.INTERNAL_SERVER_ERROR, {'success': False, 'message': 'Failed to update tailored CV'}, headers)"
+  },
+  {
+    "file": "careervp/handlers/cv_tailoring_handler.py",
+    "line": 98,
+    "kind": "no_raise",
+    "body": "except Exception:  # noqa: BLE001\n            logger.exception('Error in get_tailored_cv_status')\n            return _response(\n                HTTPStatus.INTERNAL_SERVER_ERROR,\n                {'success': False, 'message': 'Internal server error'},\n                headers,\n            )"
+  },
+  {
+    "file": "careervp/handlers/vpr_status_handler.py",
+    "line": 396,
+    "kind": "no_raise",
+    "body": "except Exception as exc:\n        logger.error('DynamoDB error during VPR cancel', job_id=vpr_id, error=str(exc))\n        return _build_error_response('Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR)"
+  },
+  {
+    "file": "careervp/logic/utils/web_scraper.py",
+    "line": 72,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # pragma: no cover - safety net\n        return Result(success=False, error=str(exc), code=ResultCode.SCRAPE_FAILED)"
+  },
+  {
+    "file": "careervp/logic/utils/tavily_client.py",
+    "line": 72,
+    "kind": "no_raise",
+    "body": "except Exception as exc:  # noqa: BLE001\n            return Result(success=False, error=f'Tavily search error: {exc}', code=ResultCode.SEARCH_FAILED)"
+  },
+  {
+    "file": "careervp/logic/utils/llm_client.py",
+    "line": 283,
+    "kind": "no_raise",
+    "body": "except Exception as e:\n            logger.exception('Unexpected LLM error', error=str(e))\n            return Result(success=False, error=str(e), code=ResultCode.INTERNAL_ERROR)"
+  }
+]

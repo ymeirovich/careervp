@@ -240,10 +240,11 @@ def test_list_user_cvs_returns_own_records(db_tables: dict[str, Any]) -> None:
     _insert_user(db_tables['users'], user_id=user_id, email=email, name='CV User')
     access_token = _create_access_token(user_id=user_id, email=email)
 
-    # Put CVs into TABLE_NAME with pk/sk schema (matching DynamoDalHandler.save_cv)
-    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-1', 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
-    db_tables['users'].put_item(Item={'pk': user_id, 'sk': 'CV#cv-2', 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
-    db_tables['users'].put_item(Item={'pk': other_user_id, 'sk': 'CV#cv-3', 'cvId': 'cv-3', 'fileName': 'other.pdf'})
+    # CVs live in the CV table (userId/cvId), which is what GET /users/me/cv
+    # now queries. Seeding the users table here would pass vacuously.
+    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-1', 'fileName': 'resume-1.pdf'})
+    db_tables['cvs'].put_item(Item={'userId': user_id, 'cvId': 'cv-2', 'fileName': 'resume-2.pdf'})
+    db_tables['cvs'].put_item(Item={'userId': other_user_id, 'cvId': 'cv-3', 'fileName': 'other.pdf'})
 
     event = _generate_api_gw_event(
         path='/users/me/cvs',
@@ -257,6 +258,54 @@ def test_list_user_cvs_returns_own_records(db_tables: dict[str, Any]) -> None:
     payload = json.loads(response['body'])
     returned_ids = {item.get('cvId') or item.get('sk', '').replace('CV#', '') for item in payload['cvs']}
     assert returned_ids == {'cv-1', 'cv-2'}
+
+
+def test_list_user_cvs_surfaces_query_failure_instead_of_an_empty_list(
+    db_tables: dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A failed CV query must be a 5xx, never a 200 with zero CVs.
+
+    This is the trap the CV re-home walks into. users-table is keyed pk/sk and
+    cvs-table is keyed userId/cvId, so pointing the reader at the new table
+    while still sending the old key condition raises ValidationException. The
+    previous implementation caught every exception here and returned
+    ``[], None``, which renders as "you have no CVs" with a 200 — the user's CV
+    list silently empties and nothing alarms.
+    """
+    from botocore.exceptions import ClientError
+
+    from careervp.handlers.user_handler import lambda_handler
+
+    user_id = 'user-cv-query-fail'
+    email = 'cvqueryfail@example.com'
+    _insert_user(db_tables['users'], user_id=user_id, email=email, name='CV User')
+    access_token = _create_access_token(user_id=user_id, email=email)
+
+    from unittest.mock import MagicMock
+
+    import careervp.handlers.user_handler as user_handler_module
+
+    failing_table = MagicMock()
+    failing_table.query.side_effect = ClientError(
+        {'Error': {'Code': 'ValidationException', 'Message': 'key element does not match the schema'}},
+        'Query',
+    )
+    failing_resource = MagicMock()
+    failing_resource.Table.return_value = failing_table
+    monkeypatch.setattr(user_handler_module.boto3, 'resource', lambda *_a, **_k: failing_resource)
+
+    event = _generate_api_gw_event(
+        path='/users/me/cvs',
+        method='GET',
+        headers={'Authorization': f'Bearer {access_token}'},
+        user_id=user_id,
+    )
+    # Loud by design: the error reaches Lambda, so it lands on the Errors metric
+    # and the caller sees a 5xx. The failure mode being guarded against is the
+    # opposite -- a 200 carrying {"cvs": []}.
+    with pytest.raises(ClientError):
+        lambda_handler(event, _generate_lambda_context())
 
 
 def test_user_endpoints_require_auth(db_tables: dict[str, Any]) -> None:

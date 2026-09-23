@@ -12,13 +12,34 @@ import boto3
 from botocore.exceptions import ClientError as BotoClientError
 
 from careervp.dal.application_repository import ApplicationRepository
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
-from careervp.logic.artifact_dependency_resolver import DependencyResolution, resolve_dependencies
+from careervp.logic.artifact_dependency_resolver import ArtifactUnavailableError, DependencyResolution, resolve_dependencies
 from careervp.logic.company_research import load_confident_company_research_artifact
+from careervp.models.result import Result, ResultCode
+
+# Codes that mean "the read failed", not "the artifact is absent". These must never
+# reach the resolver as a missing dependency (F-DEVX-1 / D-H3).
+_INFRASTRUCTURE_CODES = frozenset(
+    {
+        ResultCode.DYNAMODB_ERROR,
+        ResultCode.TABLE_SCHEMA_MISMATCH,
+        ResultCode.DYNAMODB_VALIDATION_EXCEPTION,
+    }
+)
 
 
 def artifact_chain_enabled() -> bool:
     return os.environ.get('ARTIFACT_CHAIN_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _raise_if_unavailable(artifact_type: str, result: Result[Any]) -> None:
+    """Convert an infrastructure failure into an explicit unavailability signal."""
+    if result.success or result.code == ResultCode.FORBIDDEN:
+        return
+    if result.code in _INFRASTRUCTURE_CODES:
+        error = result.error if isinstance(result.error, str) else None
+        raise ArtifactUnavailableError(artifact_type, result.code, error)
 
 
 class DynamoArtifactDependencyRepos:
@@ -39,11 +60,7 @@ class DynamoArtifactDependencyRepos:
 
     def get_artifact(self, artifact_type: str, application_id: str) -> Any | None:
         if artifact_type == 'vpr':
-            try:
-                result = self._dal.get_vpr(application_id=application_id)
-            except Exception:
-                return None
-            return result.data if getattr(result, 'success', False) else None
+            return self._get_canonical_vpr(application_id)
 
         if artifact_type == 'company_research':
             try:
@@ -65,6 +82,27 @@ class DynamoArtifactDependencyRepos:
             if isinstance(application, dict) and application.get('gap_responses'):
                 return {'user_id': self._user_id, 'application_id': application_id, 'gap_responses': application['gap_responses']}
         return None
+
+    def _get_canonical_vpr(self, application_id: str) -> dict[str, Any] | None:
+        """Resolve the owned canonical VPR, or raise if the read itself failed.
+
+        This is the sole VPR read behind cover-letter, interview-prep and CV-tailoring
+        dependency resolution (F-DEVX-1). There is no users-table fallback.
+        """
+        repository = CoreRepository(dal=None)
+        resolved = repository.resolve_artifact_id(application_id, 'vpr', user_id=self._user_id)
+        _raise_if_unavailable('vpr', resolved)
+        artifact_id = resolved.data
+        if not artifact_id:
+            return None
+
+        vpr_result = repository.get_vpr_by_artifact_id(
+            application_id=application_id,
+            artifact_id=str(artifact_id),
+            user_id=self._user_id,
+        )
+        _raise_if_unavailable('vpr', vpr_result)
+        return vpr_result.data if isinstance(vpr_result.data, dict) else None
 
 
 def build_application_repo() -> ApplicationRepository | None:
@@ -96,6 +134,44 @@ def resolve_handler_dependencies(
     )
 
 
+def _advance_to_cr_pending(application_repo: ApplicationRepository, application_id: str, user_id: str) -> None:
+    """Try to set application state to cr_pending from either valid predecessor state.
+
+    Tries gap_responses_submitted first (initial run), then cr_failed (retry).
+    If both CCF the state is already cr_pending or further along — safe to proceed.
+    """
+    for expected in ('gap_responses_submitted', 'cr_failed'):
+        try:
+            application_repo.update_state(
+                application_id=application_id,
+                user_id=user_id,
+                new_state='cr_pending',
+                expected_state=expected,
+            )
+            return
+        except BotoClientError as exc:
+            if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                raise
+
+
+def _reset_cr_artifact_status(application_repo: ApplicationRepository, application_id: str, user_id: str) -> None:
+    """Reset company_research artifact status to 'pending' when starting a fresh CR chain.
+
+    Clears any stale 'cancelled' status left by a prior cancelled run so the
+    worker's fail_if_status='cancelled' guard (FE-UI-043) does not fire on a
+    legitimate new execution.
+    """
+    try:
+        application_repo.update_artifact_status(
+            application_id=application_id,
+            user_id=user_id,
+            artifact_type='company_research',
+            status='pending',
+        )
+    except Exception:
+        pass  # non-fatal: worker proceeds; stale status handled by idempotency check
+
+
 def build_start_chain(application_repo: ApplicationRepository | None) -> Callable[..., str | None]:
     def _start_chain(*, node: str, application_id: str, user_id: str, requested_artifact: str) -> str | None:
         chain_arn = os.environ.get('STEP_FUNCTIONS_CHAIN_ARN', '').strip()
@@ -109,16 +185,8 @@ def build_start_chain(application_repo: ApplicationRepository | None) -> Callabl
             try:
                 application_repo.claim_chain_execution(application_id=application_id, user_id=user_id)
                 if node == 'company_research':
-                    try:
-                        application_repo.update_state(
-                            application_id=application_id,
-                            user_id=user_id,
-                            new_state='cr_pending',
-                            expected_state='gap_responses_submitted',
-                        )
-                    except BotoClientError as exc:
-                        if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
-                            raise
+                    _advance_to_cr_pending(application_repo, application_id, user_id)
+                    _reset_cr_artifact_status(application_repo, application_id, user_id)
             except BotoClientError as exc:
                 if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                     return None  # Another request already holds the RUNNING lock

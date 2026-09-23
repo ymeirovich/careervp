@@ -1,0 +1,2976 @@
+{
+    "Changes": [
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "AiAssistNestedStackNestedStackAiAssistNestedStackNestedStackResourceB83ADE0B",
+                "ResourceType": "AWS::CloudFormation::Stack",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
+                "ResourceType": "AWS::Lambda::Function",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+                "ResourceType": "AWS::IAM::Role",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
+                "ResourceType": "AWS::IAM::Policy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CDKMetadata",
+                "ResourceType": "AWS::CDK::Metadata",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCognitoUserPoolD64DCEC6",
+                "ResourceType": "AWS::Cognito::UserPool",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCognitoUserPoolUserPoolClient62BD8AFA",
+                "ResourceType": "AWS::Cognito::UserPoolClient",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCognitoUserPoolUserPoolDomainE415E4B6",
+                "ResourceType": "AWS::Cognito::UserPoolDomain",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC",
+                "ResourceType": "AWS::Logs::LogGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudArtifactCleanupScheduleAllowEventRuleCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesArtifactCleanupLambda955F2A64919FCCE9",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudArtifactCleanupScheduleE3E0FE19",
+                "ResourceType": "AWS::Events::Rule",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudBillingLambdaErrorAlarmA92EB360",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudBillingReconcileScheduleRule067D9E01",
+                "ResourceType": "AWS::Events::Rule",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudBillingReconcileScheduleRuleAllowEventRuleCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesBillingReconcileLambda35593F885944F1AA",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudHighFacadeCareerVpCrudDevxCrudHighFacadeDashboardsDashboardA57CAC53",
+                "ResourceType": "AWS::CloudWatch::Dashboard",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudLowFacadeCareerVpCrudDevxCrudLowFacadeDashboardsDashboardACC1FB4C",
+                "ResourceType": "AWS::CloudWatch::Dashboard",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudalarmsBC878480",
+                "ResourceType": "AWS::SNS::Topic",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudalarmsPolicy086E298D",
+                "ResourceType": "AWS::SNS::TopicPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbApplicationsTable2E36AC63",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsBucketCB1183FD",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsBucketPolicyD8C01524",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsTableB176B976",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbBackupsBucketE66662B8",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbBackupsBucketPolicy3814CC3F",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbCompanyResearchCacheTable5BB13876",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbCvsTable15442EBB",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbGapResponsesTable1AA36ACB",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbKnowledgeTable26B0B086",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbLogsBucketF2FDDF17",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbLogsBucketPolicy2F793EB9",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbStaticBucketF4F6F368",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbStaticBucketPolicyEF12A027",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvs5D089B0F",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsAllowBucketNotificationsToCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesCvUploadWorkerLambda8F420637AACAD774",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsNotifications979FAF02",
+                "ResourceType": "Custom::S3BucketNotifications",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsPolicy0DE5AAA5",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbidempotency17C1C0A0",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbidentitymap4DC950DE",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbjobsA440A56E",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbusers2F7CC4DB",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbvprresults7C5B85E8",
+                "ResourceType": "AWS::S3::Bucket",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbvprresultsPolicy2A74091F",
+                "ResourceType": "AWS::S3::BucketPolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafApiGatewayWafAssociationCFA28404",
+                "ResourceType": "AWS::WAFv2::WebACLAssociation",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafProductApiGatewayWebAcl830EA135",
+                "ResourceType": "AWS::WAFv2::WebACL",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLogGroup739167B3",
+                "ResourceType": "AWS::Logs::LogGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLogGroupPolicyResourcePolicy05453F23",
+                "ResourceType": "AWS::Logs::ResourcePolicy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLoggingConfiguration1E2273FA",
+                "ResourceType": "AWS::WAFv2::LoggingConfiguration",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCloudWatchLogsKeyF9BBB657",
+                "ResourceType": "AWS::KMS::Key",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCognitoAuth43E2B3EA",
+                "ResourceType": "AWS::ApiGateway::Authorizer",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCoverLetterSQSKey25BB207D",
+                "ResourceType": "AWS::KMS::Key",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudCrudFeaturesNestedStackCrudFeaturesNestedStackResource4518FF9C",
+                "ResourceType": "AWS::CloudFormation::Stack",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudGatewayResponseAccessDenied1007012F",
+                "ResourceType": "AWS::ApiGateway::GatewayResponse",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudGatewayResponseDefault4xx1645608A",
+                "ResourceType": "AWS::ApiGateway::GatewayResponse",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudGatewayResponseDefault5xxB2A8AE63",
+                "ResourceType": "AWS::ApiGateway::GatewayResponse",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudGatewayResponseUnauthorized15C1552C",
+                "ResourceType": "AWS::ApiGateway::GatewayResponse",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudInterviewPrepSQSKey5FEFA926",
+                "ResourceType": "AWS::KMS::Key",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudMonitoringKeyB1C69D14",
+                "ResourceType": "AWS::KMS::Key",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23ApplicationApiCanaryDeploymentGroup1E15CD53",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23ApplicationApiCanaryErrorAlarmA86497A4",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23AuthApiCanaryDeploymentGroupC734483C",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23AuthApiCanaryErrorAlarm7C57F892",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23AuthResolverFailureAlarm5EB6D1B6",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23AuthResolverStepUpRequiredAlarm70BDECD4",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23BillingCanaryDeploymentGroupA76B2D7F",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23BillingCanaryErrorAlarmFA54A732",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CanaryApplication5851BFD7",
+                "ResourceType": "AWS::CodeDeploy::Application",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CodeDeployRole77039DFD",
+                "ResourceType": "AWS::IAM::Role",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CompanyResearchCanaryDeploymentGroupCDD8B178",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CompanyResearchCanaryErrorAlarm862818E3",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CoverLetterApiCanaryDeploymentGroup654F7469",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CoverLetterApiCanaryErrorAlarm9AE431C7",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CoverLetterStatusCanaryDeploymentGroup1771A078",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CoverLetterStatusCanaryErrorAlarmFD534E13",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CvParserCanaryDeploymentGroupDCFE1615",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CvParserCanaryErrorAlarm449D5A58",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CvtailorCanaryDeploymentGroupCE17F613",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23CvtailorCanaryErrorAlarm29A8AE8C",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23ExportCanaryDeploymentGroupA6F37D99",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23ExportCanaryErrorAlarm23F5BE6A",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23GapApiCanaryDeploymentGroup4E891EEA",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23GapApiCanaryErrorAlarmF497EFEF",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23HealthApiCanaryDeploymentGroupD431A3F4",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23HealthApiCanaryErrorAlarm880C6777",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23InterviewPrepApiCanaryDeploymentGroup786BA1DC",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23InterviewPrepApiCanaryErrorAlarmB410C625",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23InterviewPrepStatusCanaryDeploymentGroupDB01DE61",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23InterviewPrepStatusCanaryErrorAlarmDAA13243",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23JobApiCanaryDeploymentGroup3F0555FC",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23JobApiCanaryErrorAlarm887CE97C",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23UserApiCanaryDeploymentGroup9E2B51D3",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23UserApiCanaryErrorAlarmD0C25E31",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23VprStatusCanaryDeploymentGroup6C0D7F53",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23VprStatusCanaryErrorAlarm99310C1A",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23VprSubmitCanaryDeploymentGroup9B80D470",
+                "ResourceType": "AWS::CodeDeploy::DeploymentGroup",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudP23VprSubmitCanaryErrorAlarm8EEBDCBF",
+                "ResourceType": "AWS::CloudWatch::Alarm",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudSQSKey48DBFBAC",
+                "ResourceType": "AWS::KMS::Key",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudllmcachetable5F55E2E8",
+                "ResourceType": "AWS::DynamoDB::GlobalTable",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapi2258A47A",
+                "ResourceType": "AWS::ApiGateway::RestApi",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiAccount544EE2BB",
+                "ResourceType": "AWS::ApiGateway::Account",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiCloudWatchRoleCFDB6E35",
+                "ResourceType": "AWS::IAM::Role",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiDeploymentDB3BC6A847af7a0b31dfd72a1a8b18e233b66317",
+                "ResourceType": "AWS::ApiGateway::Deployment",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiDeploymentStageprodB3891A8B",
+                "ResourceType": "AWS::ApiGateway::Stage",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiOPTIONS570C1120",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiaiD87AECE7",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiaiOPTIONS1487A117",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiaiassistD9229D9D",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiaiassistOPTIONS415F78C7",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiaiassistPOST923B058F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiapplicationsAC892F40",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiapplicationsOPTIONS7080D4FD",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidAF880AC5",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidGET2DF7AE04",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidOPTIONSC28D74BF",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthANY98C9B6FB",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthB26859CC",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthOPTIONSAE3AE2EC",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthproxy091821C1",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthproxyANY4B1ABC10",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiauthproxyOPTIONS4FAE1AD5",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibilling7AC0C778",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingANY12808AC2",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingOPTIONS2323620A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingproxy640555DA",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingproxyANYC0EA8720",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingproxyOPTIONS53657948",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingwebhook4155AABB",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingwebhookOPTIONSDE1A74DB",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapibillingwebhookPOSTA91DE7A8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchDC911112",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchOPTIONS2D837446",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetch89A50383",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetchOPTIONS3D833073",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetchPOSTCBB9C4F6",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobId1E1D38BA",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdGET5612C970",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdOPTIONSEF72FEF8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelC42E4041",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelOPTIONS2838464A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelPOST2F4F8A02",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverletter0E907ED2",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverletterOPTIONS7D9CA870",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterId2C118F4F",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdOPTIONS2DD27428",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdPATCH20275372",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancel9113E301",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancelOPTIONS5523AE0F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancelPOSTDE085327",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatus43D19DA0",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatusGET8426B164",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatusOPTIONS9D3B6404",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettergenerateCB22E846",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettergenerateOPTIONS7F658121",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettergeneratePOST6C16B56D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettersF4DBC682",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettersGET2AC426F3",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicoverlettersOPTIONS7E33147E",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringED576329",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringOPTIONS8FE502A0",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringId8950EFC9",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdDELETED487D2FD",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdOPTIONS9CABD895",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdPATCH8827E8CF",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancel0203EB50",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancelOPTIONSE50CB0C5",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancelPOSTEA534498",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatus953BB5F7",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatusGET4E3E7E50",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatusOPTIONS599159DB",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringgenerate700C3D29",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringgenerateOPTIONS25CF05DA",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringgeneratePOSTE0238E3E",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringsEA979B2C",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringsGETA4E80B5A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapicvtailoringsOPTIONSAE540562",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapierrors45831D36",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapierrorsOPTIONS811954ED",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapierrorsPOST5798860D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysis1EB763CD",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysisANYBE2E0689",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysisOPTIONSFE9D8F1F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxy5084EEBF",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxyANY2BD3A4C0",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxyOPTIONS32D77BCC",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapihealth66391471",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapihealthGETA6159D42",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapihealthOPTIONS93FBFDF9",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepAF7E742A",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepOPTIONS45C65AE5",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgenerateFB8501F1",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgenerateOPTIONSB62525FC",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgeneratePOST3137200C",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepId96DF25B1",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdOPTIONS84879156",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdPATCHE3A8D11F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancel9D1B6D87",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancelOPTIONS2D4CA7D3",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancelPOSTD97AD40D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatus40AA9061",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatusGET06903362",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatusOPTIONS23419EED",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsFAFECA13",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsGETB341E0F6",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsOPTIONS8D46584E",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobs948D0D73",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsGETCBF44F6A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsOPTIONSCA2313A8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsPOSTBC96F2D8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdBED12502",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdGETACE88A70",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdOPTIONS365A7EBD",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifacts00AD85CB",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsOPTIONSBAC3586D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleType9023AC04",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeOPTIONS33467E49",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexport62718FD1",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexportGET08A9603A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexportOPTIONS6C5EA633",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestions6C3FB9DF",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsGET2D38FD47",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsOPTIONS9C75760D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsPOST145B9690",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponses786BC106",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponsesOPTIONSE2220F05",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponsesPOSTB29BD6E9",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseC5AD57ED",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseGETCA1B29FF",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseOPTIONS7BE908CC",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerC615519E",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerGET52FEF793",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswagger347A68A6",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswagger46A9978B",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerOPTIONS8F148BB0",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggercssDAD92766",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggercssGET811799E0",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggercssGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggercssBA733669",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggercssGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggercssC703BCF5",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggercssOPTIONS04820771",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerjs71AAE54E",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggerjs2EE56166",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggerjs977C1010",
+                "ResourceType": "AWS::Lambda::Permission",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETFA112478",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiswaggerjsOPTIONS79356560",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersANYCF629F51",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersD1F5CFD7",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersOPTIONSBF35196B",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersme29106F87",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmeGET05BCBC0D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmeOPTIONSB5834951",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmePUT86BA5027",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmecv67A62162",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmecvGETD32BF865",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmecvOPTIONS843D48C8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmecvPOST895F117F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionB34B82D9",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionGET7EA1D52E",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionOPTIONS97556BCB",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmetrial092EA482",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmetrialOPTIONSD7C7CA4D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetAD06DFE0",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetOPTIONS8419D44A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetPOST3C86D1D4",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmeusage76C3281C",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmeusageGET34E62F2A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersmeusageOPTIONSC2AE031B",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersproxyANY5770CA7D",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersproxyB53CAD3A",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapiusersproxyOPTIONS7D50F7D5",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprA65A7E42",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprOPTIONS6F4602D2",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprgenerate5DB86857",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprgenerateOPTIONS3D5A2C58",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprgeneratePOST26C15787",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprs4C47097A",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprsGET5E8746FF",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprsOPTIONS1E36859A",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprId59F581DD",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdOPTIONS7C421E2F",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancel3DAA8908",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancelOPTIONS71B3D235",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancelPOST4984DC36",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusCAFEBC50",
+                "ResourceType": "AWS::ApiGateway::Resource",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusGET0C5E52F8",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusOPTIONSC1607401",
+                "ResourceType": "AWS::ApiGateway::Method",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfCareerVPC9B882B9",
+                "ResourceType": "AWS::AppConfig::Application",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfenvE38DFE55",
+                "ResourceType": "AWS::AppConfig::Environment",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversion1174BB61",
+                "ResourceType": "AWS::AppConfig::HostedConfigurationVersion",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversionConfigurationProfileC805EDBE",
+                "ResourceType": "AWS::AppConfig::ConfigurationProfile",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversionDeploymentEB485019C1B60",
+                "ResourceType": "AWS::AppConfig::Deployment",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfzeroADA12D36",
+                "ResourceType": "AWS::AppConfig::DeploymentStrategy",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "CompanyResearchNestedStackNestedStackCompanyResearchNestedStackNestedStackResource6DABB58F",
+                "ResourceType": "AWS::CloudFormation::Stack",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "ErrorReportNestedStackNestedStackErrorReportNestedStackNestedStackResourceAAFBDF4F",
+                "ResourceType": "AWS::CloudFormation::Stack",
+                "Scope": [],
+                "Details": []
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Add",
+                "LogicalResourceId": "MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResourceB5E63BB6",
+                "ResourceType": "AWS::CloudFormation::Stack",
+                "Scope": [],
+                "Details": []
+            }
+        }
+    ],
+    "ChangeSetName": "devx-review-20260719",
+    "ChangeSetId": "arn:aws:cloudformation:us-east-1:788159322332:changeSet/devx-review-20260719/77aaff1b-acc6-4a00-859a-5d70065672ac",
+    "StackId": "arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/2cba9c00-839c-11f1-bdba-0affc1d1a9c5",
+    "StackName": "CareerVpCrudDevx",
+    "Description": "CDK Changeset for execution 21b0cd7e-bc9d-445f-8285-a9834be7b6ab",
+    "Parameters": [
+        {
+            "ParameterKey": "SsmParameterValuecareervpdevxpaymentproviderpricequarterlyC96584B6F00A464EAD1953AFF4B05118Parameter",
+            "ParameterValue": "/careervp/devx/payment-provider-price-quarterly",
+            "ResolvedValue": "price_placeholder_quarterly"
+        },
+        {
+            "ParameterKey": "SsmParameterValuecareervpdevxpaymentproviderpricemonthlyC96584B6F00A464EAD1953AFF4B05118Parameter",
+            "ParameterValue": "/careervp/devx/payment-provider-price-monthly",
+            "ResolvedValue": "price_placeholder_monthly"
+        },
+        {
+            "ParameterKey": "BootstrapVersion",
+            "ParameterValue": "/cdk-bootstrap/hnb659fds/version",
+            "ResolvedValue": "30"
+        }
+    ],
+    "CreationTime": "2026-07-19T18:03:41.822000+00:00",
+    "ExecutionStatus": "AVAILABLE",
+    "Status": "CREATE_COMPLETE",
+    "StatusReason": null,
+    "NotificationARNs": [],
+    "RollbackConfiguration": {},
+    "Capabilities": [
+        "CAPABILITY_IAM",
+        "CAPABILITY_NAMED_IAM",
+        "CAPABILITY_AUTO_EXPAND"
+    ],
+    "Tags": [
+        {
+            "Key": "owner",
+            "Value": "yitzchak"
+        },
+        {
+            "Key": "feature",
+            "Value": "crud"
+        },
+        {
+            "Key": "service",
+            "Value": "CareerVP"
+        }
+    ],
+    "ParentChangeSetId": null,
+    "IncludeNestedStacks": false,
+    "RootChangeSetId": null,
+    "OnStackFailure": null,
+    "ImportExistingResources": false
+}

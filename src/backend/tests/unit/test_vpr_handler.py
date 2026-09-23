@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock
@@ -42,14 +41,19 @@ from careervp.models.vpr import (
 
 
 @pytest.fixture(autouse=True)
-def env_vars():
-    os.environ['DYNAMODB_TABLE_NAME'] = 'test-table'
-    os.environ['POWERTOOLS_SERVICE_NAME'] = 'careervp-test'
-    os.environ['LOG_LEVEL'] = 'DEBUG'
-    yield
-    os.environ.pop('DYNAMODB_TABLE_NAME', None)
-    os.environ.pop('POWERTOOLS_SERVICE_NAME', None)
-    os.environ.pop('LOG_LEVEL', None)
+def env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set handler environment for this module.
+
+    Uses monkeypatch so every key is restored to its prior value on teardown.
+    The previous unconditional ``os.environ.pop()`` cleanup deleted
+    POWERTOOLS_SERVICE_NAME and LOG_LEVEL, which tests/conftest.py sets at
+    import time as the session-wide baseline, leaving them unset for every
+    test that ran afterwards. Same defect class as the autouse fixture fixed
+    in ba04eab; see docs/handoff/2026-09-20-HANDOFF-05-*.md.
+    """
+    monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-table')
+    monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
+    monkeypatch.setenv('LOG_LEVEL', 'DEBUG')
 
 
 @pytest.fixture

@@ -1,0 +1,302 @@
+/Users/yitzchak.meirovich/Library/Python/3.9/lib/python/site-packages/boto3/compat.py:89: PythonDeprecationWarning: Boto3 will no longer support Python 3.9 starting April 29, 2026. To continue receiving service updates, bug fixes, and security updates please upgrade to Python 3.10 or later. More information can be found here: https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/
+  warnings.warn(warning, PythonDeprecationWarning)
+
+===== CAREERVP DYNAMODB RECON (safe to paste back) =====
+
+{
+  "env": "dev",
+  "region": "us-east-1",
+  "tables": [
+    {
+      "table": "careervp-applications-table-dev",
+      "key_schema": [
+        "userId(HASH)",
+        "applicationId(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 9,
+      "size_bytes": 65750,
+      "stream": null,
+      "gsis": [
+        {
+          "name": "status-index",
+          "keys": [
+            "userId(HASH)",
+            "status(RANGE)"
+          ],
+          "projection": "ALL"
+        }
+      ],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "DISABLED",
+        "attr": null
+      },
+      "sampled_items": 9,
+      "key_conventions_seen": {
+        "userId/applicationId": 9,
+        "job_id": 9
+      },
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-artifacts-table-dev",
+      "key_schema": [
+        "applicationId(HASH)",
+        "artifactId(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 221,
+      "size_bytes": 771358,
+      "stream": "NEW_AND_OLD_IMAGES",
+      "gsis": [
+        {
+          "name": "type-index",
+          "keys": [
+            "applicationId(HASH)",
+            "artifactType(RANGE)"
+          ],
+          "projection": "ALL"
+        }
+      ],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiration"
+      },
+      "sampled_items": 40,
+      "key_conventions_seen": {
+        "applicationId/artifactId": 40,
+        "job_id": 39,
+        "userId/applicationId": 1,
+        "pk/sk": 35
+      },
+      "sk_prefixes_seen": {
+        "ARTIFACT#": 35
+      }
+    },
+    {
+      "table": "careervp-company-research-cache-table-dev",
+      "key_schema": [
+        "cacheKey(HASH)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 2,
+      "size_bytes": 5690,
+      "stream": null,
+      "gsis": [],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiresAt"
+      },
+      "sampled_items": 2,
+      "key_conventions_seen": {
+        "cacheKey": 2
+      },
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-cvs-table-dev",
+      "key_schema": [
+        "userId(HASH)",
+        "cvId(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 6,
+      "size_bytes": 7660,
+      "stream": null,
+      "gsis": [],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiration"
+      },
+      "sampled_items": 8,
+      "key_conventions_seen": {
+        "pk/sk": 8,
+        "userId/cvId": 8
+      },
+      "sk_prefixes_seen": {
+        "CV#": 8
+      }
+    },
+    {
+      "table": "careervp-gap-responses-table-dev",
+      "key_schema": [
+        "userId(HASH)",
+        "questionId(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 16,
+      "size_bytes": 45831,
+      "stream": null,
+      "gsis": [],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiration"
+      },
+      "sampled_items": 16,
+      "key_conventions_seen": {
+        "userId/questionId": 16,
+        "job_id": 16
+      },
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-idempotency-table-dev",
+      "key_schema": [
+        "id(HASH)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 0,
+      "size_bytes": 0,
+      "stream": null,
+      "gsis": [],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiration"
+      },
+      "sampled_items": 0,
+      "key_conventions_seen": {},
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-jobs-table-dev",
+      "key_schema": [
+        "job_id(HASH)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 144,
+      "size_bytes": 216544,
+      "stream": "NEW_AND_OLD_IMAGES",
+      "gsis": [
+        {
+          "name": "user_id-index",
+          "keys": [
+            "user_id(HASH)"
+          ],
+          "projection": "ALL"
+        },
+        {
+          "name": "idempotency-key-index",
+          "keys": [
+            "idempotency_key(HASH)"
+          ],
+          "projection": "ALL"
+        }
+      ],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "ttl"
+      },
+      "sampled_items": 40,
+      "key_conventions_seen": {
+        "job_id": 40
+      },
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-knowledge-table-dev",
+      "key_schema": [
+        "userEmail(HASH)",
+        "knowledgeType(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 0,
+      "size_bytes": 0,
+      "stream": null,
+      "gsis": [
+        {
+          "name": "entity-index",
+          "keys": [
+            "knowledgeType(HASH)",
+            "entityId(RANGE)"
+          ],
+          "projection": "ALL"
+        }
+      ],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expiration"
+      },
+      "sampled_items": 0,
+      "key_conventions_seen": {},
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-llm-cache-dev",
+      "key_schema": [
+        "cache_key(HASH)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 0,
+      "size_bytes": 0,
+      "stream": null,
+      "gsis": [],
+      "pitr": "DISABLED",
+      "ttl": {
+        "status": "ENABLED",
+        "attr": "expires_at"
+      },
+      "sampled_items": 0,
+      "key_conventions_seen": {},
+      "sk_prefixes_seen": {}
+    },
+    {
+      "table": "careervp-users-table-dev",
+      "key_schema": [
+        "pk(HASH)",
+        "sk(RANGE)"
+      ],
+      "billing": "PAY_PER_REQUEST",
+      "item_count": 908,
+      "size_bytes": 2298564,
+      "stream": null,
+      "gsis": [
+        {
+          "name": "user_id-index",
+          "keys": [
+            "user_id(HASH)",
+            "sk(RANGE)"
+          ],
+          "projection": "ALL"
+        },
+        {
+          "name": "email-index",
+          "keys": [
+            "email(HASH)"
+          ],
+          "projection": "ALL"
+        }
+      ],
+      "pitr": "ENABLED",
+      "ttl": {
+        "status": "DISABLED",
+        "attr": null
+      },
+      "sampled_items": 40,
+      "key_conventions_seen": {
+        "pk/sk": 40,
+        "job_id": 5,
+        "userId/cvId": 1
+      },
+      "sk_prefixes_seen": {
+        "ARTIFACT#": 18,
+        "PROFILE": 13,
+        "CV": 4,
+        "cv-tail-b260": 1,
+        "CV#": 1,
+        "cv-tail-a7d6": 1,
+        "cv-tail-a252": 1,
+        "cv-tail-d7a4": 1
+      }
+    }
+  ]
+}
+
+===== END =====

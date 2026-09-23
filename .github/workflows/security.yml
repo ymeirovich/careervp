@@ -32,6 +32,11 @@ jobs:
           mkdir -p src/backend/.build/lambdas
           touch src/backend/.build/lambdas/.placeholder
       - name: Synthesize CDK
+        env:
+          # infra/careervp/scratch_deployment.py fails closed on an unset
+          # ENVIRONMENT (P-64) rather than silently guessing "dev" — devx is
+          # this repo's actual live deploy target, see CLAUDE.md's topology.
+          ENVIRONMENT: devx
         run: cd infra && npx cdk synth > /tmp/cdk-synth.log
       - name: Run Checkov
         run: |

@@ -1,0 +1,226 @@
+{
+  "$defs": {
+    "VPRDifferentiator": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "cv",
+                "gap_response"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "title": "VPRDifferentiator",
+      "type": "object"
+    },
+    "VPRMetaEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "completeness_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completeness Score"
+        },
+        "persuasion_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persuasion Score"
+        }
+      },
+      "title": "VPRMetaEvaluation",
+      "type": "object"
+    },
+    "VPRStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "company_job_fit_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Company Job Fit Score"
+        },
+        "differentiators": {
+          "items": {
+            "$ref": "#/$defs/VPRDifferentiator"
+          },
+          "title": "Differentiators",
+          "type": "array"
+        },
+        "download_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Download Url"
+        },
+        "meta_evaluation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VPRMetaEvaluation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "strategic_narrative": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strategic Narrative"
+        },
+        "uvp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uvp"
+        }
+      },
+      "title": "VPRStatusResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Created At"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Id"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VPRStatusResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled",
+        "expired",
+        "not_generated",
+        "edited"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "VPRStatusResponse",
+  "type": "object"
+}

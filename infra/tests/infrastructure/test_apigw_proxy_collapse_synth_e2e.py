@@ -34,6 +34,10 @@ EXPECTED_NESTED_STACK_MARKERS = (
     "AiAssistNestedStack",
     "ErrorReportNestedStack",
     "CompanyResearchNestedStack",
+    # P-26 Job 1 re-homes the explicitly-named feature resources here via a
+    # human-gated cdk refactor resource-import (a separate, sanctioned migration
+    # from the {proxy+} collapse).
+    "CrudFeatures",
 )
 
 

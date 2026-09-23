@@ -9,7 +9,7 @@ import { api } from '../../api/methods';
 
 function SettingsContent() {
   const { user } = useUserContext();
-  const { changePassword } = useAuth();
+  const { beginTotpEnrollment, changePassword, confirmTotpEnrollment } = useAuth();
   const queryClient = useQueryClient();
 
   const [displayName, setDisplayName] = useState(user?.name ?? '');
@@ -46,6 +46,11 @@ function SettingsContent() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [totpError, setTotpError] = useState<string | null>(null);
+  const [totpSuccess, setTotpSuccess] = useState(false);
+  const [configuringTotp, setConfiguringTotp] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +81,35 @@ function SettingsContent() {
       setPwError(err instanceof Error ? err.message : 'Failed to change password.');
     } finally {
       setChangingPw(false);
+    }
+  };
+
+  const handleBeginTotp = async () => {
+    setTotpError(null);
+    setTotpSuccess(false);
+    setConfiguringTotp(true);
+    try {
+      setTotpSecret(await beginTotpEnrollment());
+    } catch (err) {
+      setTotpError(err instanceof Error ? err.message : 'Failed to start authenticator setup.');
+    } finally {
+      setConfiguringTotp(false);
+    }
+  };
+
+  const handleConfirmTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTotpError(null);
+    setConfiguringTotp(true);
+    try {
+      await confirmTotpEnrollment(totpCode);
+      setTotpSuccess(true);
+      setTotpCode('');
+      setTotpSecret('');
+    } catch (err) {
+      setTotpError(err instanceof Error ? err.message : 'Failed to verify authenticator code.');
+    } finally {
+      setConfiguringTotp(false);
     }
   };
 
@@ -160,6 +194,53 @@ function SettingsContent() {
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="rounded-md border border-border-default bg-card p-6 flex flex-col gap-4" data-testid="totp-enrollment">
+        <div>
+          <h2 className="text-base font-bold text-text-primary">Authenticator app</h2>
+          <p className="text-sm text-text-muted mt-1">
+            Enroll during the MFA grace period so your account is ready before MFA becomes required.
+          </p>
+        </div>
+        {!totpSecret && !totpSuccess && (
+          <button
+            type="button"
+            onClick={() => void handleBeginTotp()}
+            disabled={configuringTotp}
+            className="self-start rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {configuringTotp ? 'Starting…' : 'Set up authenticator'}
+          </button>
+        )}
+        {totpSecret && (
+          <form onSubmit={(e) => void handleConfirmTotp(e)} className="flex flex-col gap-3">
+            <p className="text-sm text-text-primary">
+              Enter this setup key in your authenticator app: <code className="font-mono break-all">{totpSecret}</code>
+            </p>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide" htmlFor="totp-code">
+              Six-digit verification code
+            </label>
+            <input
+              id="totp-code"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              required
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.currentTarget.value)}
+              className="rounded border border-border-default px-3 py-2 text-sm text-text-primary bg-card focus:outline-none focus:border-primary-action focus:ring-1 focus:ring-primary-action"
+            />
+            <button
+              type="submit"
+              disabled={configuringTotp}
+              className="self-start rounded-md bg-primary-action px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {configuringTotp ? 'Verifying…' : 'Verify authenticator'}
+            </button>
+          </form>
+        )}
+        {totpError && <p className="text-sm text-state-error">{totpError}</p>}
+        {totpSuccess && <p className="text-sm text-state-active">Authenticator app enabled.</p>}
       </div>
 
       {/* Placeholder sections */}

@@ -1,0 +1,308 @@
+{
+  "handoff": "01-ci-wiring",
+  "doc": "docs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md",
+  "git_sha": "1cdc88a7d8d25ba9d6f9c5a98d88fee0d8202348",
+  "git_dirty": false,
+  "branch": "tools/proof-harness",
+  "timestamp_utc": "2026-09-20T10:55:23Z",
+  "commits_this_handoff": [
+    "521af64 fix(tests): handoff-01 Step 1b — resolve the 14 per-directory VPR/P-02 failures",
+    "06f381c fix(tests): handoff-01 Step 2 — un-orphan the two dead e2e files (as Playwright specs, not Jest)",
+    "7b781b0 fix(ci): handoff-01 Step 3 — pr-validation.yml runs all 8 backend directories",
+    "d0894f8 fix(ci): handoff-01 Step 4 — run frontend suites on PR, drop --passWithNoTests",
+    "cbb01d0 fix(tests): handoff-01 Step 5 — turn silent skips into visible failures/skipif",
+    "9c8bb79 fix(config): handoff-01 Step 6a — register markers, xfail_strict, freezegun",
+    "1cdc88a fix(config): handoff-01 Step 6b — filterwarnings and pytest-randomly, as instructed"
+  ],
+  "step0_measurements": {
+    "0.1": {
+      "command": "cd src/backend && uv run pytest --collect-only -q 2>&1 | tail -1",
+      "predicted": "1864 tests collected",
+      "observed_before_work": "1864 tests collected",
+      "observed_after_work": "1862 tests collected",
+      "match": true,
+      "note": "Before-work value matched exactly. After-work delta of -2 is fully explained: Step 1b deleted test_pipeline_saves_vpr_to_dal and test_pipeline_version_comes_from_dal (stale tests asserting internal persistence generate_vpr() no longer performs)."
+    },
+    "0.2": {
+      "command": "cd src/frontend && npx jest --config jest.config.ts --listTests | wc -l",
+      "predicted": 63,
+      "observed": 63,
+      "match": true
+    },
+    "0.3": {
+      "command": "cd src/frontend && npx jest --config jest.config.ts --listTests | grep -c 'application-hub-flow|artifact-viewers'",
+      "predicted": 0,
+      "observed": 0,
+      "match": true
+    },
+    "0.4": {
+      "command": "grep -c 'passWithNoTests' -r .github/workflows/ (summed)",
+      "predicted": 3,
+      "observed": 4,
+      "match": false,
+      "note": "MISMATCH, recorded per instructions (not 0.1/0.5, so not a stop condition). Actual distribution: ui-upgrade-checks.yml:1, db-redesign-checks.yml:1, deploy-frontend.yml:2 (two separate invocations: test:unit and test:integration). The plan undercounted deploy-frontend.yml's second occurrence."
+    },
+    "0.5": {
+      "command": "grep -rn 'uv run pytest' .github/workflows/pr-validation.yml -A4",
+      "predicted": "four named files, no bare pytest",
+      "observed": "confirmed: 4 named files across 2 pytest invocations in the same job (main 'tests' job: 3 unit files + 1 integration file; 'cv-tailoring-delete-observability' job: the same integration file again). No bare `uv run pytest`.",
+      "match": true
+    },
+    "0.6": {
+      "command": "grep -rln 'make deploy' .github/workflows/ | wc -l",
+      "predicted": 10,
+      "observed": 10,
+      "match": true,
+      "note": "Already confirmed by sweep-00 (b587127); re-confirmed here, not re-derived."
+    },
+    "0.7": {
+      "command": "cd src/backend && uv run pytest --collect-only -q 2>&1 | grep -c PytestUnknownMarkWarning",
+      "predicted": ">=1",
+      "observed_before_work": 15,
+      "observed_after_work": 0,
+      "match": true,
+      "note": "Predicate satisfied before work (15 >= 1). After Step 6a's marker registration, 0 remain — also the target of the 'Markers registered' proof obligation below."
+    },
+    "0.8": {
+      "command": "cd src/backend && uv run pytest tests/unit/test_job_handler.py -q | tail -1",
+      "predicted": "7 passed",
+      "observed": "7 passed in 1.10s",
+      "match": true
+    }
+  },
+  "step1_combined_baseline": {
+    "note": "Per the 2026-09-20 sweep-00 appendix to the handoff doc, Step 1's combined and per-directory baseline was already reproduced exactly and this proof obligation was declared discharged. This handoff cites that reproduction rather than re-running it, EXCEPT for the final re-check below, run after all fixes, to verify the 'stays unchanged' claim in the proof-obligations table.",
+    "sweep_00_reference": "docs/evidence/sweep-00-20260920T082517-b587127.md / .json",
+    "final_recheck_deterministic_order": {
+      "command": "uv run pytest -q --tb=no -p no:cacheprovider -p no:randomly 2>&1 | tail -3",
+      "result": "601 failed, 1100 passed, 51 skipped, 10 xfailed, 100 errors in 166.58s",
+      "compared_to_recorded": "606 failed, 1100 passed, 54 skipped, 4 xfailed, 100 errors",
+      "deltas_explained": {
+        "failed": "606 -> 601 (-5): some of the 14 Step-1b-fixed failures also manifested inside the combined run, not only in isolation.",
+        "passed": "1100 -> 1100 (exact match)",
+        "skipped": "54 -> 51 (-3): Step 5 converted 3 previously-skipping tests into pytest.mark.skipif-guarded tests that now count as regular skips only when their guard condition is unmet at collection (net -3 in-body pytest.skip() call sites removed) or into failures/xfails instead of skips.",
+        "xfailed": "4 -> 10 (+6): the xfail(strict=...) markers added in Steps 1b and 5 (3 in test_dal_migration_integration.py, 3 in test_interview_prep_context_sources.py; test_no_placeholder_fallbacks.py's 1 counted separately per its own directory; test_p02's varies by order, see below) surface here too.",
+        "errors": "100 -> 100 (EXACT match) — the cross-test contamination itself (this handoff's explicit non-goal) is untouched, as required."
+      }
+    },
+    "IMPORTANT_FINDING_pytest_randomly_effect_on_combined_run": {
+      "description": "Step 6b added pytest-randomly, which auto-activates for every pytest invocation including a bare combined `uv run pytest -q`. Once active, the combined-run failure/error counts become NON-REPRODUCIBLE run-to-run, because the cross-test contamination (Step 1's root subject) is itself order-sensitive at whole-suite scale, not just within a directory.",
+      "sample_run_1": "465 failed, 1258 passed, 51 skipped, 9 xfailed, 1 xpassed, 78 errors in 166.25s",
+      "sample_run_2": "655 failed, 1049 passed, 51 skipped, 10 xfailed, 97 errors in 178.51s",
+      "why_this_is_not_a_regression": "The per-directory CI gate built in Step 3 never runs the bare combined command — it always runs per-directory, which this handoff confirmed 5+ times per directory to be stable under pytest-randomly (0 failed each time, except the one order-dependent xfail flake found and fixed in Step 6b). This finding is about the COMBINED run specifically, which is 606-red by design and was never going to be wired to CI (Step 1's own conclusion).",
+      "why_this_matters_for_handoff_02": "This is a stronger, whole-suite-scale version of the Step 1b finding (test_k9_artifact_cleanup_env.py's unrestored sys.modules eviction). It confirms the contamination is genuinely order-dependent, not just directory-dependent, which changes how handoff 02 should approach bisection: fixing a bug in a fixed default order does not guarantee the same fix holds under random order, and the '606' number should not be treated as a stable target to reproduce — only the deterministic-order number (~601, matching almost exactly here) is a meaningful baseline to diff against going forward, OR runs should pin `-p no:randomly` while diagnosing contamination specifically, then re-verify with randomly on afterward.",
+      "outcome_classification": "Goal met, proof differs from prediction. The prediction ('stays 606') assumed a deterministic default order; Step 6b of this same handoff changed that assumption by design (pytest-randomly is a deliberate addition, not an accident). Recording the gap rather than quietly treating '606 unchanged' as satisfied."
+    }
+  },
+  "step1b_classification_of_14": [
+    {
+      "test": "tests/integration/test_company_research_vpr.py::TestVPRGenerationFlow::test_vpr_success_with_cv_facts_validated",
+      "classification": "c",
+      "summary": "Fixture created only the artifacts table; CVS_TABLE_NAME ('test-cvs-table') was never provisioned in this moto session, so get_cv() 404'd. Fixed: added cv_table fixture (userId/cvId schema). Also removed a stale persistence assertion (vpr_handler.py never persists — caller-owns-persistence refactor, F-DEVX-1).",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_company_research_vpr.py::TestVPRGenerationFlow::test_vpr_missing_cv_returns_404",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_company_research_vpr.py::TestVPRGenerationFlow::test_vpr_llm_failure_returns_502",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_company_research_vpr.py::TestCompanyResearchVPRIntegration::test_full_flow_company_research_then_vpr",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_company_research_vpr.py::TestCompanyResearchVPRIntegration::test_vpr_response_shape",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_vpr_e2e.py::TestVPREndToEnd::test_full_success_flow",
+      "classification": "c",
+      "summary": "Same CVS-table fixture gap as test_company_research_vpr.py (independent copy of the same fixture pattern). Also removed a stale persistence assertion.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_vpr_e2e.py::TestVPREndToEnd::test_missing_cv_returns_404",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_vpr_e2e.py::TestVPREndToEnd::test_llm_failure_returns_502",
+      "classification": "c",
+      "summary": "Same CVS table fixture gap.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/integration/test_vpr_pipeline_contract.py::TestVPRPipelineContract::test_pipeline_saves_vpr_to_dal",
+      "classification": "b",
+      "summary": "Asserted generate_vpr() calls dal.save_vpr() internally. Removed by an intentional refactor (F-DEVX-1: caller owns persistence). Deleted; behavior it tested no longer exists anywhere in generate_vpr.",
+      "resolution": "deleted"
+    },
+    {
+      "test": "tests/integration/test_vpr_pipeline_contract.py::TestVPRPipelineContract::test_pipeline_version_comes_from_dal",
+      "classification": "b",
+      "summary": "Same removed-persistence assumption as above (also asserted dal.get_next_vpr_version()).",
+      "resolution": "deleted"
+    },
+    {
+      "test": "tests/regression/test_pipeline_stages.py::TestPipelineStageContracts::test_generate_vpr_function_signature_unchanged",
+      "classification": "b",
+      "summary": "Asserted generate_vpr() has 3 required params; dal became optional (default None) in the same F-DEVX-1 refactor, retained only for call-site compatibility per the function's own docstring. Updated expected count 3 -> 2.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/regression/test_no_placeholder_fallbacks.py::test_cv_tailoring_no_raise_on_missing_vpr",
+      "classification": "a",
+      "summary": "GENUINE PRODUCT BUG, not fixed (out of scope — CI wiring, not product code): CVTailoringRequest.vpr_id (careervp/models/api_models.py:343) is `str | None` with no `= None` default. Pydantic requires the key even though the entire point of this test is the case where no VPR exists yet and a real caller would omit vpr_id. The request 400s at validation before ever reaching the correctly-implemented dependency_generating/202 path.",
+      "resolution": "quarantined xfail(strict=True)"
+    },
+    {
+      "test": "tests/integration/test_l0_phase_integration.py::test_l0_phase_integration_generates_i1_audit_with_zero_template_matches",
+      "classification": "b",
+      "summary": "Same removed-persistence assumption (mock_dal.save_vpr.assert_called_once() inside the _run_vpr helper). Removed the stale assertion; the rest of the 250-iteration template-audit test is unaffected and still runs.",
+      "resolution": "fixed"
+    },
+    {
+      "test": "tests/infrastructure/test_p02_billing_reconcile_entrypoint.py::test_p02_reconcile_configured_entrypoint_resolves",
+      "classification": "c",
+      "summary": "CONTAMINATION, root cause identified for handoff 02: test_k9_artifact_cleanup_env.py evicts 'careervp'/'careervp.*' from sys.modules (to force a clean infra re-import) and never restores it, leaving sys.modules['careervp'] pinned to infra's package (no `handlers` subpackage) for the rest of the process. Reproduced minimally with just these two files. The same unrestored-pop pattern appears in 6 more infra test files (test_p16, test_p17 x2, test_p18, test_p19, test_p20, test_p31).",
+      "resolution": "quarantined xfail(strict=False) — deliberately non-strict; Step 6b's pytest-randomly run proved this test's pass/fail is itself order-dependent, so strict=True would XPASS-fail the gate whenever the polluting test happens to run after it."
+    }
+  ],
+  "proof_obligations": [
+    {
+      "claim": "Combined-run baseline reproduces",
+      "before": "606 failed, 1100 passed",
+      "after_target": "same (unchanged)",
+      "after_observed": "601 failed, 1100 passed (deterministic order); 465-655 failed (pytest-randomly's default order, non-reproducible by design once Step 6b lands)",
+      "match": "differs_from_prediction_explained",
+      "commit": "1cdc88a (Step 6b) for the pytest-randomly interaction; the ~5-failure deterministic delta is a side effect of every Step 1b/5/6 commit combined"
+    },
+    {
+      "claim": "Per-directory failures resolved",
+      "before": "14 failed",
+      "after_target": "0 failed (fixed or xfail(strict=True))",
+      "after_observed": "0 failed across all 8 directories (unit 1430p/15s/4x, integration 193p/11s/7x, infrastructure 81p/1s/1x-or-xpass, e2e 4p/21s, models 18p, regression 38p/1x, security 3p, infra 34p)",
+      "match": true,
+      "commit": "521af64"
+    },
+    {
+      "claim": "Each of the 14 classified",
+      "before": "unclassified",
+      "after_target": "14 rows, each (a)/(b)/(c)",
+      "after_observed": "14 rows recorded above: 8x(c), 4x(b), 2x(a is 1, recount: 8 c / 5 b / 1 a) — see step1b_classification_of_14 array (length 14)",
+      "match": true,
+      "commit": "521af64"
+    },
+    {
+      "claim": "Two orphaned files now run",
+      "before": "0",
+      "after_target": "2",
+      "after_observed": "2, but via Playwright (`npx playwright test --list` collects 7 tests across the 2 renamed .spec.ts files), not Jest — jest's own count is unaffected (see next row). See outcome note below.",
+      "match": "differs_from_prediction_explained",
+      "commit": "06f381c"
+    },
+    {
+      "claim": "Jest collection grew by exactly 2",
+      "before": 63,
+      "after_target": 65,
+      "after_observed": 63,
+      "match": false,
+      "note": "PREDICTION WAS WRONG, not silently updated. Both files import from '@playwright/test', not Jest — running them under Jest throws 'Playwright Test needs to be invoked via npx playwright test'. They were never orphaned Jest tests; they are Playwright specs that were misnamed with a .test.ts extension, which is simultaneously matched-but-unrunnable by Jest and excluded by Playwright's own `testIgnore: ['**/*.test.ts']`. Renamed to the *.spec.ts convention the other 25 Playwright specs use. Jest's count staying at 63 is the CORRECT outcome given this reality, not a failure to un-orphan them.",
+      "commit": "06f381c"
+    },
+    {
+      "claim": "Their tests execute",
+      "before": "never run",
+      "after_target": "7 tests pass, or deleted with reason",
+      "after_observed": "Structurally confirmed executable: `npx playwright test` on both files gets past collection and fails at the `[setup] authenticate as test-user` step with 'E2E_TEST_EMAIL and E2E_TEST_PASSWORD must be set' — i.e. the specs are well-formed and the ONLY missing thing is credentials + a live target (playwright.config.ts runs no webServer of its own; needs Amplify preview or a manually-started localhost:3000). Full pass/fail is deferred proof, same category as Step 3's CI push — cannot be produced in this session without deploying or being handed E2E credentials, neither of which was authorized.",
+      "match": "deferred",
+      "commit": "06f381c"
+    },
+    {
+      "claim": "PR validation runs all 8 directories",
+      "before": 1,
+      "after_target": 8,
+      "after_observed": 8,
+      "match": true,
+      "commit": "7b781b0"
+    },
+    {
+      "claim": "Frontend runs on PR",
+      "before": 0,
+      "after_target": ">=2",
+      "after_observed": 2,
+      "match": true,
+      "commit": "d0894f8"
+    },
+    {
+      "claim": "No --passWithNoTests",
+      "before": 3,
+      "after_target": 0,
+      "after_observed": 0,
+      "match": true,
+      "note": "Before-value corrected to 4 by Step 0.4 (see step0_measurements); target of 0 still met exactly.",
+      "commit": "d0894f8"
+    },
+    {
+      "claim": "No silent skip on unset API_BASE",
+      "before": 1,
+      "after_target": 0,
+      "after_observed": 0,
+      "match": true,
+      "commit": "cbb01d0"
+    },
+    {
+      "claim": "Markers registered",
+      "before": ">=1",
+      "after_target": 0,
+      "after_observed": 0,
+      "match": true,
+      "commit": "9c8bb79"
+    }
+  ],
+  "step6_filterwarnings_pytest_randomly": {
+    "filterwarnings_error": {
+      "action": "tried then reverted (>~10 failure threshold exceeded)",
+      "total_failures": 137,
+      "breakdown": "tests/unit 112 failed, tests/integration 24 failed + 2 errors, tests/infrastructure 1 failed",
+      "dominant_cause": "~126 of 137: UserWarning 'No application metrics to publish' from aws_lambda_powertools, fired by every test invoking a @metrics.log_metrics-decorated handler that never records an application metric. One systemic, mechanical cause — not 126 distinct bugs.",
+      "other_causes": [
+        "A handful of RuntimeWarning / pytest.PytestUnraisableExceptionWarning: coroutine 'generate_gap_questions' / '_async_process_record' / 'AsyncMockMixin._execute_mock_call' was never awaited — genuinely suspicious, worth handoff 02 looking at specifically (a missing `await` is a real bug pattern, not test noise)",
+        "2x DeprecationWarning: datetime.datetime.utcnow() is deprecated",
+        "1x UserWarning in test_p26_blue_green_api.py about a CDK template nearing the 400-resource headroom target"
+      ],
+      "handed_to": "handoff 02, per this step's own instructions"
+    },
+    "pytest_randomly": {
+      "action": "kept",
+      "directories_tested": 8,
+      "repeated_runs": "5+ on tests/unit, 2+ on every other directory, with different random seeds each time",
+      "result": "0 failed in every run except one",
+      "exception_found_and_fixed": "tests/infrastructure/test_p02_billing_reconcile_entrypoint.py's Step 1b xfail(strict=True) quarantine is itself order-dependent (its own root cause is contamination from test_k9_artifact_cleanup_env.py, which may or may not run first under random order). With Step 6a's new xfail_strict=true default, an unexpected pass is a hard XPASS failure. Fixed by setting strict=False on that one marker specifically, with a comment explaining the reasoning is not a weakened quarantine — the underlying condition genuinely goes either way."
+    }
+  },
+  "deferred_proof": {
+    "ci_actually_runs": "The branch is unpushed. Editing workflow files is not evidence GitHub runs them. Handoff 02's Step 0 must verify against a real Actions run (`gh run list --workflow=pr-validation.yml` and the job log's collected-test count), not by reading the YAML.",
+    "playwright_specs_execute": "See 'Their tests execute' row above — needs a live target + E2E credentials, neither available in this session."
+  },
+  "what_was_not_fixed_deliberately": [
+    "The cross-test contamination itself (592 failures / 100 errors in the original combined-run measurement) — explicitly out of this handoff's scope, root cause substantially narrowed for handoff 02 (see step1b_classification_of_14's P-02 entry and step1_combined_baseline's pytest-randomly finding).",
+    "S7-adjacent VPR product code: vpr_handler.py (the synchronous handler) is DEAD CODE — infra/careervp/api_construct.py explicitly states 'Original synchronous VPR generator removed - using async VPR architecture instead; self.vpr_generator_func = None # Placeholder for backward compatibility', and its own Lambda-wiring method (_add_vpr_lambda_integration) is defined but never called. The real POST /api/vpr path is vpr_submit_handler.py -> SQS -> vpr_worker_handler.py, which correctly persists via core_repository.save_vpr_artifact(). This means most of the 'VPR' test failures in the original 14 were exercising a handler production traffic never reaches, not journey step J5 itself. J5's real health is unmeasured by these particular tests.",
+    "CVTailoringRequest.vpr_id missing default (genuine product bug, quarantined not fixed, see the (a) row above).",
+    "DynamoDalHandler API mismatch in test_dal_migration_integration.py (constructor requires table_name; also missing save_gap_analysis/get_gap_analysis/save_interview_prep methods entirely) — W2 table-normalization territory, quarantined not fixed.",
+    "interview_prep_prompt renamed API (build_interview_prep_prompt -> build_system_prompt + build_user_prompt; generate_interview_prep_questions -> generate_interview_prep) — quarantined not fixed.",
+    "48 unit + 7 integration files still call now()/utcnow()/today() without freezegun actually applied — the dependency is now available (Step 6a) but call sites are unconverted, per the handoff's own explicit scope line."
+  ]
+}

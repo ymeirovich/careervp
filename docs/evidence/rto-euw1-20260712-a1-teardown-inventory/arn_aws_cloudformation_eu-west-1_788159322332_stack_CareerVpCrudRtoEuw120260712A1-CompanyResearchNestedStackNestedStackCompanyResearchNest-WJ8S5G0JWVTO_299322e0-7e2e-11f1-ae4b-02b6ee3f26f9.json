@@ -1,0 +1,44 @@
+{
+    "StackResourceSummaries": [
+        {
+            "LogicalResourceId": "CDKMetadata",
+            "PhysicalResourceId": "299322e0-7e2e-11f1-ae4b-02b6ee3f26f9",
+            "ResourceType": "AWS::CDK::Metadata",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:39.336000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CompanyResearchAllSourcesFailedAlarm0DD88A9D",
+            "PhysicalResourceId": "careervp-company-research-all-sources-failed-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:40.938000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CompanyResearchTavilyAccessPolicy",
+            "PhysicalResourceId": "Caree-Compa-VKCiJK7X29AK",
+            "ResourceType": "AWS::IAM::Policy",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:55.022000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "TavilySearchFailureAlarmE7018961",
+            "PhysicalResourceId": "careervp-tavily-search-failure-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:13:41.038000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        }
+    ]
+}

@@ -18,11 +18,12 @@ from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.dal.user_repository import UserRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
 from careervp.logic.billing_service import BillingService
+from careervp.logic.utils.secret_provider import get_ssm_secret
 from careervp.logic.webhook_service import WebhookService
+from careervp.payment_providers.factory import get_payment_provider
 from careervp.payment_providers.interface import PaymentProviderError
-from careervp.payment_providers.placeholder import PlaceholderPaymentProvider
 
 # ─── Cold-start singletons ────────────────────────────────────────────────────
 
@@ -33,11 +34,13 @@ _webhook_service: WebhookService | None = None
 def _get_webhook_service() -> WebhookService:
     global _webhook_service
     if _webhook_service is None:
-        primary_secret = os.environ['PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM']
-        previous_secret = os.environ.get('PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM', 'none')
+        primary_secret_param = os.environ['PAYMENT_PROVIDER_WEBHOOK_SECRET_SSM_PARAM']
+        previous_secret_param = os.environ.get('PAYMENT_PROVIDER_WEBHOOK_SECRET_PREVIOUS_SSM_PARAM')
+        primary_secret = get_ssm_secret(primary_secret_param)
+        previous_secret = get_ssm_secret(previous_secret_param) if previous_secret_param else 'none'
         _webhook_service = WebhookService(
             subscription_repo=SubscriptionRepository(),
-            payment_provider=PlaceholderPaymentProvider(),
+            payment_provider=get_payment_provider(),
             primary_secret=primary_secret,
             previous_secret=previous_secret,
         )
@@ -50,7 +53,7 @@ def _get_billing_service() -> BillingService:
         _billing_service = BillingService(
             subscription_repo=SubscriptionRepository(),
             user_repo=UserRepository(),
-            payment_provider=PlaceholderPaymentProvider(),
+            payment_provider=get_payment_provider(),
         )
     return _billing_service
 
@@ -61,6 +64,7 @@ def _get_billing_service() -> BillingService:
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(raise_on_empty_metrics=False)
+@log_response_status
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:  # noqa: ARG001
     """Route billing API requests to BillingService methods."""
     set_request_origin(event)

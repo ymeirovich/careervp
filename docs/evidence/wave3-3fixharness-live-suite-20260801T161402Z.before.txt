@@ -1,0 +1,421 @@
+sFFFFFFFs....ssssssssssF                                                 [100%]
+=================================== FAILURES ===================================
+______________________ test_e2e_contract_gate_validation _______________________
+
+    def test_e2e_contract_gate_validation() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+    
+        checks = [
+            ('POST', '/auth/register', None, {'email': 'x', 'password': 'y', 'name': 'z'}, {201, 400, 409}),
+            ('POST', '/auth/login', None, {'email': 'x', 'password': 'y'}, {200, 401, 400}),
+            ('POST', '/auth/refresh', token, None, {200, 401}),
+            ('GET', '/users/me', token, None, {200, 401}),
+            ('PUT', '/users/me', token, {'name': 'Gate User'}, {200, 400, 401}),
+            ('POST', '/users/me/cv', token, {'text_content': 'Contract gate CV text content'}, {201, 400, 401}),
+            ('GET', '/users/me/cvs', token, None, {200, 401}),
+            ('POST', '/jobs', token, {'title': 't', 'company': 'c', 'description': 'd'}, {201, 400, 401}),
+            ('GET', '/jobs', token, None, {200, 401}),
+            ('GET', '/jobs/nonexistent-id', token, None, {200, 401, 404}),
+            ('POST', '/vpr/generate', token, {'cv_id': 'x', 'job_id': 'y', 'gap_response_ids': ['z']}, {202, 400, 401, 422}),
+            ('GET', '/vpr/nonexistent-id', token, None, {200, 401, 404}),
+            ('GET', '/users/me/vprs', token, None, {200, 401}),
+            ('POST', '/gap-analysis/questions', token, {'cv_id': 'x', 'job_id': 'y'}, {200, 400, 401}),
+            ('POST', '/jobs/nonexistent-id/gap-responses', token, {'cv_id': 'x', 'job_id': 'y', 'responses': []}, {200, 201, 400, 401, 404}),
+            ('GET', '/gap-analysis/nonexistent-id/questions', token, None, {200, 401, 404}),
+            ('POST', '/cv-tailoring/generate', token, {'cv_id': 'x'}, {202, 400, 401, 422}),
+            ('GET', '/cv-tailoring/nonexistent-id', token, None, {200, 401, 404}),
+            ('GET', '/users/me/tailored-cvs', token, None, {200, 401}),
+            ('POST', '/cover-letter/generate', token, {'cv_id': 'x'}, {202, 400, 401, 422}),
+            ('GET', '/cover-letter/nonexistent-id', token, None, {200, 401, 404}),
+            ('GET', '/users/me/cover-letters', token, None, {200, 401}),
+            ('POST', '/interview-prep/generate', token, {'vpr_id': 'x'}, {202, 400, 401, 422}),
+            ('GET', '/interview-prep/nonexistent-id', token, None, {200, 401, 404}),
+            ('POST', '/company-research/fetch', token, {'domain': 'example.com'}, {200, 202, 400, 401}),
+            ('GET', '/company-research/nonexistent-id', token, None, {200, 401, 404}),
+            ('GET', '/health', None, None, {200}),
+        ]
+    
+        for method, path, auth, payload, expected in checks:
+>           res = client.request(method, path, token=auth, json_body=payload, expected_status=expected)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/e2e/test_e2e_contract_gate_validation.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10d2f1940>, method = 'GET'
+path = '/vpr/nonexistent-id'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: GET /vpr/nonexistent-id returned 403; expected [200, 401, 404]; body={"error": "DEFAULT_4XX", "code": "DEFAULT_4XX", "request_id": "10034dc3-3e12-45b3-bc40-8de49b6e6c24"}
+
+tests/e2e/e2e_helpers.py:95: AssertionError
+___________________ test_e2e_unauthorized_access_returns_401 ___________________
+
+    def test_e2e_unauthorized_access_returns_401() -> None:
+        client = E2EClient.from_env()
+        protected = [
+            ('GET', '/users/me', None),
+            ('POST', '/vpr/generate', {'cv_id': 'x', 'job_id': 'y', 'gap_response_ids': ['z']}),
+            ('GET', '/vpr/nonexistent-id', None),
+            ('POST', '/cv-tailoring/generate', {'cv_id': 'x'}),
+            ('POST', '/cover-letter/generate', {'cv_id': 'x'}),
+            ('POST', '/interview-prep/generate', {'vpr_id': 'x'}),
+            ('GET', '/company-research/nonexistent-id', None),
+            ('GET', '/jobs/nonexistent-id', None),
+        ]
+        for method, path, body in protected:
+>           client.request(method, path, json_body=body, expected_status=401)
+
+tests/e2e/test_e2e_error_handling.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10cf9d590>, method = 'GET'
+path = '/vpr/nonexistent-id'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: GET /vpr/nonexistent-id returned 403; expected [401]; body={"error": "DEFAULT_4XX", "code": "DEFAULT_4XX", "request_id": "51dc2d91-c0a8-48c6-8e65-9b2f925c4e5b"}
+
+tests/e2e/e2e_helpers.py:95: AssertionError
+______________________ test_e2e_invalid_input_returns_400 ______________________
+
+    def test_e2e_invalid_input_returns_400() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+    
+        cases = [
+            ('POST', '/auth/register', {'email': 'invalid'}, None),
+            ('POST', '/auth/register', {'email': 'a@b.com'}, None),
+            ('POST', '/jobs', {}, token),
+            ('POST', '/vpr/generate', {'cv_id': 'x'}, token),
+            ('POST', '/cv-tailoring/generate', {'cv_id': 'x'}, token),
+            ('POST', '/gap-analysis/questions', {}, token),
+        ]
+        for method, path, body, auth_token in cases:
+>           res = client.request(method, path, token=auth_token, json_body=body, expected_status=400)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/e2e/test_e2e_error_handling.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10cf9da90>, method = 'POST'
+path = '/jobs'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: POST /jobs returned 401; expected [400]; body={"error": "UNAUTHORIZED", "code": "UNAUTHORIZED", "request_id": "6fc03ac9-ef77-4393-998b-a9e8c409a491"}
+
+tests/e2e/e2e_helpers.py:95: AssertionError
+________________________ test_e2e_not_found_returns_404 ________________________
+
+    def test_e2e_not_found_returns_404() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+        for path in [
+            '/vpr/nonexistent-id',
+            '/cv-tailoring/nonexistent-id',
+            '/cover-letter/nonexistent-id',
+            '/interview-prep/nonexistent-id',
+            '/jobs/nonexistent-id',
+            '/company-research/nonexistent-id',
+        ]:
+>           client.request('GET', path, token=token, expected_status=404)
+
+tests/e2e/test_e2e_error_handling.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10cee0050>, method = 'GET'
+path = '/vpr/nonexistent-id'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: GET /vpr/nonexistent-id returned 403; expected [404]; body={"error": "DEFAULT_4XX", "code": "DEFAULT_4XX", "request_id": "d3475b96-33c9-4b58-8ee0-51af58aeb5d6"}
+
+tests/e2e/e2e_helpers.py:95: AssertionError
+__________________ test_e2e_prerequisites_not_met_returns_422 __________________
+
+    def test_e2e_prerequisites_not_met_returns_422() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+>       cv_id = upload_cv(client, token)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/e2e/test_e2e_error_handling.py:64: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <e2e_helpers.E2EClient object at 0x10cee0770>
+token = '<JWT-REDACTED>...p4P7A2x8HjTOP3614tsJO6hBZ30VppsiRQRnsV5jJjTwqut5ZNbGCP1UV4GcU8nb1ycIl2Oc-Q-xe5KyqmFRfvaAa43pHkuSE2SkG7BISpYsLTHK3LaSqA'
+
+    def upload_cv(client: E2EClient, token: str) -> str:
+        cv_text = 'Senior backend engineer with Python, AWS Lambda, and DynamoDB experience.'
+        cv_b64 = base64.b64encode(cv_text.encode('utf-8')).decode('utf-8')
+        variants = [
+            {'text_content': cv_text},
+            {'file_content': cv_b64, 'file_type': 'txt'},
+        ]
+        for payload in variants:
+            res = client.request('POST', '/users/me/cv', token=token, json_body=payload)
+            if res.status == 201:
+                return str(require(res.data, 'cv_id', 'id'))
+>       raise AssertionError('Could not upload CV with supported payload variants.')
+E       AssertionError: Could not upload CV with supported payload variants.
+
+tests/e2e/e2e_helpers.py:133: AssertionError
+___________________ test_e2e_happy_path_full_job_application ___________________
+
+    def test_e2e_happy_path_full_job_application() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+    
+>       me = client.request('GET', '/users/me', token=token, expected_status=200)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/e2e/test_e2e_happy_path_full_job_application.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <e2e_helpers.E2EClient object at 0x10cfd3650>, method = 'GET'
+path = '/users/me'
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: str | None = None,
+        json_body: dict[str, Any] | None = None,
+        expected_status: int | Iterable[int] | None = None,
+    ) -> Resp:
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        r = requests.request(
+            method.upper(),
+            f'{self.base_url}{path}',
+            headers=headers,
+            json=json_body,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            data = r.json()
+            if not isinstance(data, dict):
+                data = {'result': data}
+        except ValueError:
+            data = {}
+        if expected_status is not None:
+            expected = {expected_status} if isinstance(expected_status, int) else set(expected_status)
+>           assert r.status_code in expected, f'{method} {path} returned {r.status_code}; expected {sorted(expected)}; body={r.text}'
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: GET /users/me returned 401; expected [200]; body={"error": "UNAUTHORIZED", "code": "UNAUTHORIZED", "request_id": "00c005c4-3aaa-4f7f-90e1-f8cde7de0234"}
+
+tests/e2e/e2e_helpers.py:95: AssertionError
+____________________________ test_e2e_quality_gates ____________________________
+
+    def test_e2e_quality_gates() -> None:
+        client = E2EClient.from_env()
+        user = register_and_login(client)
+        token = user['token']
+>       cv_id = upload_cv(client, token)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/e2e/test_e2e_quality_gates.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <e2e_helpers.E2EClient object at 0x10cb6ef10>
+token = '<JWT-REDACTED>...LOlvYxpmr9zp7MVwna_7r9opsEgrOlcEmObu_i9HzUpuhxSWWxbM7VFdR7AQVxH8D8Gyxmpzxtd-K2w5cOc-MpL3MKRW4fG499gAGvjzDBMBcofNA9zwMg'
+
+    def upload_cv(client: E2EClient, token: str) -> str:
+        cv_text = 'Senior backend engineer with Python, AWS Lambda, and DynamoDB experience.'
+        cv_b64 = base64.b64encode(cv_text.encode('utf-8')).decode('utf-8')
+        variants = [
+            {'text_content': cv_text},
+            {'file_content': cv_b64, 'file_type': 'txt'},
+        ]
+        for payload in variants:
+            res = client.request('POST', '/users/me/cv', token=token, json_body=payload)
+            if res.status == 201:
+                return str(require(res.data, 'cv_id', 'id'))
+>       raise AssertionError('Could not upload CV with supported payload variants.')
+E       AssertionError: Could not upload CV with supported payload variants.
+
+tests/e2e/e2e_helpers.py:133: AssertionError
+________________________ test_full_pipeline_integration ________________________
+
+    def test_full_pipeline_integration() -> None:
+        client = IntegrationApiClient.from_env()
+        user = create_authenticated_user(client)
+        token = user['login_token']
+    
+>       cv_id = upload_cv_and_get_id(client, token)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/test_full_pipeline_integration.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/integration/integration_helpers.py:172: in upload_cv_and_get_id
+    response = post_with_payload_fallback(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <tests.integration.integration_helpers.IntegrationApiClient object at 0x113c13620>
+path = '/users/me/cv'
+payloads = [{'text_content': 'Jane Doe\nSenior Backend Engineer\nBuilt Python APIs, AWS Lambda workloads, DynamoDB data models, a...aG9uIEFQSXMsIEFXUyBMYW1iZGEgd29ya2xvYWRzLCBEeW5hbW9EQiBkYXRhIG1vZGVscywgYW5kIENJIHBpcGVsaW5lcy4=', 'file_type': 'txt'}]
+
+    def post_with_payload_fallback(
+        client: IntegrationApiClient,
+        path: str,
+        payloads: Sequence[dict[str, Any]],
+        *,
+        token: str | None = None,
+        expected_status: int,
+    ) -> HTTPResponse:
+        attempts: list[str] = []
+        for payload in payloads:
+            response = client.request('POST', path, token=token, json_body=payload, expected_status=None)
+            attempts.append(f'payload={payload} -> status={response.status}')
+            if response.status == expected_status:
+                return response
+>       raise AssertionError(f'All payload attempts failed for POST {path}; expected status {expected_status}. Attempts: {"; ".join(attempts)}')
+E       AssertionError: All payload attempts failed for POST /users/me/cv; expected status 201. Attempts: payload={'text_content': 'Jane Doe\nSenior Backend Engineer\nBuilt Python APIs, AWS Lambda workloads, DynamoDB data models, and CI pipelines.'} -> status=401; payload={'file_content': 'SmFuZSBEb2UKU2VuaW9yIEJhY2tlbmQgRW5naW5lZXIKQnVpbHQgUHl0aG9uIEFQSXMsIEFXUyBMYW1iZGEgd29ya2xvYWRzLCBEeW5hbW9EQiBkYXRhIG1vZGVscywgYW5kIENJIHBpcGVsaW5lcy4=', 'file_type': 'txt'} -> status=401
+
+tests/integration/integration_helpers.py:132: AssertionError
+=============================== warnings summary ===============================
+tests/e2e/test_vpr_generation_flow.py:52
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_generation_flow.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.e2e - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.e2e
+
+tests/e2e/test_vpr_generation_flow.py:53
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_generation_flow.py:53: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/e2e/test_vpr_regeneration_flow.py:56
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_regeneration_flow.py:56: PytestUnknownMarkWarning: Unknown pytest.mark.e2e - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.e2e
+
+tests/e2e/test_vpr_regeneration_flow.py:57
+  /Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/tests/e2e/test_vpr_regeneration_flow.py:57: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_e2e_contract_gate_validation.py::test_e2e_contract_gate_validation
+FAILED tests/e2e/test_e2e_error_handling.py::test_e2e_unauthorized_access_returns_401
+FAILED tests/e2e/test_e2e_error_handling.py::test_e2e_invalid_input_returns_400
+FAILED tests/e2e/test_e2e_error_handling.py::test_e2e_not_found_returns_404
+FAILED tests/e2e/test_e2e_error_handling.py::test_e2e_prerequisites_not_met_returns_422
+FAILED tests/e2e/test_e2e_happy_path_full_job_application.py::test_e2e_happy_path_full_job_application
+FAILED tests/e2e/test_e2e_quality_gates.py::test_e2e_quality_gates - Assertio...
+FAILED tests/integration/test_full_pipeline_integration.py::test_full_pipeline_integration
+8 failed, 4 passed, 12 skipped, 4 warnings in 25.51s

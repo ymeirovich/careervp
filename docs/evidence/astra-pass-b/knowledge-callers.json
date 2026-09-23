@@ -1,0 +1,16 @@
+{
+  "command": [
+    "rg",
+    "-n",
+    "KnowledgeRepository\\(|knowledge_base_handler",
+    "src/backend/careervp",
+    "infra/careervp",
+    "--glob",
+    "*.py"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T14:04:15.400801+00:00",
+  "exit_code": 0,
+  "stdout": "src/backend/careervp/handlers/knowledge_base_handler.py:29:    repo = KnowledgeRepository(table_name)\n",
+  "stderr": ""
+}

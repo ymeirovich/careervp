@@ -1,4 +1,4 @@
-.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup
+.PHONY: dev lint mypy-lint complex coverage pre-commit sort deploy create-changeset execute-changeset destroy deps unit infra-tests integration e2e coverage-tests docs lint-docs build format format-fix compare-openapi openapi pr watch update-deps cleanup-changesets wait-for-stack smoke-test ssm-setup preflight journey state compare review
 PYTHON := .venv/bin/python3
 APP := ../../infra/app.py
 .ONESHELL:  # run all commands in a single shell, ensuring it runs within a local virtual env
@@ -12,10 +12,21 @@ DOCKER_PLATFORM := linux/amd64
 LAYER_BUNDLING_PLATFORM := linux/amd64
 LAMBDA_BASE_IMAGE := public.ecr.aws/lambda/python:$(PYTHON_RUNTIME_VERSION)
 API_CONSTRUCT_PATH := ../../infra/careervp/api_construct.py
+COVERAGE_ARGS := --cov-config=.coveragerc --cov=careervp --cov-report=xml --cov-report=json:coverage.json
 
 OPENAPI_DIR := ./docs/swagger
 CURRENT_OPENAPI := $(OPENAPI_DIR)/openapi.json
 LATEST_OPENAPI := openapi_latest.json
+
+# ---------------------------------------------------------------------------
+# Proof harness
+# ---------------------------------------------------------------------------
+# GIT_STAMP is what gets baked into the stack's DeployedGitSha output, so the
+# running system can always say which commit it is. The `-dirty` suffix is not
+# cosmetic: a stack deployed from an unclean tree is running code that exists in
+# no repository, and preflight treats that as a failure.
+GIT_STAMP := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell git status --porcelain 2>/dev/null | grep -q . && echo -dirty)
+HARNESS_STACK ?= CareerVpCrudDevx
 
 
 dev:
@@ -50,12 +61,30 @@ pre-commit:
 mypy-lint:
 	uv run mypy --pretty careervp --strict
 
+# The `| sed '/^[[:space:]]*#/d'` is load-bearing, not tidiness.
+#
+# uv's requirements-txt export changed format between versions: modern uv emits
+# `# via <package>` provenance annotations, uv 0.5.21 (pinned as UV_VERSION in
+# the deploy workflows) does not. The deploy job runs `make build` -> `make
+# deps` before `make deploy-devx`, so whichever version CI runs rewrote these
+# committed files, leaving the tree dirty. GIT_STAMP (line 28) then appended
+# `-dirty` to DeployedGitSha, preflight failed `deployed commit is known`, and
+# every journey proof was stamped non-reproducible -- from handoff 08 onward.
+#
+# Stripping comments makes the output identical across uv versions: verified
+# byte-for-byte between 0.5.21 and 0.11.29, 414 lines each, order preserved.
+# That fixes it without bumping uv in the deploy path, which would have changed
+# more than formatting. pip ignores these comments entirely.
+#
+# Enforced by the "Requirements Drift" job in pr-validation.yml.
 deps:
-	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > lambda_requirements.txt
-	uv export --no-editable --no-emit-project --no-color --format=requirements-txt > dev_requirements.txt
+	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt \
+		| sed '/^[[:space:]]*#/d' > lambda_requirements.txt
+	uv export --no-editable --no-emit-project --no-color --format=requirements-txt \
+		| sed '/^[[:space:]]*#/d' > dev_requirements.txt
 
 unit:
-	uv run pytest tests/unit  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/unit $(COVERAGE_ARGS)
 
 build: deps check-runtime
 	rm -rf .build/lambdas
@@ -85,25 +114,74 @@ infra-tests: build
 	uv run pytest tests/infrastructure
 
 integration:
-	uv run pytest tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/integration $(COVERAGE_ARGS)
 
 e2e:
 	@if ! ls tests/e2e/test_*.py >/dev/null 2>&1; then \
 		echo "No e2e tests detected; skipping."; \
 	else \
-		uv run pytest tests/e2e --cov-config=.coveragerc --cov=careervp --cov-report xml; \
+		uv run pytest tests/e2e $(COVERAGE_ARGS); \
 	fi
 
 pr: deps format pre-commit complex lint lint-docs unit deploy coverage-tests e2e openapi
 
 coverage-tests:
-	uv run pytest tests/unit tests/integration  --cov-config=.coveragerc --cov=careervp --cov-report xml
+	uv run pytest tests/unit tests/integration $(COVERAGE_ARGS)
+	uv run python scripts/check_coverage_gates.py coverage.json
 
 _CDK_ALLOWED_ORIGINS := $(shell node -e "try{const d=JSON.parse(require('fs').readFileSync('../../infra/cdk.json','utf8'));process.stdout.write(d.context.allowed_origins||'')}catch(e){}" 2>/dev/null)
 
 deploy: build
 	npx cdk acknowledge 34892
 	npx cdk deploy CareerVpCrudDev --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)"
+
+# Wave-3 / `db-redesign` deploy target — the P-26 parallel-cutover stack.
+#
+# Deliberately a SEPARATE target rather than parameterizing `deploy` above:
+# `make deploy` is invoked by seven workflows (company-research, cv-tailoring,
+# cover-letter, main-serverless-service, ui-upgrade-checks, deploy-staging,
+# db-redesign-checks) and its hardcoded `CareerVpCrudDev` is load-bearing for
+# all of them. Parameterizing it would silently repoint deploy-staging.yml,
+# which declares STACK_NAME=CareerVpCrudStaging but currently deploys
+# CareerVpCrudDev — a pre-existing mismatch that is NOT this target's to fix.
+#
+# Requires ENVIRONMENT=devx: `infra/app.py` only instantiates CareerVpCrudDevx
+# under that environment, so a `dev` environment here would fail to find the
+# stack rather than deploy the wrong one.
+DEVX_STACK_NAME ?= CareerVpCrudDevx
+
+deploy-devx: build
+	npx cdk acknowledge 34892
+	npx cdk deploy $(DEVX_STACK_NAME) --app="$(PYTHON) ../../infra/app.py" --require-approval=never --context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" --context "p26_rehome_features=true" --context "git_sha=$(GIT_STAMP)"
+
+# P-28: automation is CreateChangeSet-only. `create-changeset` synthesizes and creates a
+# CFN change set WITHOUT executing it (`--no-execute`); a human-gated job runs
+# `execute-changeset`. Never call `make deploy` (create+execute) from automation.
+STACK_NAME ?= CareerVpCrudDev
+AWS_REGION ?= us-east-1
+CHANGESET_NAME ?= careervp-changeset-$(shell date -u +%Y%m%d%H%M%S)
+
+# git_sha is passed here for the same reason deploy-devx passes it: without it
+# service_stack.py falls back to the literal string "unstamped" for the
+# DeployedGitSha output, so `make journey` cannot prove which commit it
+# measured and preflight records a permanent UNKNOWN. Measured 2026-09-20:
+# none of CareerVpCrudDev / Devx / Staging currently exposes the output at all.
+# Setting an output value is a metadata-only stack update -- it replaces nothing.
+create-changeset: build
+	npx cdk acknowledge 34892
+	npx cdk deploy $(STACK_NAME) --app="$(PYTHON) ../../infra/app.py" \
+		--require-approval=never --method=change-set --no-execute \
+		--change-set-name "$(CHANGESET_NAME)" \
+		--context "allowed_origins=$(_CDK_ALLOWED_ORIGINS)" \
+		--context "git_sha=$(GIT_STAMP)"
+	@echo "$(CHANGESET_NAME)" | tee /tmp/careervp-changeset-name.txt
+
+execute-changeset:
+	@test -n "$(CHANGESET_NAME)" || { echo "CHANGESET_NAME is required"; exit 1; }
+	aws cloudformation execute-change-set \
+		--stack-name "$(STACK_NAME)" \
+		--change-set-name "$(CHANGESET_NAME)" \
+		--region "$(AWS_REGION)"
 
 destroy:
 	npx cdk acknowledge 34892
@@ -230,3 +308,37 @@ smoke-test:
 	else \
 		echo "AWS CLI smoke test script not found, skipping."; \
 	fi
+
+# ---------------------------------------------------------------------------
+# Proof harness targets — see docs/HARNESS.md
+# ---------------------------------------------------------------------------
+# Four commands, run in this order, answer "where am I and did I move?":
+#   make preflight   are the facts I am about to rely on true?
+#   make journey     how far does a customer get?  (N of 9)
+#   make state       show both on one page
+#   make review      classify a change set before touching dev/staging/prod
+
+preflight:
+	uv run python scripts/preflight.py --stack $(HARNESS_STACK)
+
+# BASE_URL must point at the frontend serving THIS environment. DEPLOYED_SHA is
+# read from the stack so the resulting proof records what was actually running,
+# not merely what was checked out.
+journey:
+	$(eval DEPLOYED_SHA := $(shell aws cloudformation describe-stacks \
+		--stack-name $(HARNESS_STACK) \
+		--query "Stacks[0].Outputs[?OutputKey=='DeployedGitSha'].OutputValue" \
+		--output text 2>/dev/null || echo unstamped))
+	@echo "journey → $${BASE_URL:-http://localhost:3000}  (stack runs $(DEPLOYED_SHA))"
+	cd ../frontend && DEPLOYED_SHA=$(DEPLOYED_SHA) JOURNEY_STACK=$(HARNESS_STACK) \
+		npx playwright test journey.spec.ts
+
+state:
+	uv run python scripts/state.py
+
+compare:
+	uv run python scripts/compare_evidence.py --kind $(or $(KIND),journey)
+
+# Usage: make review STACK=CareerVpCrudDev
+review:
+	uv run python scripts/review_change.py --stack $(or $(STACK),CareerVpCrudDev) --latest

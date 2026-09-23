@@ -1,0 +1,1257 @@
+{
+  "functions": [
+    {
+      "function": "careervp-export-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "477d5c0a-6588-44f7-aaf2-9a9a279dbf3b"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-export-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:24.414234+00:00"
+    },
+    {
+      "function": "careervp-export-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-export-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "477d5c0a-6588-44f7-aaf2-9a9a279dbf3b"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-export-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:32.576642+00:00"
+    },
+    {
+      "function": "careervp-vpr-status-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "b0d683c4-8a53-4e3f-a175-4cdf711143e1"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-status-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:34.250340+00:00"
+    },
+    {
+      "function": "careervp-vpr-status-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "b0d683c4-8a53-4e3f-a175-4cdf711143e1"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-status-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:35.091878+00:00"
+    },
+    {
+      "function": "careervp-vpr-worker-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-vpr-worker-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:36.751598+00:00"
+    },
+    {
+      "function": "careervp-cv-parser-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "0fb44bb4-f271-4be2-bc56-64d1e59ff8e7"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cv-parser-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:38.376135+00:00"
+    },
+    {
+      "function": "careervp-cv-parser-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:30.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cv-parser-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "0fb44bb4-f271-4be2-bc56-64d1e59ff8e7"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cv-parser-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:39.610271+00:00"
+    },
+    {
+      "function": "careervp-cvtailor-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:31.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "9d83d75f-600e-4343-8b45-c7dd06337519"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cvtailor-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:41.271191+00:00"
+    },
+    {
+      "function": "careervp-cvtailor-lambda-devx",
+      "qualifier": "16",
+      "version": "16",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:31.000+0000",
+      "aliases": [
+        {
+          "AliasArn": "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:live-devx",
+          "Name": "live-devx",
+          "FunctionVersion": "16",
+          "Description": "",
+          "RevisionId": "9d83d75f-600e-4343-8b45-c7dd06337519"
+        }
+      ],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-cvtailor-lambda-devx",
+        "--qualifier",
+        "16"
+      ],
+      "timestamp": "2026-09-13T09:09:42.166310+00:00"
+    },
+    {
+      "function": "careervp-artifact-cleanup-lambda-devx",
+      "qualifier": "$LATEST",
+      "version": "$LATEST",
+      "CodeSha256": "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=",
+      "LastModified": "2026-08-08T08:21:16.000+0000",
+      "aliases": [],
+      "command": [
+        "aws",
+        "--region",
+        "us-east-1",
+        "--output",
+        "json",
+        "lambda",
+        "get-function",
+        "--function-name",
+        "careervp-artifact-cleanup-lambda-devx",
+        "--qualifier",
+        "$LATEST"
+      ],
+      "timestamp": "2026-09-13T09:09:43.802251+00:00"
+    }
+  ],
+  "bundles": {
+    "FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=": {
+      "download_sha256_verified": true,
+      "download_bytes": 44679866,
+      "python_members": 137,
+      "mismatches": [],
+      "files": [
+        {
+          "file": "src/backend/careervp/__init__.py",
+          "deployed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "commit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/validation/cv_tailoring_validation.py",
+          "deployed_sha256": "6732d55bf6e57756de03dcd10dc2720ed12c399d93933bf7f40ae2b642dc3dfe",
+          "commit_sha256": "6732d55bf6e57756de03dcd10dc2720ed12c399d93933bf7f40ae2b642dc3dfe",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/validation/__init__.py",
+          "deployed_sha256": "dcc5a5d2c155ea06628be7bd28eb269b81ffa50c0a3a315b2bdc2f1d46bd9d02",
+          "commit_sha256": "dcc5a5d2c155ea06628be7bd28eb269b81ffa50c0a3a315b2bdc2f1d46bd9d02",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/stripe_provider.py",
+          "deployed_sha256": "7467879c5e96a53e35a66e7d6391b1bdea95f7e47ab129fbaddbc2d29f2fde00",
+          "commit_sha256": "7467879c5e96a53e35a66e7d6391b1bdea95f7e47ab129fbaddbc2d29f2fde00",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/placeholder.py",
+          "deployed_sha256": "5a9ea45e610cf413ef156dd5b7fcefd0b5900241103d5a827fcc583097661b3b",
+          "commit_sha256": "5a9ea45e610cf413ef156dd5b7fcefd0b5900241103d5a827fcc583097661b3b",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/mock_provider.py",
+          "deployed_sha256": "9677d951a99e310dff1fb127efe41258bd570c632df6fc7cec4142af0d99ef5b",
+          "commit_sha256": "9677d951a99e310dff1fb127efe41258bd570c632df6fc7cec4142af0d99ef5b",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/interface.py",
+          "deployed_sha256": "34f8e093912188b253c7dfaa908968b4ffa7822f6bf32bb205d02e0f3f8632e1",
+          "commit_sha256": "34f8e093912188b253c7dfaa908968b4ffa7822f6bf32bb205d02e0f3f8632e1",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/factory.py",
+          "deployed_sha256": "7ffaa333e0c228ca80da8302f8cf61a88dd7737972c36e57b92f8186a78e7ff8",
+          "commit_sha256": "7ffaa333e0c228ca80da8302f8cf61a88dd7737972c36e57b92f8186a78e7ff8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/payment_providers/__init__.py",
+          "deployed_sha256": "78d4a3b7f8bbd1bb9e6aedbd92b36a85e4f27ecdd9e793cf11936dd30a3ea88f",
+          "commit_sha256": "78d4a3b7f8bbd1bb9e6aedbd92b36a85e4f27ecdd9e793cf11936dd30a3ea88f",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/vpr.py",
+          "deployed_sha256": "ac821b533faf6b5d29d4e53c44d0adbe6630da38d0099b419c03c82f986e1f33",
+          "commit_sha256": "ac821b533faf6b5d29d4e53c44d0adbe6630da38d0099b419c03c82f986e1f33",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/user.py",
+          "deployed_sha256": "34148356ac8c0317e0c7d52d82a548d3dac53e1b7bc8121b995fe6d4a4187747",
+          "commit_sha256": "34148356ac8c0317e0c7d52d82a548d3dac53e1b7bc8121b995fe6d4a4187747",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/result.py",
+          "deployed_sha256": "d38940aec53f8567819409509693b4318dd372580c5b6c70b29632962fde1060",
+          "commit_sha256": "d38940aec53f8567819409509693b4318dd372580c5b6c70b29632962fde1060",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/output.py",
+          "deployed_sha256": "dfbc07991c9d10ef83ef4345ca5f9b92714d6470b1cd0c60fc06df4b30d55792",
+          "commit_sha256": "dfbc07991c9d10ef83ef4345ca5f9b92714d6470b1cd0c60fc06df4b30d55792",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/knowledge_base.py",
+          "deployed_sha256": "bc2202bc8fc6d460554189038f643593942980d6e1928a48e5126562c148b114",
+          "commit_sha256": "bc2202bc8fc6d460554189038f643593942980d6e1928a48e5126562c148b114",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/job.py",
+          "deployed_sha256": "8e39a9e20fd82c20bfe91b5cb0d6c1935aea438c62c2968ca4346d0208312e57",
+          "commit_sha256": "8e39a9e20fd82c20bfe91b5cb0d6c1935aea438c62c2968ca4346d0208312e57",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/interview_prep.py",
+          "deployed_sha256": "c2d7fc1c3709be11cbec75d3b28034f9a227997bf78ad5d2a7b97c23a6ec71a7",
+          "commit_sha256": "c2d7fc1c3709be11cbec75d3b28034f9a227997bf78ad5d2a7b97c23a6ec71a7",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/gap_analysis.py",
+          "deployed_sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925",
+          "commit_sha256": "60946b0ba6890f73dd6f47352af4137f35a50b16912730475f2992a1b2492925",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/fvs_models.py",
+          "deployed_sha256": "0eee16d07ad5fe93a6f6196c5fb933b79ea328a5849828cbb2116bfaaeaa8796",
+          "commit_sha256": "0eee16d07ad5fe93a6f6196c5fb933b79ea328a5849828cbb2116bfaaeaa8796",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/fvs.py",
+          "deployed_sha256": "1b29e938ec91b22bd2d27cfa8ab5ad2fe68677ea77c50669f709edfb843df2c8",
+          "commit_sha256": "1b29e938ec91b22bd2d27cfa8ab5ad2fe68677ea77c50669f709edfb843df2c8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/exceptions.py",
+          "deployed_sha256": "be3ff0b2c104eb6a2a667954edebeb44712723dfe9899363a7a77fa5c17bba0a",
+          "commit_sha256": "be3ff0b2c104eb6a2a667954edebeb44712723dfe9899363a7a77fa5c17bba0a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/cv_tailoring_models.py",
+          "deployed_sha256": "dec497dc78b2e84ac7d0d409033693d13a4e69f4852a03a23c3f94d6183e26f4",
+          "commit_sha256": "dec497dc78b2e84ac7d0d409033693d13a4e69f4852a03a23c3f94d6183e26f4",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/cv_tailoring.py",
+          "deployed_sha256": "e0fafe49dd14ce392a4f097b320efdcd2b128566d277e4b9f16b1de23a859244",
+          "commit_sha256": "e0fafe49dd14ce392a4f097b320efdcd2b128566d277e4b9f16b1de23a859244",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/cv_models.py",
+          "deployed_sha256": "0cc91b33cb8162e0a7864f05c16e7fe3e8c5c19f8491963c575259f4b6d76391",
+          "commit_sha256": "0cc91b33cb8162e0a7864f05c16e7fe3e8c5c19f8491963c575259f4b6d76391",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/cv.py",
+          "deployed_sha256": "86fef080a0b3aa5a774e760ffc054adfebdb15b10ca19b3a49d4d0575631ac6a",
+          "commit_sha256": "86fef080a0b3aa5a774e760ffc054adfebdb15b10ca19b3a49d4d0575631ac6a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/cover_letter.py",
+          "deployed_sha256": "5a2eda1680a59c13f47d358f26dbd9537d6e65f389104a5026758984911d49a6",
+          "commit_sha256": "5a2eda1680a59c13f47d358f26dbd9537d6e65f389104a5026758984911d49a6",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/company.py",
+          "deployed_sha256": "2ff931c9683e6bef09d8e78b513c7bb372a8919cca1337ed218529b1d0797258",
+          "commit_sha256": "2ff931c9683e6bef09d8e78b513c7bb372a8919cca1337ed218529b1d0797258",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/api_models.py",
+          "deployed_sha256": "1a3e6dd93cbfec5b703dba5844bf17e1b026e9de6b08cc7f4d10c7d87b5b8f34",
+          "commit_sha256": "1a3e6dd93cbfec5b703dba5844bf17e1b026e9de6b08cc7f4d10c7d87b5b8f34",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/models/__init__.py",
+          "deployed_sha256": "53190c450375dd103c61a35fcd2aca4bd933badbc0532784caa02c002b95a454",
+          "commit_sha256": "53190c450375dd103c61a35fcd2aca4bd933badbc0532784caa02c002b95a454",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/webhook_service.py",
+          "deployed_sha256": "890016df6d58b81767bfd5463cb1d762aed501932b53347adaf53f4322a6408e",
+          "commit_sha256": "890016df6d58b81767bfd5463cb1d762aed501932b53347adaf53f4322a6408e",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/vpr_generator.py",
+          "deployed_sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853",
+          "commit_sha256": "484c0c9aecf5bd823213c313bd02c66c88c41ee5806b3f00d3c8cfc73ea57853",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/trial_service.py",
+          "deployed_sha256": "6a79cb66faac35361726fa7d1e30e03f03c49dbabc217f605eeb97a904af05f5",
+          "commit_sha256": "6a79cb66faac35361726fa7d1e30e03f03c49dbabc217f605eeb97a904af05f5",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/reconciliation_service.py",
+          "deployed_sha256": "41c30fe7eebc916214a6673e3e68417ac69b09e915771af6a6cfd70440df6352",
+          "commit_sha256": "41c30fe7eebc916214a6673e3e68417ac69b09e915771af6a6cfd70440df6352",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/quota_service.py",
+          "deployed_sha256": "86772916f3c6233f72611f084bf1f35a755b87f014f74569d1df398f6955e6f0",
+          "commit_sha256": "86772916f3c6233f72611f084bf1f35a755b87f014f74569d1df398f6955e6f0",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/llm_client.py",
+          "deployed_sha256": "b69ee45e489700f83acf1e35da846e6d30b461a67d336a607d73d4723b1815b7",
+          "commit_sha256": "b69ee45e489700f83acf1e35da846e6d30b461a67d336a607d73d4723b1815b7",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/llm_cache.py",
+          "deployed_sha256": "a305de688e79ebb0116ba686d57c8d305e5e13592e469158172320e72535c682",
+          "commit_sha256": "a305de688e79ebb0116ba686d57c8d305e5e13592e469158172320e72535c682",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/interview_prep.py",
+          "deployed_sha256": "346da06627e7161d73741babe5d24869686da5be4d78541fe116eaab82e5da49",
+          "commit_sha256": "346da06627e7161d73741babe5d24869686da5be4d78541fe116eaab82e5da49",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/identity_resolver.py",
+          "deployed_sha256": "baf3fce66a1d6d9f111080a414a6e94b669d55fb33c348972612269ba43e6ba0",
+          "commit_sha256": "baf3fce66a1d6d9f111080a414a6e94b669d55fb33c348972612269ba43e6ba0",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/gap_analysis.py",
+          "deployed_sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8",
+          "commit_sha256": "8cf4d741f37062b9c3fa18b1f7f33a0c17496da38185823ed49c87fb635a77c8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/fvs_validator.py",
+          "deployed_sha256": "71f4d217f098e65b85c2a76838ccbabb7f3a134aa885d96274a288786b8c62e5",
+          "commit_sha256": "71f4d217f098e65b85c2a76838ccbabb7f3a134aa885d96274a288786b8c62e5",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_tailoring_prompt.py",
+          "deployed_sha256": "39e847239fa98ecfc7720a2d62bbba05b0bbaacb9522b884a5055ba8511afe03",
+          "commit_sha256": "39e847239fa98ecfc7720a2d62bbba05b0bbaacb9522b884a5055ba8511afe03",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_tailoring_pipeline.py",
+          "deployed_sha256": "2103630330866ab6355c8ca207f9cf1dff3f4836b1aee403998aab2099da9c9b",
+          "commit_sha256": "2103630330866ab6355c8ca207f9cf1dff3f4836b1aee403998aab2099da9c9b",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_tailoring_logic.py",
+          "deployed_sha256": "34c972e78532d6dc410c086d9098d68517d2caf22fefe9dc2e389ce5addce95a",
+          "commit_sha256": "34c972e78532d6dc410c086d9098d68517d2caf22fefe9dc2e389ce5addce95a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_tailoring_ats.py",
+          "deployed_sha256": "41da590f7a67b7559c00685e93d9a6a7fa0f5f4f85883229c505ee6267738abb",
+          "commit_sha256": "41da590f7a67b7559c00685e93d9a6a7fa0f5f4f85883229c505ee6267738abb",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_tailoring.py",
+          "deployed_sha256": "b4ac5bcb0f2d1be2391ab26afe9003e6d8cf15e3b994a9e620bf275afbda05bb",
+          "commit_sha256": "b4ac5bcb0f2d1be2391ab26afe9003e6d8cf15e3b994a9e620bf275afbda05bb",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_summarizer.py",
+          "deployed_sha256": "d73d7a4d7be7d27f6db193c7e294a42c19c12b744de737a948bcbf3c6967e3e0",
+          "commit_sha256": "d73d7a4d7be7d27f6db193c7e294a42c19c12b744de737a948bcbf3c6967e3e0",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cv_parser.py",
+          "deployed_sha256": "0e6446031b84c958678655b2b7614806c09b94d0b086aeca9ce273f9fa446cb8",
+          "commit_sha256": "0e6446031b84c958678655b2b7614806c09b94d0b086aeca9ce273f9fa446cb8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cover_letter.py",
+          "deployed_sha256": "651638e5f39101abc225eefdbdfd363613cda8ceec2244de10a481131d453e02",
+          "commit_sha256": "651638e5f39101abc225eefdbdfd363613cda8ceec2244de10a481131d453e02",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/company_research_store.py",
+          "deployed_sha256": "5e7e17b79ff5b2dc5e7a68d9dcd0df639d9b682f69f9d8413ce57fed6e98e053",
+          "commit_sha256": "5e7e17b79ff5b2dc5e7a68d9dcd0df639d9b682f69f9d8413ce57fed6e98e053",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/company_research.py",
+          "deployed_sha256": "d3dec14d4d239bb30178de226d8e05e158212265341af2468ad898a58a8a11a6",
+          "commit_sha256": "d3dec14d4d239bb30178de226d8e05e158212265341af2468ad898a58a8a11a6",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/company_intel_cache.py",
+          "deployed_sha256": "54de917277a62b81766d28f215d815e2aec5978a7ce7610ac78c2c7635d9bdb3",
+          "commit_sha256": "54de917277a62b81766d28f215d815e2aec5978a7ce7610ac78c2c7635d9bdb3",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/circuit_breaker.py",
+          "deployed_sha256": "eea22657adc1b3201fd85c452becdcfd8f4df576d8be2d5b75be15912b88b967",
+          "commit_sha256": "eea22657adc1b3201fd85c452becdcfd8f4df576d8be2d5b75be15912b88b967",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/cancellation.py",
+          "deployed_sha256": "475c8349d718152f717d4fa2ee3ed2e16749cf69e71973b394dbc4ec384d2f99",
+          "commit_sha256": "475c8349d718152f717d4fa2ee3ed2e16749cf69e71973b394dbc4ec384d2f99",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/billing_service.py",
+          "deployed_sha256": "281c39cd7885d3817f175f5f6fe299149e87a92788acf914dcd3589028441f79",
+          "commit_sha256": "281c39cd7885d3817f175f5f6fe299149e87a92788acf914dcd3589028441f79",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/auth_service.py",
+          "deployed_sha256": "8a50d60728a56e84962a24df9348c55884c854eafd19ef741b8c0adf7f09a652",
+          "commit_sha256": "8a50d60728a56e84962a24df9348c55884c854eafd19ef741b8c0adf7f09a652",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/artifact_dependency_resolver.py",
+          "deployed_sha256": "864539b1d16f820a2054bd4744026898317bdc6fc97d76f9b9bcdaa90b7a2003",
+          "commit_sha256": "864539b1d16f820a2054bd4744026898317bdc6fc97d76f9b9bcdaa90b7a2003",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/__init__.py",
+          "deployed_sha256": "5fb5cb8f332fc0a14e51c8d7f3afaf1c0dc21ef3226d308c89444ebf93c273ce",
+          "commit_sha256": "5fb5cb8f332fc0a14e51c8d7f3afaf1c0dc21ef3226d308c89444ebf93c273ce",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/web_search.py",
+          "deployed_sha256": "05722455ec754bbb775e5cadd2310d2cf58f514f3ee7e138324aff1a8c3df251",
+          "commit_sha256": "05722455ec754bbb775e5cadd2310d2cf58f514f3ee7e138324aff1a8c3df251",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/web_scraper.py",
+          "deployed_sha256": "469552fc14cf7e013241f2f8b85d6ce7b50e968ea79bdc588df57361a9bdfe9c",
+          "commit_sha256": "469552fc14cf7e013241f2f8b85d6ce7b50e968ea79bdc588df57361a9bdfe9c",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/tavily_client.py",
+          "deployed_sha256": "5efb68ebbba0793b8d8df9ca8753167e2b9c4de7646898d915a70193c6ba2843",
+          "commit_sha256": "5efb68ebbba0793b8d8df9ca8753167e2b9c4de7646898d915a70193c6ba2843",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/secret_provider.py",
+          "deployed_sha256": "c919d94d45de656f88bb8813fb0515547598a261230f3fd53025824d1b541790",
+          "commit_sha256": "c919d94d45de656f88bb8813fb0515547598a261230f3fd53025824d1b541790",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/llm_metering.py",
+          "deployed_sha256": "24b476ed7b61d440935604954e6dbae93d31ca54e45250a9d5810f2cbbd52236",
+          "commit_sha256": "24b476ed7b61d440935604954e6dbae93d31ca54e45250a9d5810f2cbbd52236",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/llm_client.py",
+          "deployed_sha256": "70a60ae1c289c189a6cb2fd9dd3a95aff991dd7e12f48047611aabc1038c1215",
+          "commit_sha256": "70a60ae1c289c189a6cb2fd9dd3a95aff991dd7e12f48047611aabc1038c1215",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/idempotency.py",
+          "deployed_sha256": "8f380094dd50a4176907e3497c59605ed5388ccb960b0851174de1a4a7bab6e4",
+          "commit_sha256": "8f380094dd50a4176907e3497c59605ed5388ccb960b0851174de1a4a7bab6e4",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/domain_validator.py",
+          "deployed_sha256": "b47302af6673a6b8a8c32221b0dfbd4dbf4c47204362689610e2faa557b81eb9",
+          "commit_sha256": "b47302af6673a6b8a8c32221b0dfbd4dbf4c47204362689610e2faa557b81eb9",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/constants.py",
+          "deployed_sha256": "184c7211429c66fffc8a78bc098006ec531cdee3efcd01f5876222973cdfaf53",
+          "commit_sha256": "184c7211429c66fffc8a78bc098006ec531cdee3efcd01f5876222973cdfaf53",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/utils/__init__.py",
+          "deployed_sha256": "c632e16798c3fb292485902cd0e03839de92d5702cee70be5acb675a6c08bf4d",
+          "commit_sha256": "c632e16798c3fb292485902cd0e03839de92d5702cee70be5acb675a6c08bf4d",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/vpr_prompt.py",
+          "deployed_sha256": "a3edf563d613b1f94bd50d6a68b8cd786adc4f0ad67e4de33c3d20f1a507ac22",
+          "commit_sha256": "a3edf563d613b1f94bd50d6a68b8cd786adc4f0ad67e4de33c3d20f1a507ac22",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/interview_prep_prompt.py",
+          "deployed_sha256": "6dbc0b9de1223c2045aed517292d30a1590b72c75e4a3ddc6c05b08a242c7676",
+          "commit_sha256": "6dbc0b9de1223c2045aed517292d30a1590b72c75e4a3ddc6c05b08a242c7676",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/gap_analysis_prompt.py",
+          "deployed_sha256": "a6a32a8710484c8c3f42bc00989f755883420e7d76b45ad8649bf2c02ed81e5a",
+          "commit_sha256": "a6a32a8710484c8c3f42bc00989f755883420e7d76b45ad8649bf2c02ed81e5a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/cover_letter_prompt.py",
+          "deployed_sha256": "a43bef0196cca9d6f88f74566c619abb3076c0ba1a553f11a775e9b5b74c0e7f",
+          "commit_sha256": "a43bef0196cca9d6f88f74566c619abb3076c0ba1a553f11a775e9b5b74c0e7f",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/company_research_prompt.py",
+          "deployed_sha256": "2a8938cdc3d15014d2f082d6b7fbf58d3071dd7c755a645d79bd15e24bc6a1fe",
+          "commit_sha256": "2a8938cdc3d15014d2f082d6b7fbf58d3071dd7c755a645d79bd15e24bc6a1fe",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/ai_assist_prompt.py",
+          "deployed_sha256": "517df29a35d178bdc3e86d781410ff8c6c28ed109c4a3ce45b17c2107e973dca",
+          "commit_sha256": "517df29a35d178bdc3e86d781410ff8c6c28ed109c4a3ce45b17c2107e973dca",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/logic/prompts/__init__.py",
+          "deployed_sha256": "3679c149ae51bfebb8765443fdb23caee22d1e8863ad4998109653bc6ec7fc0a",
+          "commit_sha256": "3679c149ae51bfebb8765443fdb23caee22d1e8863ad4998109653bc6ec7fc0a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/infrastructure/__init__.py",
+          "deployed_sha256": "c9dd126a726983fea9fd786de1757ff432c63644f01e9f9c7815ad4b0ac25969",
+          "commit_sha256": "c9dd126a726983fea9fd786de1757ff432c63644f01e9f9c7815ad4b0ac25969",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/infrastructure/stacks/cv_tailoring_stack.py",
+          "deployed_sha256": "61be793734993243f444795d9bb5c3a7cbd0b4186c0ffc65c6569abbf7fb749f",
+          "commit_sha256": "61be793734993243f444795d9bb5c3a7cbd0b4186c0ffc65c6569abbf7fb749f",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/infrastructure/stacks/__init__.py",
+          "deployed_sha256": "c523bd834343fc0d352780854cd45228ee3c38396e375d772ebd0b4345c8cb5a",
+          "commit_sha256": "c523bd834343fc0d352780854cd45228ee3c38396e375d772ebd0b4345c8cb5a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/vpr_worker_handler.py",
+          "deployed_sha256": "f3e53ab5443d203be4967fc2267b60ba980d15f36a56dc02502399328849ecc2",
+          "commit_sha256": "f3e53ab5443d203be4967fc2267b60ba980d15f36a56dc02502399328849ecc2",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/vpr_submit_handler.py",
+          "deployed_sha256": "f63dcf76dc2c6684e416c3f30696da314355f085b1779f895cae464d1f0d60e0",
+          "commit_sha256": "f63dcf76dc2c6684e416c3f30696da314355f085b1779f895cae464d1f0d60e0",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/vpr_status_handler.py",
+          "deployed_sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3",
+          "commit_sha256": "6ed052054ddfc9613137b9049961795c879cc587dcf3c437814860280a8f9df3",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/vpr_handler.py",
+          "deployed_sha256": "c158edbdc482f1c6ba314fb48e21d09ae534ba6b2c9935bcd9c106a9f0b8e7eb",
+          "commit_sha256": "c158edbdc482f1c6ba314fb48e21d09ae534ba6b2c9935bcd9c106a9f0b8e7eb",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/vpr_dlq_handler.py",
+          "deployed_sha256": "ca6e421a45e5347d10477a4a09fe71d5b27bfda9d23ac23305e950ac9b01cae6",
+          "commit_sha256": "ca6e421a45e5347d10477a4a09fe71d5b27bfda9d23ac23305e950ac9b01cae6",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/validators.py",
+          "deployed_sha256": "d2b90e34ba3cabeff027c844acf31ade098a686680695c8391269765d3a16c6a",
+          "commit_sha256": "d2b90e34ba3cabeff027c844acf31ade098a686680695c8391269765d3a16c6a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/user_handler.py",
+          "deployed_sha256": "cbc23ac0c3f25661e332578236aa137df3faeb5ee57446c3d5f056026a5cb5ff",
+          "commit_sha256": "cbc23ac0c3f25661e332578236aa137df3faeb5ee57446c3d5f056026a5cb5ff",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/knowledge_base_handler.py",
+          "deployed_sha256": "bbf00e5dd418b2bcd6fb45a5198ddff3b6351fc81592d79fbf90c148464bce94",
+          "commit_sha256": "bbf00e5dd418b2bcd6fb45a5198ddff3b6351fc81592d79fbf90c148464bce94",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/job_handler.py",
+          "deployed_sha256": "4ccc68a63139ec169e108150747dd2825cdf1f8b6702d44bad19b81129adc6f1",
+          "commit_sha256": "4ccc68a63139ec169e108150747dd2825cdf1f8b6702d44bad19b81129adc6f1",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/interview_prep_submit_handler.py",
+          "deployed_sha256": "b972d054d6b6cf8a02ba1512c3b4e6ee00e0c90fbe25e7143003727275a0453a",
+          "commit_sha256": "b972d054d6b6cf8a02ba1512c3b4e6ee00e0c90fbe25e7143003727275a0453a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/interview_prep_handler.py",
+          "deployed_sha256": "59c1db64e8e49077e456d302e54554beb6e9823c68fb51d95d6e89f68098a799",
+          "commit_sha256": "59c1db64e8e49077e456d302e54554beb6e9823c68fb51d95d6e89f68098a799",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/health_handler.py",
+          "deployed_sha256": "f63ca9ca964230bdf3de8e26fe9f7c6e7f894b09ce163f5c7cef735972df15fd",
+          "commit_sha256": "f63ca9ca964230bdf3de8e26fe9f7c6e7f894b09ce163f5c7cef735972df15fd",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/gap_handler.py",
+          "deployed_sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e",
+          "commit_sha256": "9b56da8fd73545ad7a72b04fe5604700b2ed8f70de81e1abee3e01895c19159e",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/export_handler.py",
+          "deployed_sha256": "72472bb3adcedc14bce037378bf58299a14440769d913074aee251cac65edb75",
+          "commit_sha256": "72472bb3adcedc14bce037378bf58299a14440769d913074aee251cac65edb75",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/error_report_handler.py",
+          "deployed_sha256": "ea6ec42529662192af556689c8bd8765109e13d74082ebe928b709b2739b52bc",
+          "commit_sha256": "ea6ec42529662192af556689c8bd8765109e13d74082ebe928b709b2739b52bc",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cv_upload_handler.py",
+          "deployed_sha256": "dc03cac19de9b85a986e9a28636509fc2aac1e9011a8224216c9320cd2f04824",
+          "commit_sha256": "dc03cac19de9b85a986e9a28636509fc2aac1e9011a8224216c9320cd2f04824",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cv_tailoring_handler.py",
+          "deployed_sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8",
+          "commit_sha256": "a33f8a6b67f1bd2c2f1233da237e97acd22b60e77b126b24dbc3c2dc909891a8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cr_failure_handler.py",
+          "deployed_sha256": "2987ebd7f48721ad417e1552f2e2c92902404e0685a7c5978f584eda9d9b65ad",
+          "commit_sha256": "2987ebd7f48721ad417e1552f2e2c92902404e0685a7c5978f584eda9d9b65ad",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cover_letter_submit_handler.py",
+          "deployed_sha256": "706cf9967160a009162a8277b1cedda24c1b8b157ac9afffdcb9ea8807794745",
+          "commit_sha256": "706cf9967160a009162a8277b1cedda24c1b8b157ac9afffdcb9ea8807794745",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cover_letter_handler.py",
+          "deployed_sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861",
+          "commit_sha256": "b923a229f9d6f4fe785b000744bda67468d89f950593f3f7ae82c90b726e8861",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/cors_utils.py",
+          "deployed_sha256": "05f4ff3eaaf21e9da87bd81ed7ec2099c760ae759c53dd53e0598a4b27aaaba8",
+          "commit_sha256": "05f4ff3eaaf21e9da87bd81ed7ec2099c760ae759c53dd53e0598a4b27aaaba8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/company_research_worker_handler.py",
+          "deployed_sha256": "309006f346d3d9fa3363f00889a8979ea0b1f8ba830e82375866c954093e23ba",
+          "commit_sha256": "309006f346d3d9fa3363f00889a8979ea0b1f8ba830e82375866c954093e23ba",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/company_research_handler.py",
+          "deployed_sha256": "00ed7e7b98bfa812010eebe09b5da3a5ce0967789878e503eca3264c19a532ff",
+          "commit_sha256": "00ed7e7b98bfa812010eebe09b5da3a5ce0967789878e503eca3264c19a532ff",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/billing_reconcile_handler.py",
+          "deployed_sha256": "79db9ff0c30e1112197edd1a6bfd2386e7963c3788f9c97e0e0f55b96891bcee",
+          "commit_sha256": "79db9ff0c30e1112197edd1a6bfd2386e7963c3788f9c97e0e0f55b96891bcee",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/billing_handler.py",
+          "deployed_sha256": "5b9673ff087f243420af5db3a24eb37ea9adec972912c73dd17c268f33221187",
+          "commit_sha256": "5b9673ff087f243420af5db3a24eb37ea9adec972912c73dd17c268f33221187",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/auth_utils.py",
+          "deployed_sha256": "df819baaf757adde4586c6023cc9a6c843ed243beead7009c2810cc3de287274",
+          "commit_sha256": "df819baaf757adde4586c6023cc9a6c843ed243beead7009c2810cc3de287274",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/auth_middleware.py",
+          "deployed_sha256": "bd42668bc0a9cc9976e501a5ea05f1c1a86910c586339e72873e7e02d8c82374",
+          "commit_sha256": "bd42668bc0a9cc9976e501a5ea05f1c1a86910c586339e72873e7e02d8c82374",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/auth_handler.py",
+          "deployed_sha256": "726c8c11af0ad07c5916faf1cb78a888971a7baf49fcc60be4415161e05320d7",
+          "commit_sha256": "726c8c11af0ad07c5916faf1cb78a888971a7baf49fcc60be4415161e05320d7",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/artifact_failure_handler.py",
+          "deployed_sha256": "be4c48a0830123f4a2e57b07b06319a956413788433371f7f168610ccd1ac11a",
+          "commit_sha256": "be4c48a0830123f4a2e57b07b06319a956413788433371f7f168610ccd1ac11a",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/artifact_dependency_utils.py",
+          "deployed_sha256": "d0d48dc47cb57f3022702ba836be4dac0b141991ef80de6c9d0a899fb7dd6b4c",
+          "commit_sha256": "d0d48dc47cb57f3022702ba836be4dac0b141991ef80de6c9d0a899fb7dd6b4c",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/artifact_cleanup_handler.py",
+          "deployed_sha256": "20e83ede943ab21d13089f269aa9d62ab145d6ed5a91cd0214ee7adacb91bc1c",
+          "commit_sha256": "20e83ede943ab21d13089f269aa9d62ab145d6ed5a91cd0214ee7adacb91bc1c",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/application_handler.py",
+          "deployed_sha256": "9dd2f105efdd41471ad062baa9929eb22a21ed2a0792da3f8ae5cf3e2e8b2f07",
+          "commit_sha256": "9dd2f105efdd41471ad062baa9929eb22a21ed2a0792da3f8ae5cf3e2e8b2f07",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/api_gateway_authorizer.py",
+          "deployed_sha256": "e337aa38588e3855097c052a60d9f2a4d54fcc28af91be4431456a3a0bbfbfbd",
+          "commit_sha256": "e337aa38588e3855097c052a60d9f2a4d54fcc28af91be4431456a3a0bbfbfbd",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/ai_assist_handler.py",
+          "deployed_sha256": "ffc0e13dace63662ae5ea4a1fcde1070560be83160d1a27035497e089c00f9a2",
+          "commit_sha256": "ffc0e13dace63662ae5ea4a1fcde1070560be83160d1a27035497e089c00f9a2",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/__init__.py",
+          "deployed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "commit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/validation.py",
+          "deployed_sha256": "f3d91827ec3799b3b93c32be6d6183b3650ac02e2b83525929e9cec3445c32c3",
+          "commit_sha256": "f3d91827ec3799b3b93c32be6d6183b3650ac02e2b83525929e9cec3445c32c3",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/rest_api_resolver.py",
+          "deployed_sha256": "0259e1d78cc1f66bc0703e22920610437db719d3156e78826646d1e867190236",
+          "commit_sha256": "0259e1d78cc1f66bc0703e22920610437db719d3156e78826646d1e867190236",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/observability.py",
+          "deployed_sha256": "bf69abde509806fdd0c8f06655d6e399bef35957c0c2a3fb6145ba3f7cbdc986",
+          "commit_sha256": "bf69abde509806fdd0c8f06655d6e399bef35957c0c2a3fb6145ba3f7cbdc986",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/env_guard.py",
+          "deployed_sha256": "9f5506cbb3bba765c975095a5267c1d2e66a6be7d57878edc6070621d9f311d9",
+          "commit_sha256": "9f5506cbb3bba765c975095a5267c1d2e66a6be7d57878edc6070621d9f311d9",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/dynamic_configuration.py",
+          "deployed_sha256": "c1450e0b80f1aeca3440306757123bf7fc1622c804cd195602b59aceb65d3874",
+          "commit_sha256": "c1450e0b80f1aeca3440306757123bf7fc1622c804cd195602b59aceb65d3874",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/utils/__init__.py",
+          "deployed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "commit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/models/env_vars.py",
+          "deployed_sha256": "fc3b0e621d6314e128d03e224d83a5f3a82f1a9b637906a667baacec24701b7e",
+          "commit_sha256": "fc3b0e621d6314e128d03e224d83a5f3a82f1a9b637906a667baacec24701b7e",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/models/dynamic_configuration.py",
+          "deployed_sha256": "7ffe122516a6cb4e62955e907e61fc96b3678195ca74e1401c394ad8d41a68ea",
+          "commit_sha256": "7ffe122516a6cb4e62955e907e61fc96b3678195ca74e1401c394ad8d41a68ea",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/handlers/models/__init__.py",
+          "deployed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "commit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/user_repository.py",
+          "deployed_sha256": "fad3fe14937893a781e18110d3908e726bbffd9b07b49ad867e7317950d0003c",
+          "commit_sha256": "fad3fe14937893a781e18110d3908e726bbffd9b07b49ad867e7317950d0003c",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/table_registry.py",
+          "deployed_sha256": "27077a553c5a60402c37f33385582c72a5b130e3bdffc3a60a72c4ea48af6fa2",
+          "commit_sha256": "27077a553c5a60402c37f33385582c72a5b130e3bdffc3a60a72c4ea48af6fa2",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/subscription_repository.py",
+          "deployed_sha256": "3e5ab3cbbeb7b969996e91e1c5ce6b0fc86d1104d472bf6f9bcefae4d8163a01",
+          "commit_sha256": "3e5ab3cbbeb7b969996e91e1c5ce6b0fc86d1104d472bf6f9bcefae4d8163a01",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/knowledge_repository.py",
+          "deployed_sha256": "50239683a3da6b5c72217652ec01dca90952a8b21e5cb71ea72d3c543b58c7e1",
+          "commit_sha256": "50239683a3da6b5c72217652ec01dca90952a8b21e5cb71ea72d3c543b58c7e1",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/jobs_repository.py",
+          "deployed_sha256": "2bac26c4a3868c3e5a62f26b1f5991b48aaa2501c251a8aee1d99f5c45ba4cd0",
+          "commit_sha256": "2bac26c4a3868c3e5a62f26b1f5991b48aaa2501c251a8aee1d99f5c45ba4cd0",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/identity_map_repository.py",
+          "deployed_sha256": "e823e926ed34e6ca4cb3bc6f05b6516f281f49bec267d1c91595a493f2f2eb49",
+          "commit_sha256": "e823e926ed34e6ca4cb3bc6f05b6516f281f49bec267d1c91595a493f2f2eb49",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/idempotency_repository.py",
+          "deployed_sha256": "0d7838f6bc9c7e5321ef0d8e77c8059708b2c3adc1e508f3cc6cff22e8eba3c6",
+          "commit_sha256": "0d7838f6bc9c7e5321ef0d8e77c8059708b2c3adc1e508f3cc6cff22e8eba3c6",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/dynamo_dal_handler.py",
+          "deployed_sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9",
+          "commit_sha256": "f7bd7f9bcbe91f7a2fcb926960ee2d8fcf31adcbc1223e21133b4652f0aa5ed9",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/db_handler.py",
+          "deployed_sha256": "b59eb066060c69340142a66767e06ff74333796735500b7006cd38ca0e335a16",
+          "commit_sha256": "b59eb066060c69340142a66767e06ff74333796735500b7006cd38ca0e335a16",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/cv_tailoring_dal.py",
+          "deployed_sha256": "c1b9f3f871e9a68aafdeb1310ee15d185e324be23c6a031669ebadc3fec0883b",
+          "commit_sha256": "c1b9f3f871e9a68aafdeb1310ee15d185e324be23c6a031669ebadc3fec0883b",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/cv_repository.py",
+          "deployed_sha256": "06abeb6ee3fa66da19daeca62bc22d6cf435e8d6583b2a68b9328c10521a2d73",
+          "commit_sha256": "06abeb6ee3fa66da19daeca62bc22d6cf435e8d6583b2a68b9328c10521a2d73",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/cv_dal.py",
+          "deployed_sha256": "104526af19c02a9ecf25a1016629ee309b240ef448196d2185aa2b84bfc92e6f",
+          "commit_sha256": "104526af19c02a9ecf25a1016629ee309b240ef448196d2185aa2b84bfc92e6f",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/core_repository.py",
+          "deployed_sha256": "b5d5af1058c77d95b55049a90e224acf7baae0e99e46eca4aba08c036a7747a5",
+          "commit_sha256": "b5d5af1058c77d95b55049a90e224acf7baae0e99e46eca4aba08c036a7747a5",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/application_repository.py",
+          "deployed_sha256": "25a15f26354f659d068ad17aa868a23feb7c92547adf699f3ec1511846314a15",
+          "commit_sha256": "25a15f26354f659d068ad17aa868a23feb7c92547adf699f3ec1511846314a15",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/api_storage_adapter.py",
+          "deployed_sha256": "3877a42a222f2a52f8bf74ddc4133c2fcf954accd7768e32847361af7bf994d8",
+          "commit_sha256": "3877a42a222f2a52f8bf74ddc4133c2fcf954accd7768e32847361af7bf994d8",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/__init__.py",
+          "deployed_sha256": "0fe6e770c449390fe9744b12d4e2def46d6a79527dab8deccbc0f5687867ed4f",
+          "commit_sha256": "0fe6e770c449390fe9744b12d4e2def46d6a79527dab8deccbc0f5687867ed4f",
+          "matches_commit": true,
+          "matches_worktree": true
+        },
+        {
+          "file": "src/backend/careervp/dal/models/__init__.py",
+          "deployed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "commit_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "matches_commit": true,
+          "matches_worktree": true
+        }
+      ]
+    }
+  }
+}

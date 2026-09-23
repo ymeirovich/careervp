@@ -1,0 +1,38 @@
+{
+  "operations": [
+    {
+      "operation": "signin.user.admin",
+      "source_patterns": ["signin\\.user\\.admin"],
+      "classification": "temporarily_allowed",
+      "locations": ["lib/pkce.ts"],
+      "migration_plan": "Keep the scope through the PKCE soak because browser-side ChangePassword still needs the access-token scope. Move password change behind a backend proxy, deploy, soak for at least the 30-day refresh-token lifetime, then set P07_AUTH_MIGRATION_PHASE to cutover_complete and remove this scope with implicit grant."
+    },
+    {
+      "operation": "AssociateSoftwareToken",
+      "source_patterns": ["AssociateSoftwareToken"],
+      "classification": "temporarily_allowed",
+      "locations": ["contexts/AuthContext.tsx"],
+      "migration_plan": "The OPTIONAL-MFA grace UI associates a software token for the signed-in user. Before public-client scope removal, move enrollment behind an approved auth service flow that does not require the SPA client to request COGNITO_ADMIN."
+    },
+    {
+      "operation": "UpdateUserAttributes",
+      "source_patterns": ["UpdateUserAttributes"],
+      "classification": "none",
+      "locations": []
+    },
+    {
+      "operation": "ChangePassword",
+      "source_patterns": ["\\.changePassword\\s*\\("],
+      "classification": "temporarily_allowed",
+      "locations": ["contexts/AuthContext.tsx"],
+      "migration_plan": "The live settings flow calls Cognito ChangePassword directly. Add a Handler -> Logic -> DAL backend proxy, cut the settings page to that proxy, and verify it in production before COGNITO_ADMIN is removed from the public client."
+    },
+    {
+      "operation": "TOTP enrollment",
+      "source_patterns": ["associateSoftwareToken", "verifySoftwareToken", "setUserMfaPreference"],
+      "classification": "temporarily_allowed",
+      "locations": ["contexts/AuthContext.tsx"],
+      "migration_plan": "The settings-page enrollment grace verifies TOTP and sets the preferred MFA factor. Preserve COGNITO_ADMIN until enrollment is migrated behind an approved auth service flow and the deployed migration has soaked."
+    }
+  ]
+}

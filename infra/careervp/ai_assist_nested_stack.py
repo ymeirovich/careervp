@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from aws_cdk import Aws, Duration, NestedStack, RemovalPolicy
+from aws_cdk import aws_cloudwatch as cw
+from aws_cdk import aws_cloudwatch_actions as cw_actions
+from aws_cdk import aws_codedeploy as codedeploy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_sns as sns
 from cdk_nag import NagSuppressions
 from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import ssm_parameter_name
 
 
 class AiAssistNestedStack(NestedStack):
@@ -29,6 +36,10 @@ class AiAssistNestedStack(NestedStack):
         users_table: dynamodb.TableV2,
         llm_cache_table: dynamodb.TableV2,
         allowed_origins: str,
+        deployment_application: codedeploy.ILambdaApplication,
+        deployment_role: iam.IRole,
+        rollback_alarms: Sequence[cw.IAlarm],
+        notification_topic: sns.ITopic,
     ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
@@ -69,16 +80,20 @@ class AiAssistNestedStack(NestedStack):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
             environment={
+                "ENVIRONMENT": naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-ai-assist",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
-                # CV, VPR, tailored CV and gap responses are persisted in the
-                # single-table users_table (pk/sk design). The dedicated
-                # cvs/gap_responses tables are unused by the write path, so
-                # AI-assist reads those cross-artifact contexts from users_table —
+                # VPR, tailored CV and gap responses are still persisted in the
+                # single-table users_table (pk/sk design), so ARTIFACTS_TABLE_NAME
+                # stays pointed there until those artifacts are re-homed —
                 # otherwise upstream lookups resolve against empty tables and
                 # return spurious 409 "missing upstream artifact".
                 "ARTIFACTS_TABLE_NAME": users_table.table_name,
-                "CVS_TABLE_NAME": users_table.table_name,
+                # CVs, however, now have exactly one home. The comment above used
+                # to cover this line too, and it was the reason ai-assist was the
+                # only Lambda in the account whose CVS_TABLE_NAME did not name the
+                # CVs table (audit N3, CV half).
+                "CVS_TABLE_NAME": cvs_table.table_name,
                 "APPLICATIONS_TABLE_NAME": applications_table.table_name,
                 # The application row is created lazily, so early in the flow the
                 # ownership check must fall back to the JOB record (matching
@@ -104,12 +119,46 @@ class AiAssistNestedStack(NestedStack):
                 "COMPANY_RESEARCH_TABLE_NAME": artifacts_table.table_name,
                 "ALLOWED_ORIGINS": allowed_origins,
                 constants.LLM_CACHE_TABLE_NAME_ENV: llm_cache_table.table_name,
-                constants.ANTHROPIC_API_KEY_ENV_VAR: constants.ANTHROPIC_API_KEY_SSM_PARAM,
+                constants.ANTHROPIC_API_KEY_ENV_VAR: ssm_parameter_name(
+                    naming.environment, "anthropic-api-key"
+                ),
                 constants.STRATEGIC_MODEL_ID_ENV_VAR: constants.STRATEGIC_MODEL_ID,
                 constants.TEMPLATE_MODEL_ID_ENV_VAR: constants.TEMPLATE_MODEL_ID,
                 constants.AI_ASSIST_MODEL_ENV_VAR: constants.TEMPLATE_MODEL_ID,
                 constants.AI_ASSIST_TIMEOUT_ENV_VAR: "25",
             },
+        )
+        self.ai_assist_alias = self.ai_assist_lambda.add_alias(
+            f"live-{naming.environment}"
+        )
+        canary_error_alarm = cw.Alarm(
+            self,
+            "P23AiAssistCanaryErrorAlarm",
+            alarm_name=naming.resource_name("ai-assist-canary-error", "alarm"),
+            metric=self.ai_assist_alias.metric_errors(
+                period=Duration.minutes(1), statistic="Sum"
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        canary_error_alarm.add_alarm_action(cw_actions.SnsAction(notification_topic))
+        codedeploy.LambdaDeploymentGroup(
+            self,
+            "P23AiAssistCanaryDeploymentGroup",
+            application=deployment_application,
+            alias=self.ai_assist_alias,
+            deployment_group_name=naming.resource_name(
+                "ai-assist-canary", "deployment-group"
+            ),
+            deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+            alarms=[canary_error_alarm, *rollback_alarms],
+            auto_rollback=codedeploy.AutoRollbackConfig(
+                deployment_in_alarm=True,
+                failed_deployment=True,
+                stopped_deployment=True,
+            ),
+            role=deployment_role,
         )
 
         log_group.grant_write(self.role)
@@ -135,6 +184,18 @@ class AiAssistNestedStack(NestedStack):
             iam.PolicyStatement(
                 actions=["dynamodb:GetItem", "dynamodb:Query"],
                 resources=[applications_table.table_arn],
+            )
+        )
+        # CVs have a single home in cvs_table. Without this grant the
+        # CVS_TABLE_NAME repoint above would resolve to AccessDenied at runtime
+        # rather than to a CV.
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:GetItem", "dynamodb:Query"],
+                resources=[
+                    cvs_table.table_arn,
+                    f"{cvs_table.table_arn}/index/*",
+                ],
             )
         )
         # Ownership fallback: when the application row is absent, validate against
@@ -176,13 +237,13 @@ class AiAssistNestedStack(NestedStack):
                 resources=[
                     (
                         f"arn:aws:ssm:{naming.region}:{naming.account_id}:parameter/"
-                        f"{constants.ANTHROPIC_API_KEY_SSM_PARAM.lstrip('/')}"
+                        f"{ssm_parameter_name(naming.environment, 'anthropic-api-key').lstrip('/')}"
                     )
                 ],
             )
         )
 
-        self.ai_assist_lambda.add_permission(
+        self.ai_assist_alias.add_permission(
             "AllowAiAssistApiInvoke",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             action="lambda:InvokeFunction",

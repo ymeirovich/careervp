@@ -79,11 +79,13 @@ class TestContractRouteParity:
 
         assert not violations, 'Legacy route aliases found:\n' + '\n'.join(violations)
 
+    @pytest.mark.skipif(
+        not (PAYLOADS_DIR / 'gap_questions_generate.json').exists(),
+        reason=f'Fixture data missing: {PAYLOADS_DIR / "gap_questions_generate.json"}',
+    )
     def test_gap_questions_payload_uses_canonical_route(self):
         """AC-TR-301: gap_questions_generate.json uses /jobs/{jobId}/gap-questions not legacy alias."""
         payload_file = PAYLOADS_DIR / 'gap_questions_generate.json'
-        if not payload_file.exists():
-            pytest.skip('gap_questions_generate.json not found')
 
         data = json.loads(payload_file.read_text())
         path = data.get('path', '')

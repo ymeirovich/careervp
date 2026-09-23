@@ -1,0 +1,66 @@
+{
+  "_README": "TEMPLATE ONLY — NOT EVIDENCE. This file does not close the soak gate. The real artifact is docs/evidence/pkce-devx-verification-<UTC-timestamp>.json, written by the human who performs the single real login (step 1.6 item 5). Every 'passed' below is null because no login has happened. Do not rename this file to a timestamped name without actually running the flow and filling in real values.",
+  "status": "not_executed",
+  "step": "wave-1 step 1.6 (P-07 frontend cutover delivery)",
+  "environment": "devx",
+  "user_pool_id": "us-east-1_bAZ6jb6HP",
+  "client_id": "10c72h0q6cshe7dh3tup6ek9de",
+  "cognito_domain": "https://careervp-devx.auth.us-east-1.amazoncognito.com",
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "origin": "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com",
+  "login_account": "ymeirovich@gmail.com",
+  "timestamp": null,
+  "passed": null,
+  "checks": [
+    {
+      "name": "authorization_redirect",
+      "passed": null,
+      "detail": "Record the full /oauth2/authorize URL. Assert response_type=code, code_challenge_method=S256, and redirect_uri exactly https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback.",
+      "expected": "302 to the hosted UI login page",
+      "status": null
+    },
+    {
+      "name": "callback_route",
+      "passed": null,
+      "detail": "Record the /callback URL Cognito returns to. Assert the returned state matches the value stored in sessionStorage under careervp.pkce.state, and that a code parameter is present.",
+      "expected": "200 from the SPA /callback route, state round-trips",
+      "status": null
+    },
+    {
+      "name": "token_exchange",
+      "passed": null,
+      "detail": "Record the POST to /oauth2/token. Assert code_verifier is sent, no client_secret is sent (public client), and id/access/refresh tokens come back. Record the token 'iss' claim and assert it names us-east-1_bAZ6jb6HP, NOT us-east-1_WiHMRqLpe — that assertion is the whole point of the fallback removal.",
+      "expected": "200 with id_token, access_token, refresh_token",
+      "status": null
+    },
+    {
+      "name": "authenticated_api_call",
+      "passed": null,
+      "detail": "One authenticated GET against the devx raw execute-api URL. Record the request id.",
+      "expected": "200",
+      "status": null
+    },
+    {
+      "name": "forced_401",
+      "passed": null,
+      "detail": "Force a 401 (e.g. tamper the access token) and record it.",
+      "expected": "401",
+      "status": null
+    },
+    {
+      "name": "refresh_exactly_once",
+      "passed": null,
+      "detail": "Count refresh attempts triggered by the 401. This is the §3 item-10 frontend contract: EXACTLY ONE refresh. Two or more is a FAILURE, not a retry — record the observed count explicitly.",
+      "expected": "refresh_count == 1, then the original request succeeds",
+      "observed_refresh_count": null,
+      "status": null
+    },
+    {
+      "name": "sign_out",
+      "passed": null,
+      "detail": "Record the /logout URL. Assert logout_uri is exactly https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/ and that the session is cleared.",
+      "expected": "302 back to the registered logout URL, session gone",
+      "status": null
+    }
+  ]
+}

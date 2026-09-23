@@ -23,7 +23,7 @@ from careervp.dal.jobs_repository import JobsRepository
 from careervp.dal.subscription_repository import SubscriptionRepository
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.quota_service import QuotaError, QuotaService
 from careervp.logic.trial_service import TrialExhaustedException, TrialExpiredException, TrialService
@@ -72,6 +72,23 @@ def _job_url_error_response(
             'error_code': error_code,
             'field': 'url',
             'classification': classification,
+        },
+    )
+
+
+def _ownership_denied_response() -> Response[str]:
+    """Flat §3 item-10 envelope for a cross-tenant ownership denial (P-05).
+
+    Returns 403 with the flat keys the frontend oracle requires (``error``/``message``,
+    ``classification``, ``error_code``, ``field``) and never a nested ``error.code`` object.
+    """
+    return _json_response(
+        HTTPStatus.FORBIDDEN,
+        {
+            'error': 'User can only access own jobs',
+            'error_code': 'forbidden',
+            'field': 'jobId',
+            'classification': 'access_denied',
         },
     )
 
@@ -194,7 +211,15 @@ def _check_create_job_access(user_id: str) -> Response[str] | None:
             quota_service.check_access(user_id)
         except QuotaError as exc:
             return _json_response(HTTPStatus.FORBIDDEN, {'error': exc.error})
+        return None
 
+    # Fallback only: quota_service wraps this exact trial_service instance
+    # (see _get_quota_service) and already enforces trial limits — with the
+    # crucial difference that it skips them entirely for an active
+    # subscriber (QuotaService.check_access, test_active_subscription_does_
+    # not_check_trial). Running this unconditionally after quota_service had
+    # already allowed access meant any customer who subscribed after using
+    # up their trial credits was permanently blocked from creating a job.
     trial_service = _get_trial_service()
     if trial_service is not None:
         try:
@@ -296,7 +321,9 @@ def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str
     if job_record is None:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
     if str(job_record.get('user_id', '')) != user_id:
-        return _json_response(HTTPStatus.FORBIDDEN, {'error': 'User can only access own jobs'})
+        # P-05: cross-tenant ownership denial. Use the flat §3 item-10 error envelope so the
+        # frontend oracle parses it consistently (no nested error.code object).
+        return _ownership_denied_response()
     if 'title' not in job_record:
         return _json_response(HTTPStatus.NOT_FOUND, {'error': 'Job not found'})
 
@@ -306,6 +333,7 @@ def get_job(jobId: str | None = None, job_id: str | None = None) -> Response[str
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for jobs API routes."""
     set_request_origin(event)

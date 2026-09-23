@@ -1,0 +1,23 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigateway",
+    "get-export",
+    "--rest-api-id",
+    "ymzhvcxod0",
+    "--stage-name",
+    "prod",
+    "--export-type",
+    "oas30",
+    "--parameters",
+    "extensions=integrations",
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/docs/evidence/astra-pass-b/deployed-api-oas.json"
+  ],
+  "exit_code": 0,
+  "stdout": "{\n    \"contentType\": \"application/octet-stream\",\n    \"contentDisposition\": \"attachment; filename=\\\"oas30_2026-08-01T18:02:27Z.json\\\"\"\n}\n",
+  "stderr": ""
+}

@@ -11,6 +11,11 @@ permissions:
   deployments: write
   id-token: write
 
+# P-28 Sub-clause B: one deploy slot for staging, never cancelled mid-flight.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
 env:
   PYTHON_VERSION: '3.13'
   NODE_VERSION: '22'
@@ -20,9 +25,20 @@ env:
   STACK_NAME: 'CareerVpCrudStaging'
 
 jobs:
-  deploy-staging:
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 1: automation, CreateChangeSet ONLY (no execute).
+  # `make deploy` (used here previously) hardcodes CareerVpCrudDev regardless of
+  # STACK_NAME/ENVIRONMENT — this workflow was silently deploying dev on every
+  # push to develop, not staging, and doing so with --require-approval=never
+  # and no human gate at all. `make create-changeset` takes STACK_NAME as a
+  # real parameter (see src/backend/Makefile), so it actually targets staging.
+  # ===========================================================================
+  create-change-set-staging:
     runs-on: ubuntu-latest
-    environment: staging
+    outputs:
+      changeset_name: ${{ steps.create.outputs.changeset_name }}
+    env:
+      CHANGESET_NAME: cs-staging-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,19 +142,76 @@ jobs:
         run: |
           "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
 
-      - name: Build and Deploy
+      - name: Create change set (NO execute)
+        id: create
         working-directory: src/backend
         run: |
           set -o pipefail
-          make deploy 2>&1 | tee /tmp/deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)" /tmp/deploy.log; then
-              echo "::warning::Stack update lock detected. Re-running CFN guard and retrying deploy..."
-              "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "${{ env.STACK_NAME }}" "${{ env.AWS_REGION }}"
-              make deploy
-            else
-              exit 1
-            fi
-          }
+          make create-changeset STACK_NAME="${{ env.STACK_NAME }}" CHANGESET_NAME="${{ env.CHANGESET_NAME }}"
+          echo "changeset_name=${{ env.CHANGESET_NAME }}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Replacement report (auto-fail on protected replacement)
+        run: |
+          echo "=== DescribeChangeSet Replacement report (P-28 approval artifact) ==="
+          aws cloudformation describe-change-set \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --change-set-name "${{ env.CHANGESET_NAME }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --output json > /tmp/changeset.json
+          # Exits 1 (fails the job) if any RestApi/Table/Bucket/UserPool has Replacement:True,
+          # so the human-gated execute-change-set job never runs.
+          python3 scripts/ci/changeset_replacement_report.py --changeset /tmp/changeset.json --summary
+
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 2: HUMAN-GATED execute.
+  # `environment: staging` must have a REQUIRED REVIEWER in GitHub settings.
+  # The reviewer reads the Replacement report (job summary above) before approving.
+  # ===========================================================================
+  execute-change-set-staging:
+    needs: create-change-set-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      CHANGESET_NAME: ${{ needs.create-change-set-staging.outputs.changeset_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_EXECUTE_ROLE || secrets.AWS_ROLE }}
+          role-session-name: execute-cs-staging-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Execute approved change set
+        working-directory: src/backend
+        run: |
+          make execute-changeset \
+            STACK_NAME="${{ env.STACK_NAME }}" \
+            CHANGESET_NAME="${{ env.CHANGESET_NAME }}" \
+            AWS_REGION="${{ env.AWS_REGION }}"
 
       - name: Wait for Stack Stability
         run: |

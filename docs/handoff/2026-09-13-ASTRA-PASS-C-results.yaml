@@ -1,0 +1,893 @@
+- finding_id: S0a
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED — proven by execution, no deploy required.
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-001
+    - E-013
+    - E-018
+    - E-022
+    - C02
+    - C05
+    - C08
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C02-additional.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Owner and attacker both receive 200 and the planted secret in the generated DOCX.
+    raw_artifact: docs/evidence/astra-pass-c/C02-additional.json
+  mechanism_final: The authenticated VPR export branch omits user_id from its S3 lookup and exports the selected
+    owner's content. This confirms a handler authorization defect; an executed deployed attack remains unproven.
+  refuted_subclaims: []
+  disconfirming_effort: Tested whether the synthetic export was merely an empty fixture by reading the real generated
+    DOCX for both identities. Inspected deployed stage integration and alias permission as possible upstream barriers.
+    The secret survives; those configuration receipts do not supply an object ownership decision or an HTTPS transaction.
+  depends_on_live_aws: false
+  layer_caveat: Moto injects authorizer claims; it does not authenticate a Cognito token. E-018 plus E-022 strengthens
+    applicability but does not establish effective S3 access or a retrievable live presigned URL. The local defect
+    survives independently.
+  residual_disagreement: No substantive A/B disagreement on the defect. Their confidence must not be transferred
+    to deployed exploit completion.
+  what_would_change_verdict: An owner check dominating the VPR read would change the source verdict. For system
+    impact, a separately authorized isolated deployment needs owner-positive and attacker HTTPS requests plus successful
+    retrieval of the synthetic victim DOCX, with matched route, alias, dependencies and IAM.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: S0b
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: REFUTED
+  p1_verdict: mechanism CONFIRMED by execution. Stated trigger (24h TTL) REFUTED.
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-002
+    - E-005
+    - E-022
+    - C02
+    - C05
+    - C08
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C02-additional.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Changing only the jobs read to a throttling ClientError changes 403 to 200 with the secret;
+      the missing-row reproduction also passes. Retained scan contains 10 completed rows with TTL and 26 active
+      rows without TTL.
+    raw_artifact: docs/evidence/astra-pass-c/C02-additional.json
+  mechanism_final: get_job maps a read error to None; None selects an unscoped S3 fallback before ownership validation.
+    Actual missing rows select the same branch. Neither requires an age threshold.
+  refuted_subclaims:
+  - Any completed VPR older than 24 hours necessarily exposes this fallback; completed jobs extend TTL to approximately
+    one year and the observed result cohort still has rows.
+  - The configured results bucket retains objects indefinitely; its enabled all-prefix expiration is 365 days.
+  disconfirming_effort: Kept a victim-owned row present and changed only read success to throttle failure. Also
+    checked completed TTLs and bucket lifecycle against the age-based explanation. Ownership blocks the successful
+    read but not the error path; the lifecycle disproves indefinite configured retention without disproving the
+    fallback.
+  depends_on_live_aws: false
+  layer_caveat: Handler defect survives. Live TTL and lifecycle corrections describe the retained devx snapshot
+    under E-022; exact deletion ordering and a two-user deployed fallback transaction were not observed.
+  residual_disagreement: A labels the core CONFIRMED and B labels the erroneous trigger REFUTED; their conjunct-level
+    conclusions agree. B's error-path control adds evidence, not an opposing verdict. S3-before-completion ordering
+    is separately registered.
+  what_would_change_verdict: Separate read failure from absence and enforce an owner boundary before any result
+    read. To settle deployed exposure, use pre-provisioned synthetic owned results with present and missing rows
+    in an isolated environment and capture HTTPS bodies and download retrieval; exercise throttling there, never
+    by mutating live AWS in this audit.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: true
+- finding_id: S11d
+  bucket: DISAGREE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: REFUTED
+  p1_verdict: CONFIRMED at the DAL layer. Live user impact UNPROVABLE-WITHOUT-DEPLOY.
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-003
+    - E-010
+    - E-019
+    - E-022
+    - C02
+    - C03
+    - C06
+    - C08
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C03-parser-races-pagination.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: A directly constructed GPA=3.8 raises TypeError; actual parse_cv maps mocked extracted GPA=3.5
+      to model GPA=null and persists successfully. VPR.model_fields lacks cost_usd and token_usage; extra cost_usd
+      is discarded.
+    raw_artifact: docs/evidence/astra-pass-c/C03-parser-races-pagination.json
+  mechanism_final: save_cv has a latent float-serialization defect for a GPA-bearing UserCV. The present extraction
+    pipeline drops GPA, so this evidence does not establish GPA-triggered upload failures. TokenUsage has cost_usd,
+    but the VPR object saved by save_vpr does not contain TokenUsage.
+  refuted_subclaims:
+  - Extracting GPA in the current parser necessarily makes upload fail; the parser omits GPA when constructing Education.
+  - The claimed save_vpr cost_usd sibling is an active equivalent trigger; cost_usd belongs to another model and
+    no application save_vpr caller was found.
+  - Commit 7cdc5e5 introduced GPA propagation or made the first save newly fatal; it changed failure handling of
+    the second dedicated-CV-table write.
+  disconfirming_effort: Followed the parser-to-DAL path with only extracted GPA varied, instead of relying on a
+    hand-built UserCV. Inspected VPR and TokenUsage separately and executed extra-field serialization. Both controls
+    contradict the claimed current trigger while preserving the direct DAL failure.
+  depends_on_live_aws: false
+  layer_caveat: Mock LLM output proves the application parser transformation, not how often a provider extracts
+    GPA. E-022 ties parser application source to the checked alias; no live provider output or upload failure is
+    needed for the latent DAL verdict.
+  residual_disagreement: B leaves the parser trigger uncertain and calls the save_vpr serialization omission confirmed;
+    A follows the actual model path. C's parser and model controls settle the exact trigger in A's favor. General
+    absence of float conversion is not proof that the named cost field reaches that method.
+  what_would_change_verdict: A reachable writer that retains GPA would activate this latent failure; Decimal normalization
+    would remove it. An actual VPR field carrying a float into save_vpr would require reassessing the sibling claim.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: true
+- finding_id: S25
+  bucket: BOTH-UNCERTAIN
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  p1_verdict: CONFIRMED (the call is broken). "Never advanced" REFUTED as written.
+  final_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  confidence: medium
+  decided_by:
+    evidence_ids:
+    - E-004
+    - E-006
+    - E-022
+    - C01
+    - C04
+    - C05
+    - C08
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Empty-owner transition leaves the real owner's row at cv_selected. Response submission creates
+      an absent row at gap_responses_submitted but preserves an existing cv_selected row. The retained live scan
+      is eight submitted and four missing-state rows.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: The empty-owner pending transition is directly confirmed and swallowed. The absolute historical
+    claim that the state machine never advanced is unresolved. Under procedure step 4 the composite verdict remains
+    uncertain, with the confirmed mechanism retained below.
+  confirmed_conjuncts:
+  - The pending transition supplies the wrong partition identity.
+  - The failure is swallowed.
+  - An absent application can be initialized directly as submitted.
+  refuted_subclaims:
+  - Response-submission upsert necessarily advances an existing cv_selected application; the matched control leaves
+    it unchanged. This corrects a possible interpretation of the alternative path, not the original empty-owner
+    finding.
+  disconfirming_effort: Distinguished an already-existing cv_selected row from a nonexistent row. The alternative
+    upsert does not rescue the former. Checked the live scan for transition history; it contains states, not writer
+    identities or old/new transition evidence.
+  depends_on_live_aws: true
+  layer_caveat: Moto establishes the wrong-key mechanism, not an exact real-service error class or all historical
+    transitions. E-022 closes source identity for inspected bundles but cannot turn a table snapshot into history.
+  residual_disagreement: A confirms the broken call and rejects a universal stall using new-row creation. B preserves
+    uncertainty about history and explicitly tests existing-row preservation. Both narrower controls stand; historical
+    uncertainty is not resolved by reasoning.
+  what_would_change_verdict: Supply retained application-table DynamoDB data events or stream old/new images for
+    the claimed period, correlated to writer requests. Separately, an isolated copy of the deployed stack with synthetic
+    applications must execute create -> cv_selected -> generate questions -> submit answers and capture each state;
+    that proves current behavior, not all past behavior. Read-only access to existing traces suffices for historical
+    attribution; no live writes are authorized here.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: S1
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: REFUTED
+  pass_b_verdict: REFUTED
+  p1_verdict: CONFIRMED
+  final_verdict: REFUTED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-022
+    - C01
+    - C05
+    - C07
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Owned dependency reaches the controlled pipeline; foreign dependency returns 409. The poisoned
+      legacy get_vpr fallback is called zero times in either case.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: On the cited normal CV-tailoring path, a ready owned upstream VPR dominates the alleged fallback.
+    The request's foreign vpr_id does not produce the claimed read through that fallback. The DAL API is itself
+    unscoped, but that is not a reproduced reachable IDOR here.
+  refuted_subclaims:
+  - The normal cited route reaches the unscoped fallback with the attacker-selected foreign VPR.
+  - The current stored VPR model provides the asserted job_posting payload for this disclosure; job_posting belongs
+    to VPRRequest.
+  disconfirming_effort: Poisoned the unsafe fallback and supplied a real dependency resolver with owner-controlled
+    versus foreign artifacts. Inspected the ready-result branch and canonical repository owner arguments to test
+    whether mocks merely bypassed a missing guard. The foreign branch stops before the fallback.
+  depends_on_live_aws: false
+  layer_caveat: Refutes the specified source path under its current contracts. E-022 maps that source to the inspected
+    CV-tailor alias. It does not certify every other handler or unscoped DAL caller as secure.
+  residual_disagreement: None on the reachable mechanism; both passes overturn P1. A surviving unscoped method signature
+    must not be counted as this exploit.
+  what_would_change_verdict: An executable same-route case where dependency resolution is ready without an owned
+    VPR and attacker vpr_id reaches the poisoned fallback, or a different deployed application revision.
+  core_defect_status: REFUTED
+  materially_wrong_subclaim: true
+- finding_id: S2
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: REFUTED
+  pass_b_verdict: REFUTED
+  p1_verdict: Mechanism CONFIRMED / exploitability REFUTED
+  final_verdict: REFUTED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-015
+    - E-022
+    - C01
+    - C05
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Ordinary HTTP-v2 body fields do not select SFN; copying the three required fields to the event
+      top level does. REST httpMethod also prevents selection. Retained deployed API is REST aws_proxy.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: The SFN branch is a trusted direct-invocation contract requiring top-level user_id, cv_id and
+    job_id and no httpMethod. It is not an unauthenticated identity bypass through the ordinary HTTP-v2 body or
+    the inspected REST deployment.
+  refuted_subclaims:
+  - The guard is only absence of httpMethod.
+  - An ordinary API Gateway HTTP-v2 request body satisfies the direct-invoke field contract.
+  - The inspected public route uses HTTP API v2.
+  disconfirming_effort: Kept identical malicious body contents and moved only the required fields to top level;
+    then restored REST httpMethod. Inspected the actual deployed proxy route. The defect requires a different event-shaping
+    or invocation authority than the alleged public request.
+  depends_on_live_aws: true
+  layer_caveat: E-022 supports inspected alias source and E-015/C05 support REST routing as of the retained snapshot.
+    Full effective IAM for every possible direct invoker is not established; that residual does not revive the disproven
+    HTTP-body trigger.
+  residual_disagreement: Both refute the public trigger. P1's mechanism-CONFIRMED language describes a direct invocation
+    capability, not a demonstrated unauthorized invocation.
+  what_would_change_verdict: A deployed request mapping that promotes client body fields into the SFN event envelope,
+    or evidence an untrusted principal can invoke the Lambda directly, would require a separate concrete attack
+    path.
+  core_defect_status: REFUTED
+  materially_wrong_subclaim: true
+- finding_id: S6
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - C01
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Empty and non-JSON LLM content both produce ten questions with success=true; an invocation
+      exception produces success=false and LLM_API_ERROR.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: Successful invocation with malformed or insufficient output is converted into template questions
+    and reported as generated. Provider invocation failure is a separate path returning an error Result.
+  refuted_subclaims:
+  - Total LLM API failure is indistinguishable from successful generation.
+  - GAP_QUESTIONS_GENERATED is necessarily exposed in the HTTP success body; it is the logic Result code.
+  disconfirming_effort: Changed the failure from malformed returned content to a raised provider exception with
+    the same logic entry point. That control disproves the all-LLM-failures wording but leaves the template-success
+    mechanism intact.
+  depends_on_live_aws: false
+  layer_caveat: Mock-provider logic and source-handler mapping establish the mechanism. No production fallback frequency,
+    provider bill or request was measured.
+  residual_disagreement: None on the same two error paths.
+  what_would_change_verdict: Malformed or inadequate output returned as an explicit failure/degraded result, or
+    an HTTP/persistence caller that demonstrably distinguishes generated templates.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: true
+- finding_id: S7
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED, understated
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-021
+    - C01
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Passed and exhausted-failed quality gates both return success=true; the failed path sets quality_warning=true
+      internally. Source search finds no warning consumer outside vpr_generator.py.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: Section validation errors substitute canned defaults, and exhausted quality retries are accepted
+    as success. generate_vpr builds a VPRResponse without the internal quality_warning; the public handler and worker
+    do not surface it.
+  refuted_subclaims: []
+  disconfirming_effort: Tested a genuinely passed gate against a persistently failed gate, then traced the conversion
+    from FinalVPRData to VPRResponse and the worker's success check to seek a later warning channel. No such channel
+    exists in the inspected source. This is stronger than a grep alone.
+  depends_on_live_aws: false
+  layer_caveat: Source/pipeline behavior survives; paid usage, prevalence and the subjective placebo description
+    were not independently measured. Bundle identity does not prove billed generation outcomes.
+  residual_disagreement: No substantive A/B difference. The billing claim remains an unproven impact conjunct, not
+    a confirmed charge observation.
+  what_would_change_verdict: A failing final quality gate returns failure or an explicit quality signal that survives
+    response serialization and is consumed by the client. Billing magnitude requires a correlated controlled run
+    and usage records.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: S8
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED (live schema proof)
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-014
+    - E-022
+    - C02
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C02-additional.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: With the real gap sort-key builder and identical answer, artifacts schema yields an unsuccessful
+      DAL Result and empty context; dedicated userId/questionId schema yields the answer.
+    raw_artifact: docs/evidence/astra-pass-c/C02-additional.json
+  mechanism_final: Cover-letter gap lookup uses the artifacts DAL against a gap-key query, so schema failure becomes
+    empty context. The interview path selects dedicated gap-table candidates. The failure is normally converted
+    to a Result inside the DAL before the handler sees it.
+  refuted_subclaims:
+  - The ordinary schema failure always raises into the handler exception block; the DAL catches ClientError and
+    returns failure.
+  disconfirming_effort: Rejected the original B positive control because its sort-key prefix returned no answer
+    even on the correct table. Re-ran the corrected control using _build_gap_responses_sort_key and inspected the
+    nonempty returned answer; changing table schema alone determines context loss.
+  depends_on_live_aws: true
+  layer_caveat: Live table schemas and environment bindings are retained raw observations. E-022 establishes packaged
+    application sources for checked functions; the routed cover-letter alias/dependencies and a complete public
+    request were not separately established in C. The local wrong-table mechanism is independent of that residual.
+  residual_disagreement: A's exception-layer correction supplements the shared core. Initial C01 S8 result is explicitly
+    not a valid positive control; C02 governs.
+  what_would_change_verdict: The cover-letter path resolves the gap table and demonstrates that the seeded owner's
+    persisted answer reaches generation; an alias/configuration differing from the retained live bindings would
+    change deployed applicability.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: S10
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED in substance / mechanism partly misstated
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - C01
+    - C03
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C03-parser-races-pagination.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Success and failure of every injected cancel effect both return HTTP 200; stop_execution is
+      attempted. The primary status-write Result is ignored and chain-operation exceptions are swallowed.
+    raw_artifact: docs/evidence/astra-pass-c/C03-parser-races-pagination.json
+  mechanism_final: Cancellation can acknowledge cancelled although persistence and chain stopping failed. This is
+    a caller-visible false acknowledgement; subsequent generation and billing depend on the actual execution and
+    worker guards.
+  refuted_subclaims:
+  - All status writes are literally except Exception/pass; the main job write's unsuccessful Result is ignored instead.
+  disconfirming_effort: Kept the owned processing job fixed and changed all effect outcomes, then inspected worker
+    cancellation checks as a possible rescue. Identical success responses survive failed effects; worker safeguards
+    mean continued generation or billing is not a universal observed consequence.
+  depends_on_live_aws: false
+  layer_caveat: Mocked side-effect outcomes establish acknowledgement semantics, not a live cancellation, continued
+    provider work, or billing. No state-changing live invocation was made.
+  residual_disagreement: Both support the mechanism and qualify the syntactic and billing claims.
+  what_would_change_verdict: Cancellation surfaces unsuccessful Result/stop failures or verifies the durable cancelled
+    state before acknowledging it. To quantify continuation, correlate synthetic cancel, worker, provider and billing
+    traces in an isolated environment.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: S11
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: REFUTED
+  p1_verdict: CONFIRMED
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - C01
+    - C02
+    - C03
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C03-parser-races-pagination.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Both cancel handlers recreate a partial CANCELLED item after deletion between read and update.
+      Opposite-schema controls return 500 and leave the original processing item unchanged.
+    raw_artifact: docs/evidence/astra-pass-c/C03-parser-races-pagination.json
+  mechanism_final: The cited unconditional updates permit a same-key race and upsert. Each handler reads and writes
+    its own key schema, so the asserted legacy-read/canonical-write phantom is not the cause.
+  refuted_subclaims:
+  - These cancel paths read a legacy item and write a distinct canonical phantom; cover uses canonical keys throughout
+    and CV-tailor uses legacy keys throughout.
+  disconfirming_effort: Executed each handler against both key schemas, then deleted only the already-read row immediately
+    before update. The opposite schema fails before update; same-schema deletion produces the partial item and HTTP
+    200 in both handlers.
+  depends_on_live_aws: false
+  layer_caveat: Moto and the actual SDK arguments establish unconditional-upsert behavior. Concurrent production
+    frequency, the identity of competing writers and downstream billing are unmeasured.
+  residual_disagreement: A confirms the real race and B refutes the alleged cross-schema cause while explicitly
+    confirming the same race. Their opposite scalar labels conceal substantive agreement; C follows the mechanism-real/trigger-false
+    rule.
+  what_would_change_verdict: A conditional existence/current-status write would remove the demonstrated race. A
+    trace showing these exact handlers cross schemas would change the refuted cause, but a different writer would
+    be a separate finding.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: true
+- finding_id: S23
+  bucket: AGREE-SUPERFICIAL
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: REFUTED
+  p1_verdict: mechanism CONFIRMED. "On the request path" REFUTED. Severity REFUTED.
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-017
+    - E-022
+    - C01
+    - C05
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Three requirements and two evidence strings cause nine tokenizations. Synthetic 60x500 input
+      takes about 55 ms with short evidence versus 319 ms with longer evidence. The deployed generation route targets
+      the submit Lambda.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: Evidence is re-tokenized for every requirement, giving n*(m+1) calls and work dependent on text
+    length, with no explicit evidence-pool cap. Current public generation is asynchronous. These local timings cannot
+    determine production severity.
+  refuted_subclaims:
+  - This generator's work runs synchronously inside the current public API Gateway generation request.
+  - n*m is the exact total tokenizer invocation count; it excludes n requirement tokenizations, although the stated
+    big-O term is valid.
+  disconfirming_effort: Counted calls with a wrapped tokenizer, varied evidence length at fixed n and m, and inspected
+    the deployed route rather than inferring synchronicity from the legacy handler name. Neither a short benchmark
+    nor asynchronous execution establishes harmlessness.
+  depends_on_live_aws: true
+  layer_caveat: Local algorithm is confirmed without AWS. E-022 application matching and the deployed stage export
+    support the asynchronous-route correction; representative latency, limits, dependencies and cost remain unmeasured.
+  residual_disagreement: A adjudicates tokenization but does not rule on the public-route conjunct; B explicitly
+    refutes that conjunct and declines P1's severity refutation. Treat the incomplete shared scope as superficial
+    agreement, not a vote on severity.
+  what_would_change_verdict: Cache tokenization across requirements to change the mechanism; provide observed size
+    distributions and a deployment-matched worker benchmark with p95/p99 CPU, memory and latency to establish severity.
+    A synchronous public integration would change the route correction.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: true
+- finding_id: S26
+  bucket: BOTH-UNCERTAIN
+  pass_a_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  pass_b_verdict: REFUTED
+  p1_verdict: 6 of 7 sub-claims CONFIRMED / "unbounded" REFUTED
+  final_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  confidence: medium
+  decided_by:
+    evidence_ids:
+    - E-020
+    - C01
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Company name, job description and answer accept 100000 characters; 3000 scraped words are truncated
+      to 2500. generate lacks a system argument, while complete exposes system_prompt. No provider attack was executed.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: 'Distinct source exposures exist: uncapped named user fields, instruction/input concatenation
+    in gap/interview, and the async validation gap. Successful prompt injection and malicious downstream behavior
+    remain unproven. Procedure step 4 preserves A''s uncertainty instead of replacing it with B''s refutation of
+    one bound claim.'
+  confirmed_conjuncts:
+  - Named model string fields have no tested 100000-character rejection.
+  - Gap and interview place instructions and input in a user-message prompt.
+  - The async CV-tailoring path omits the named legacy validator.
+  refuted_subclaims:
+  - Scraped company text is unbounded; MAX_PROMPT_WORDS is 2500.
+  - There is no privileged-channel capability anywhere in the client; complete has system_prompt and company/VPR
+    use separate system prompts.
+  - VPR inputs have no structural delimiters; labeled JSON sections exist. Delimiters alone do not prove injection
+    resistance.
+  disconfirming_effort: Executed length limits and inspected actual provider interfaces and prompt assembly as possible
+    defenses. They refute blanket bounds/channel assertions but neither demonstrate nor rule out instruction override
+    by a real model.
+  depends_on_live_aws: false
+  layer_caveat: Pydantic acceptance is not acceptance at every HTTP boundary. Mock-provider tests cannot establish
+    model behavior, effective WAF/body constraints or downstream exploit success.
+  residual_disagreement: A retains exploit uncertainty; B's scalar REFUTED targets an incorrect source qualifier
+    and its own residual also says no injection was executed. The unresolved attack remains unresolved.
+  what_would_change_verdict: Use an isolated provider evaluation environment pinned to the deployed model, dependency
+    bundle, prompts and decoding settings, with sandbox-only storage, synthetic CV/company/gap data, paired benign/adversarial
+    inputs, predeclared unauthorized-output criteria and retained requests/responses. Supply scoped provider credentials
+    and evaluate every named surface; no real-provider call or live write was performed here.
+  core_defect_status: UNPROVABLE-WITHOUT-DEPLOY
+  materially_wrong_subclaim: true
+- finding_id: K9
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED (live metrics)
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-007
+    - E-008
+    - E-022
+    - C01
+    - C05
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C01-independent.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Removing only DYNAMODB_TABLE_NAME raises MissingTableEnvError; adding it builds dependencies.
+      Retained metrics sum to 336 errors/336 invocations, and a raw log identifies the same exception at dependency
+      construction.
+    raw_artifact: docs/evidence/astra-pass-c/C01-independent.json
+  mechanism_final: The cleanup entry point requires DYNAMODB_TABLE_NAME outside its catch, and the retained deployed
+    configuration omits it. It fails at startup under that configuration.
+  refuted_subclaims: []
+  disconfirming_effort: Considered that metrics might reflect an unrelated failure. The single-variable dependency
+    control and raw MissingTableEnvError stack identify the missing variable; the bundle receipt includes matching
+    cleanup source. Metrics alone would have been insufficient.
+  depends_on_live_aws: true
+  layer_caveat: This has direct deployed execution evidence, not merely a moto prediction. E-022 closes cleanup
+    application-source correspondence for the captured latest version. No all-time failure rate or current-after-snapshot
+    configuration guarantee is claimed.
+  residual_disagreement: No mechanism disagreement. B's observed log/metrics strengthen A's source-plus-environment
+    proof without proving that cleanup never worked historically.
+  what_would_change_verdict: A configuration supplying the correct jobs table and a successful scheduled execution
+    would change the current startup verdict. Historical cleanup claims require older logs/configuration evidence,
+    not another invocation during this read-only audit.
+  core_defect_status: CONFIRMED
+  materially_wrong_subclaim: false
+- finding_id: G1
+  bucket: BOTH-UNCERTAIN
+  pass_a_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  pass_b_verdict: CONFIRMED
+  p1_verdict: GOOD — and mutation-proven
+  final_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  confidence: medium
+  decided_by:
+    evidence_ids:
+    - E-012
+    - C03
+    - C07
+    - C09
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C10-targeted-controls.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Header/body/query identities held constant yield no identity without claims and real-user with
+      claims. The parser forces supplied authenticated ownership. The retained two-spelling header mutation adds
+      six test failures against its matched baseline.
+    raw_artifact: docs/evidence/astra-pass-c/C10-targeted-controls.json
+  mechanism_final: The named auth helper fails closed and the upload/parser identity boundary is supported. Universal
+    absence of body/query-derived writes and full F-DEVX-8 closure are not proven by those helpers or one mutation.
+    Procedure step 4 retains the uncertainty of the composite good claim.
+  confirmed_conjuncts:
+  - The named helper does not fall back to x-user-id.
+  - Authorizer claims control the tested identity.
+  - CV upload removes the body owner and the parser uses its supplied owner.
+  refuted_subclaims: []
+  disconfirming_effort: 'Kept malicious header/body/query inputs fixed while adding only claims. Inspected the six
+    mutation failures: three middleware cases share a fixture containing all three identity sources, so a header
+    mutation cannot independently certify body/query paths or all write routes.'
+  depends_on_live_aws: false
+  layer_caveat: Synthetic claims and mutation sensitivity do not verify Cognito signature checking, API integration
+    contracts or every public write handler. E-022 does not supply that missing coverage.
+  residual_disagreement: B confirms the local helper while A reserves the universal closure claim. Both local controls
+    stand; the broad good claim remains unproved.
+  what_would_change_verdict: Supply F-DEVX-8 acceptance criteria and a complete public-write route/integration inventory;
+    in an isolated deployment use two real Cognito users and independently mutate header, query and body identity
+    while verifying persisted owner values for each handler and trusted-invoke adapter. A documented exhaustive
+    source-path proof can settle the source-only part; HTTPS tests settle the deployed boundary.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false
+- finding_id: G4
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: CONFIRMED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: GOOD
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - C01
+    - C03
+    - C04
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C03-parser-races-pagination.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Six 220000-byte rows force two queries in each real list helper; all six return and ExclusiveStartKey
+      is forwarded. The short-row control needs one query. Page-two failure separately returns an empty list.
+    raw_artifact: docs/evidence/astra-pass-c/C03-parser-races-pagination.json
+  mechanism_final: The two specifically named list paths follow pagination correctly. Their later-page error handling
+    is a separate claim, captured in the unadjudicated register.
+  refuted_subclaims: []
+  disconfirming_effort: Forced a real moto pagination boundary rather than relying only on mocked cursors, and injected
+    a second-page error to challenge a broader interpretation of correct listing. Pagination survives; error recovery
+    is not covered by this good claim.
+  depends_on_live_aws: false
+  layer_caveat: Tests establish the loops and forwarded cursor; they are not a production data migration, real-service
+    pagination stress test or proof about unrelated export queries.
+  residual_disagreement: None on pagination. Agreement must not erase the out-of-manifest page-two error observation.
+  what_would_change_verdict: A cursor-containing successful response that the named helper fails to follow, or a
+    partial successful multi-page result. Errors after page one belong to the separately registered issue.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false
+- finding_id: PREMISE-P2
+  bucket: BOTH-UNCERTAIN
+  pass_a_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  pass_b_verdict: REFUTED
+  p1_verdict: the two-cause framing STANDS. The cited anchor is WRONG.
+  final_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  confidence: medium
+  decided_by:
+    evidence_ids:
+    - E-007
+    - C02
+    - C05
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C10-targeted-controls.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: With artifacts and users bindings, canonical/legacy resolvers select different tables; removing
+      only ARTIFACTS_TABLE_NAME makes both select users. No enumerated mapping of the approximately 35 findings
+      is supplied.
+    raw_artifact: docs/evidence/astra-pass-c/C10-targeted-controls.json
+  mechanism_final: Table authority and key grammar are concrete distinct contracts. The self.db alias is not sufficient
+    evidence for a shared cause of an unspecified group. The approximately 35-item causal compression remains unproven.
+  refuted_subclaims:
+  - Removing self.db alone eliminates the independently present resolver chains and dual key grammars.
+  disconfirming_effort: Varied only an environment binding and inspected the alias-independent resolution chains
+    as a counterexample to a one-line root cause. Did not use unrelated confirmed defects to refute an unspecified
+    35-item group.
+  depends_on_live_aws: false
+  layer_caveat: Live environment counts are corroboration, not a causal map. E-022 establishes selected application
+    source identity but not that one table refactor repairs the unspecified inventory.
+  residual_disagreement: B refutes the single-alias explanation while preserving two concrete problems; A withholds
+    judgment on group sufficiency. The missing group remains uncertain under step 4.
+  what_would_change_verdict: Provide the exact approximately 35 finding IDs and, per ID, writer, reader, selected
+    table, key grammar and failing contract. In an isolated checkout run each reproduction before and after only
+    the proposed authority/key change. No AWS credential or deployment is required for this causal-map deliverable.
+  dependent_session_scope: Narrow P2 to proven table/schema contracts and the explicit causal map; do not promise
+    a 35-finding cure from removing an alias.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false
+- finding_id: PREMISE-P3
+  bucket: AGREE-SUBSTANTIVE
+  pass_a_verdict: REFUTED
+  pass_b_verdict: REFUTED
+  p1_verdict: the count is REFUTED. The characterisation is CONFIRMED and understated.
+  final_verdict: REFUTED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-009
+    - C01
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C10-targeted-controls.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: 'AST totals reproduce 176 broad catches: 12 pass-only, 144 other no-raise, 20 containing raise.
+      Equal no-raise classifications produce opposite Result.success values; a nested caught raise returns normally.
+      B''s 46 explicit-error locations resolve in source.'
+    raw_artifact: docs/evidence/astra-pass-c/C10-targeted-controls.json
+  mechanism_final: Exact broad-pass is not the claimed approximately 40/default idiom. A no-raise classifier cannot
+    establish caller-visible success because Result and HTTP errors propagate without raising. Confirmed error masking
+    elsewhere remains actionable.
+  refuted_subclaims:
+  - There are approximately 40 exact except Exception/pass blocks; the defined source-only count is 12.
+  - All 144 non-pass no-raise handlers return success-shaped outcomes.
+  - Any nested Raise proves an exception surfaces to the caller.
+  disconfirming_effort: Recomputed the AST categories and executed pairs with identical classifier labels but opposite
+    return semantics, plus a nested swallowed raise. Checked retained explicit-error examples against source. The
+    broad characterization fails on direct counterexamples.
+  depends_on_live_aws: false
+  layer_caveat: Counts are for application Python, not scripts/tests/dependencies. Forty-six is a retained source-pattern
+    lower bound, not a fully traced semantic census; callers may still ignore an error Result.
+  residual_disagreement: A refutes the literal default/count, B also refutes P1's semantic interpretation. The overlapping
+    claim is contradicted on both instruments; there is no basis for a blanket success-shaped count.
+  what_would_change_verdict: A defined, exhaustive caller-visible taxonomy with source and caller traces could establish
+    the true error-masking population. Different population definitions cannot retroactively validate the incorrect
+    literal count.
+  dependent_session_scope: Target confirmed broad-pass, ignored-Result and error-to-empty paths; replace the 144
+    presumed-success list with a semantic inventory.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false
+- finding_id: PREMISE-P4
+  bucket: AGREE-SUPERFICIAL
+  pass_a_verdict: REFUTED
+  pass_b_verdict: CONFIRMED
+  p1_verdict: CONFIRMED, with a specific and severe instance — and the suite is stronger than feared in other places.
+  final_verdict: CONFIRMED
+  confidence: high
+  decided_by:
+    evidence_ids:
+    - E-010
+    - E-011
+    - E-012
+    - E-013
+    - C01
+    - C06
+    - C07
+    - C08
+    - C09
+    - C10
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C06-history-after.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 1
+    material_output: Unchanged parent tests yield 9 failed/3 passed before and 10 failed/2 passed after substituting
+      only the upload handler. The new failure is test_openapi_payload_uses_bearer_token_for_user_id. Shipped P-05
+      cases pass at 401; owner-positive controls expose gaps/export fixture weaknesses.
+    raw_artifact: docs/evidence/astra-pass-c/C06-history-after.json
+  mechanism_final: Tests advertised as cross-tenant ownership probes stop at the unauthenticated boundary and omit
+    the VPR export branch. This test-layer mismatch is confirmed. The separate claim that no pre-existing test could
+    detect the fatal-write change is directly false. A green unauthenticated-boundary test remains valuable for
+    that narrower contract.
+  refuted_subclaims:
+  - No existing test could detect 7cdc5e5's fatal-write change because the parent suite was already red.
+  - P1's isolated one-failure mutation baseline is reproduced by the retained controlled runs; their baseline has
+    46 failures.
+  - Mutation survival proves globally zero line or branch coverage of status ownership; it establishes no additional
+    failing assertion in the selected run, not a coverage census.
+  disconfirming_effort: Held parent tests, dependencies, working directory and network control fixed while swapping
+    the handler at import time. Compared failure sets, not aggregate red/green. Re-inspected the P-05 input builder,
+    executed owner/attacker controls and verified that a status-only mutant actually changes foreign access from
+    403 to 200.
+  depends_on_live_aws: false
+  layer_caveat: Current and historical tests are local with fake AWS and blocked transport. Historical CI enforcement
+    is unknown. The poisoned status control exposes foreign job metadata, not a live VPR document. Full B mutation
+    logs were audited, not claimed freshly rerun in C.
+  residual_disagreement: A's scalar REFUTED addresses the historical example; B's CONFIRMED addresses the separate
+    P-05 instrument defect while also rejecting the historical assertion. C confirms the demonstrated test-layer
+    defect and explicitly refutes the historical conjunct.
+  what_would_change_verdict: Authenticated owner-positive and attacker-negative cases for each registered artifact
+    branch would change the P-05 finding. Historical CI receipts would settle enforcement, and a controlled all-green
+    suite plus branch-sensitive mutation would strengthen the status-coverage conclusion.
+  dependent_session_scope: Preserve the tests with demonstrated sensitivity; improve authenticated branch coverage,
+    positive fixtures and mock isolation. Do not replace the suite wholesale on the historical claim.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false
+- finding_id: PREMISE-P5
+  bucket: BOTH-UNCERTAIN
+  pass_a_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  pass_b_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  p1_verdict: CONFIRMED, and more strongly than claimed.
+  final_verdict: UNPROVABLE-WITHOUT-DEPLOY
+  confidence: medium
+  decided_by:
+    evidence_ids:
+    - E-007
+    - E-016
+    - E-022
+    - C02
+    - C04
+    - C05
+    - C11
+    reran: true
+    command: src/backend/.venv/bin/python -c 'import json,subprocess; from pathlib import Path; r=json.loads(Path('"'"'docs/evidence/astra-pass-c/C04-page-error-knowledge.json'"'"').read_text());
+      p=subprocess.run(r['"'"'command'"'"'],input=r.get('"'"'stdin'"'"'),cwd=r['"'"'cwd'"'"'],text=True,env={**__import__('"'"'os'"'"').environ,'"'"'AWS_ACCESS_KEY_ID'"'"':'"'"'testing'"'"','"'"'AWS_SECRET_ACCESS_KEY'"'"':'"'"'testing'"'"','"'"'AWS_SESSION_TOKEN'"'"':'"'"'testing'"'"','"'"'AWS_DEFAULT_REGION'"'"':'"'"'us-east-1'"'"','"'"'AWS_EC2_METADATA_DISABLED'"'"':'"'"'true'"'"','"'"'POWERTOOLS_TRACE_DISABLED'"'"':'"'"'true'"'"','"'"'PYTHONPATH'"'"':r['"'"'cwd'"'"']});
+      raise SystemExit(p.returncode)'
+    command_cwd: /Users/yitzchak.meirovich/Documents/code5/careervp
+    exit_code: 0
+    material_output: Registered knowledge callable returns an authenticated empty list without a database call.
+      KnowledgeRepository succeeds on pk/sk but fails on userEmail/knowledgeType. The retained live count is zero.
+    raw_artifact: docs/evidence/astra-pass-c/C04-page-error-knowledge.json
+  mechanism_final: Current application wiring is disconnected from the dedicated repository/table schema. Neither
+    an empty scan nor grep establishes zero external or historical reads/writes, and neither authorizes deleting
+    the table.
+  confirmed_conjuncts:
+  - The registered knowledge route returns a stub response.
+  - The repository's keys conflict with the retained physical schema.
+  refuted_subclaims:
+  - One name grep is sufficient to settle all live and historical table usage or deletion safety.
+  disconfirming_effort: Called the registered function with database access poisoned, varied the repository table
+    schema, then checked the retained route and shared environment/IAM grants for consumers outside the named handler.
+    These establish disconnected source wiring, not a universal absence of consumers.
+  depends_on_live_aws: true
+  layer_caveat: E-022 verifies application files but cannot identify every external principal or historical data
+    event. The retained count and route topology are snapshots; missing records are not proof that nothing was ever
+    read or written.
+  residual_disagreement: Both A and B leave the universal premise uncertain. Their agreement cannot substitute for
+    usage history or a product-scope decision.
+  what_would_change_verdict: Supply read-only access to retained DynamoDB data-event records for arn:aws:dynamodb:us-east-1:788159322332:table/careervp-knowledge-table-devx
+    over an explicitly defined window, cross-account and external-consumer inventory, and the knowledge feature's
+    retention/scope decision. If history was never recorded, the all-time assertion cannot be recovered by deploying;
+    narrow the claim and observe a future window.
+  dependent_session_scope: Keep P5 as wiring, consumer-history and feature-scope investigation; deletion-only remediation
+    remains unjustified.
+  core_defect_status: NOT_A_DEFECT_SAMPLE
+  materially_wrong_subclaim: false

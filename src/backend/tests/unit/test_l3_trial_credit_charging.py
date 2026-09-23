@@ -41,7 +41,10 @@ def _event(path: str = '/jobs/job-1/gap-questions') -> dict[str, object]:
 @pytest.mark.unit
 class TestCreditChargedBeforeLLM:
     def test_credit_charged_before_llm_called(self) -> None:
-        from careervp.handlers.gap_handler import lambda_handler
+        """Credit is charged during submit; the LLM call happens later, only in the
+        SQS worker (HANDOFF-09 split) — never in the same invocation. This test
+        drives both phases against the same mocks to pin the combined ordering."""
+        from careervp.handlers.gap_handler import _process_gap_generation_job, lambda_handler
 
         call_order: list[str] = []
         trial_service = MagicMock()
@@ -63,28 +66,44 @@ class TestCreditChargedBeforeLLM:
 
         app_repo.update_state.side_effect = _update_state
 
+        cv_payload = {
+            'personal_info': {'full_name': 'Test User'},
+            'work_experience': [],
+            'skills': [],
+            'education': [],
+        }
+
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler._get_application_repository', return_value=app_repo),
             patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
-            patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+            patch('careervp.handlers.gap_handler.sqs'),
+            patch('careervp.handlers.gap_handler._build_user_cv_prompt_payload', return_value=cv_payload),
         ):
             dal = MagicMock()
             dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
             mock_get_dal.return_value = dal
 
-            def _generate_gap_questions(**_: object) -> Result[list[dict[str, object]]]:
-                call_order.append('generate_gap_questions')
-                return Result(
-                    success=True,
-                    data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
-                    code=ResultCode.GAP_QUESTIONS_GENERATED,
-                )
+            # Phase 1: submit. Charges the credit; must not touch the LLM.
+            submit_response = lambda_handler(_event(), MagicMock())
+            assert submit_response['statusCode'] == 202
 
-            mock_generate.side_effect = _generate_gap_questions
-            response = lambda_handler(_event(), MagicMock())
+            # Phase 2: worker. Runs later, only when the SQS message is processed.
+            with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
 
-        assert response['statusCode'] in [200, 201]
+                def _generate_gap_questions(**_: object) -> Result[list[dict[str, object]]]:
+                    call_order.append('generate_gap_questions')
+                    return Result(
+                        success=True,
+                        data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
+                        code=ResultCode.GAP_QUESTIONS_GENERATED,
+                    )
+
+                mock_generate.side_effect = _generate_gap_questions
+                _process_gap_generation_job({'user_id': 'user-1', 'cv_id': 'cv-1', 'job_id': 'job-1', 'application_id': 'app-1'})
+
+        assert 'generate_gap_questions' not in call_order[: call_order.index('consume_credit') + 1]
         assert call_order.index('consume_credit') < call_order.index('generate_gap_questions')
         assert app_repo.update_state.call_count == 2
         assert app_repo.update_state.call_args_list[0].kwargs['new_state'] == 'gap_questions_pending'
@@ -99,6 +118,15 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = lambda_handler(_event(), MagicMock())
 
@@ -113,6 +141,15 @@ class TestCreditChargedBeforeLLM:
         with (
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             response = lambda_handler(_event(), MagicMock())
 
@@ -129,20 +166,25 @@ class TestCreditChargedBeforeLLM:
             patch('careervp.handlers.gap_handler._get_trial_service', return_value=trial_service),
             patch('careervp.handlers.gap_handler._get_application_repository') as mock_repo_factory,
             patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
-            patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
+            patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+            patch('careervp.handlers.gap_handler.sqs'),
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             mock_repo_factory.return_value = MagicMock()
             dal = MagicMock()
             dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
             mock_get_dal.return_value = dal
-            mock_generate.return_value = Result(
-                success=True,
-                data=[{'question_id': 'q-1', 'question': 'Describe impact', 'tags': ['[CV IMPACT]']}],
-                code=ResultCode.GAP_QUESTIONS_GENERATED,
-            )
             response = lambda_handler(_event(), MagicMock())
 
-        assert response['statusCode'] in [200, 201]
+        assert response['statusCode'] in [200, 201, 202]
         trial_service.consume_credit.assert_called_once_with('user-1')
 
 

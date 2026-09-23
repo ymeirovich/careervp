@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from careervp.models.result import ResultCode
+from careervp.models.result import Result, ResultCode
 
 # ---------------------------------------------------------------------------
 # Constants / shared fixtures
@@ -83,6 +83,14 @@ _last: dict[str, MagicMock] = {}
 # ---------------------------------------------------------------------------
 
 
+def _stub_core_repository() -> MagicMock:
+    """CoreRepository stub: canonical VPR write succeeds, version starts at 1."""
+    repository = MagicMock()
+    repository.next_vpr_version.return_value = 1
+    repository.save_vpr_artifact.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
+    return repository
+
+
 def _invoke_vpr(*, make_completed_raise: bool = False, task_token: str | None = None) -> None:
     """Drive VPR worker _process_job_record with appropriate mocks."""
     from careervp.handlers import vpr_worker_handler
@@ -136,6 +144,10 @@ def _invoke_vpr(*, make_completed_raise: bool = False, task_token: str | None = 
         patch('careervp.handlers.vpr_worker_handler.generate_vpr', return_value=mock_gen_result),
         patch('careervp.handlers.vpr_worker_handler.load_confident_company_research_artifact', return_value=None),
         patch('careervp.handlers.vpr_worker_handler.ApplicationRepository'),
+        # F-DEVX-1: the worker now writes the canonical VPR artifact before the
+        # COMPLETED write. Stub the repository so this guard stays a cancellation
+        # test and performs no DynamoDB I/O of its own.
+        patch('careervp.handlers.vpr_worker_handler.CoreRepository', return_value=_stub_core_repository()),
         patch.dict(os.environ, _BASE_ENV),
     ):
         mock_s3.put_object.return_value = {}

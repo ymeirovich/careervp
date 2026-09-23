@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "get-policy",
+    "--function-name",
+    "careervp-cvtailor-lambda-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:02.131645+00:00",
+  "exit_code": 254,
+  "stdout": "",
+  "stderr": "\naws: [ERROR]: An error occurred (ResourceNotFoundException) when calling the GetPolicy operation: The resource you requested does not exist.\n\nAdditional error details:\nType: User\n"
+}

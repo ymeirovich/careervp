@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from typing import Any
 
 from careervp.payment_providers.interface import (
     CheckoutSession,
@@ -112,6 +113,22 @@ class PlaceholderPaymentProvider:
         return {
             'monthly': os.environ.get('PRICE_ID_MONTHLY', 'price_placeholder_monthly'),
             'quarterly': os.environ.get('PRICE_ID_QUARTERLY', 'price_placeholder_quarterly'),
+        }
+
+    def retrieve_subscription(self, subscription_id: str) -> dict[str, Any]:
+        """Return a lightweight fake subscription object in placeholder mode.
+
+        Shape mirrors the fields the webhook and reconciliation paths read.
+        Raises NotImplementedError outside placeholder mode via _guard().
+        """
+        self._guard()
+        return {
+            'id': subscription_id,
+            'status': 'active',
+            'current_period_start': 0,
+            'current_period_end': 0,
+            'cancel_at_period_end': False,
+            'items': {'data': [{'price': {'id': 'price_placeholder_monthly'}}]},
         }
 
     @staticmethod

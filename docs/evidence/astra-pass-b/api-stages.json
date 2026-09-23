@@ -1,0 +1,18 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "apigateway",
+    "get-stages",
+    "--rest-api-id",
+    "ymzhvcxod0"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:33.312387+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"item\": [\n        {\n            \"deploymentId\": \"4e2k57\",\n            \"stageName\": \"prod\",\n            \"cacheClusterEnabled\": false,\n            \"cacheClusterStatus\": \"NOT_AVAILABLE\",\n            \"methodSettings\": {\n                \"*/*\": {\n                    \"metricsEnabled\": true,\n                    \"loggingLevel\": \"INFO\",\n                    \"dataTraceEnabled\": false,\n                    \"throttlingBurstLimit\": 40,\n                    \"throttlingRateLimit\": 20.0,\n                    \"cachingEnabled\": false,\n                    \"cacheTtlInSeconds\": 300,\n                    \"cacheDataEncrypted\": false,\n                    \"requireAuthorizationForCacheControl\": true,\n                    \"unauthorizedCacheControlHeaderStrategy\": \"SUCCEED_WITH_RESPONSE_HEADER\"\n                }\n            },\n            \"accessLogSettings\": {\n                \"format\": \"{\\\"requestId\\\": \\\"$context.requestId\\\", \\\"extendedRequestId\\\": \\\"$context.extendedRequestId\\\", \\\"ip\\\": \\\"$context.identity.sourceIp\\\", \\\"caller\\\": \\\"$context.identity.caller\\\", \\\"user\\\": \\\"$context.identity.user\\\", \\\"requestTime\\\": \\\"$context.requestTime\\\", \\\"httpMethod\\\": \\\"$context.httpMethod\\\", \\\"resourcePath\\\": \\\"$context.resourcePath\\\", \\\"path\\\": \\\"$context.path\\\", \\\"status\\\": \\\"$context.status\\\", \\\"responseLatency\\\": \\\"$context.responseLatency\\\", \\\"protocol\\\": \\\"$context.protocol\\\", \\\"responseLength\\\": \\\"$context.responseLength\\\", \\\"integrationStatus\\\": \\\"$context.integration.status\\\", \\\"integrationErrorMessage\\\": \\\"$context.integrationErrorMessage\\\", \\\"authorizerError\\\": \\\"$context.authorizer.error\\\"}\",\n                \"destinationArn\": \"arn:aws:logs:us-east-1:788159322332:log-group:CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E\"\n            },\n            \"tracingEnabled\": true,\n            \"webAclArn\": \"arn:aws:wafv2:us-east-1:788159322332:regional/webacl/careervp-core-waf-devx/99274f5b-0a2b-4696-86ac-24316fdccf82\",\n            \"tags\": {\n                \"aws:cloudformation:logical-id\": \"CareerVpCrudDevxCrudservicerestapiDeploymentStageprodB3891A8B\",\n                \"aws:cloudformation:stack-id\": \"arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071\",\n                \"aws:cloudformation:stack-name\": \"CareerVpCrudDevx\",\n                \"feature\": \"crud\",\n                \"owner\": \"yitzchak-meirovich\",\n                \"service\": \"CareerVP\"\n            },\n            \"createdDate\": \"2026-07-20T22:41:25+03:00\",\n            \"lastUpdatedDate\": \"2026-08-05T22:18:19+03:00\"\n        }\n    ]\n}\n",
+  "stderr": ""
+}

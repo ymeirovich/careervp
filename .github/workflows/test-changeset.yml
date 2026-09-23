@@ -1,8 +1,12 @@
 name: Test Changeset Handling
 
+# P-28: automation is CreateChangeSet-only. This workflow used to run
+# `cdk deploy` (create+execute) against CareerVpCrudDev on every push to a
+# `fix/**` or `feature/**` branch, which applied unreviewed template changes —
+# IAM included — to a stack nobody was watching. Two changes close that:
+#   1. the push trigger is gone; this is a deliberate, human-started run only.
+#   2. the deploy step creates a change set and does not execute it.
 on:
-  push:
-    branches: [fix/**, feature/**]
   workflow_dispatch:
 
 permissions:
@@ -47,18 +51,42 @@ jobs:
         run: |
           .github/scripts/cfn-guard.sh "CareerVpCrudDev" "us-east-1"
 
-      - name: Deploy CDK
+      # Create the change set WITHOUT executing it, then print what it would do.
+      # The change set is the artifact this workflow exists to test; applying it
+      # is a separate, human-gated action (see deploy.yml execute-change-set-dev).
+      - name: Create change set (no execute)
+        id: changeset
         working-directory: infra
-        run: npx cdk deploy CareerVpCrudDev --require-approval never --outputs-file cdk-outputs.json
+        run: |
+          CHANGESET_NAME="test-changeset-${GITHUB_SHA::7}-$(date -u +%Y%m%d%H%M%S)"
+          echo "name=$CHANGESET_NAME" >> "$GITHUB_OUTPUT"
+          npx cdk deploy CareerVpCrudDev \
+            --require-approval never \
+            --method=change-set --no-execute \
+            --change-set-name "$CHANGESET_NAME" \
+            --outputs-file cdk-outputs.json
 
-      - name: Run company-research test
+      - name: Describe the change set (review artifact)
+        run: |
+          aws cloudformation describe-change-set \
+            --stack-name CareerVpCrudDev \
+            --change-set-name "${{ steps.changeset.outputs.name }}" \
+            --query 'Changes[].ResourceChange.{Action:Action,Replace:Replacement,Type:ResourceType,LogicalId:LogicalResourceId}' \
+            --output table
+
+      # NOTE: this now runs against whatever is already deployed to
+      # CareerVpCrudDev, not against this branch's code — the change set was
+      # never executed. It is a smoke test of the live stack, nothing more.
+      - name: Run company-research test (against the LIVE stack, not this branch)
         working-directory: src/backend/tests
         continue-on-error: true
         run: |
           bash company_research_test.sh || echo "::warning::Company research API test failed - external dependency may be unavailable"
 
-      - name: Cleanup
+      - name: Cleanup — delete the unexecuted change set
         if: always()
         run: |
-          echo "Tests complete, leaving stack for inspection"
-          echo "Stack URL: https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/stackinfo?stackId=$(aws cloudformation describe-stacks --stack-name CareerVpCrudDev --query "Stacks[0].StackId" --output text)"
+          aws cloudformation delete-change-set \
+            --stack-name CareerVpCrudDev \
+            --change-set-name "${{ steps.changeset.outputs.name }}" 2>/dev/null || true
+          echo "Change set deleted. The stack was not modified by this run."

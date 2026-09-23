@@ -15,6 +15,8 @@ from aws_lambda_powertools.metrics import MetricUnit
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.artifact_dependency_utils import (
@@ -24,9 +26,15 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import (
+    ArtifactUnavailableError,
+    DependencyResolution,
+    vpr_access_denied_envelope,
+)
 from careervp.logic.cancellation import CancelledBeforePersist
 from careervp.logic.cover_letter import generate_cover_letter
+from careervp.logic.utils.llm_metering import bind_llm_usage_context
 from careervp.models.api_models import CoverLetterRequest
 from careervp.models.company import CompanyResearchResult, ResearchSource
 from careervp.models.cover_letter import (
@@ -53,16 +61,7 @@ def _convert_decimal_to_float(obj: Any) -> Any:
 
 
 def _get_dal() -> DynamoDalHandler:
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
-    resolved_from = (
-        'ARTIFACTS_TABLE_NAME'
-        if os.environ.get('ARTIFACTS_TABLE_NAME')
-        else 'DYNAMODB_TABLE_NAME'
-        if os.environ.get('DYNAMODB_TABLE_NAME')
-        else 'TABLE_NAME'
-        if os.environ.get('TABLE_NAME')
-        else 'none'
-    )
+    table_name, resolved_from = table_registry.resolve_artifacts_table_name_with_source()
     logger.debug('Cover letter DAL table resolved', table_name=table_name, resolved_from=resolved_from)
     return DynamoDalHandler(table_name)
 
@@ -326,36 +325,50 @@ def _resolve_gap_responses(
 
 def _resolve_vpr_payload(
     dal: DynamoDalHandler,
-    vpr_id: str,
-    job_id: str,
+    application_id: str,
+    artifact_id: str,
     user_id: str,
 ) -> Any:
-    try:
-        vpr_result = dal.get_vpr(vpr_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('VPR lookup failed for cover letter context', vpr_id=vpr_id, error=str(exc))
-        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}') from exc
+    repository = CoreRepository(dal=dal, vpr_jobs_repository=JobsRepository())
+    vpr_result = repository.get_vpr_by_artifact_id(
+        application_id=application_id,
+        artifact_id=artifact_id,
+        user_id=user_id,
+    )
 
-    if not hasattr(vpr_result, 'success') or not vpr_result.success or vpr_result.data is None:
-        raise ValueError(f'Required VPR not found for cover letter: {vpr_id}')
+    # Callers do not always know the VPR's artifact id. The SQS worker path supplies
+    # none at all, so `_resolve_cover_letter_context` passes the application id in its
+    # place. Resolve the real id from owner + application rather than failing (F-DEVX-1:
+    # this used to be masked by a legacy lookup keyed on application_id).
+    if vpr_result.success and vpr_result.data is None:
+        resolved_id = repository.resolve_artifact_id(application_id, 'vpr', user_id=user_id)
+        if resolved_id.success and resolved_id.data and resolved_id.data != artifact_id:
+            vpr_result = repository.get_vpr_by_artifact_id(
+                application_id=application_id,
+                artifact_id=str(resolved_id.data),
+                user_id=user_id,
+            )
+
+    if not vpr_result.success or vpr_result.data is None:
+        raise ValueError(f'Required VPR not found for cover letter application: {application_id}')
 
     resolved_vpr = vpr_result.data
-    # Ownership: ensure the VPR belongs to the requesting user, not a different user's record.
     vpr_owner = getattr(resolved_vpr, 'user_id', None) if not isinstance(resolved_vpr, dict) else resolved_vpr.get('user_id')
     if str(vpr_owner or '').strip() != user_id:
-        raise ValueError(f'VPR ownership mismatch for cover letter: {vpr_id}')
+        raise ValueError(f'VPR ownership mismatch for cover letter application: {application_id}')
 
     if hasattr(resolved_vpr, 'model_dump'):
         return cast(Any, resolved_vpr)
     if isinstance(resolved_vpr, dict):
         return cast(Any, _ResolvedVPRPayload(resolved_vpr))
-    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {job_id}')
+    raise ValueError(f'Required VPR payload has unsupported shape for cover letter: {application_id}')
 
 
 def _resolve_cover_letter_context(
     dal: DynamoDalHandler,
     user_id: str,
     api_request: CoverLetterRequest,
+    vpr_artifact_id: str | None = None,
 ) -> dict[str, Any]:
     posting_id = api_request.application_id or api_request.job_id
     job_record = _resolve_job_record(user_id=user_id, job_id=posting_id)
@@ -373,8 +386,8 @@ def _resolve_cover_letter_context(
         ),
         'vpr': _resolve_vpr_payload(
             dal=dal,
-            vpr_id=api_request.vpr_id,
-            job_id=api_request.job_id,
+            application_id=posting_id,
+            artifact_id=vpr_artifact_id or posting_id,
             user_id=user_id,
         ),
         'company_research': _resolve_company_research(
@@ -399,6 +412,7 @@ def _resolve_cover_letter_context(
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
 @metrics.log_metrics
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Handle cover letter API requests and SQS worker events."""
     _ = context
@@ -452,7 +466,13 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
 def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
     """Process SQS messages for async cover letter generation."""
+    batch_item_failures: list[dict[str, str]] = []
+    sqs_batch_seen = False
+
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
+        is_sqs_record = record.get('eventSource') == 'aws:sqs' and bool(message_id)
+        sqs_batch_seen = sqs_batch_seen or is_sqs_record
         body = json.loads(record.get('body', '{}'))
         job_id = body.get('job_id', '')
         user_id = body.get('user_id', '')
@@ -480,10 +500,13 @@ def _process_sqs_event(event: dict[str, Any]) -> dict[str, Any]:
             # stage context before re-raising. Re-raise here so SQS routes to DLQ.
             logger.error('Cover letter SQS job failed', job_id=job_id, error=str(exc), exc_info=True)
             _send_task_failure(task_token, cause=str(exc))
-            if task_token:
-                continue
-            raise
+            if not task_token and not is_sqs_record:
+                raise
+            batch_item_failures.append({'itemIdentifier': message_id})
+            continue
 
+    if sqs_batch_seen:
+        return {'batchItemFailures': batch_item_failures}
     return {'statusCode': 200, 'body': 'OK'}
 
 
@@ -646,7 +669,7 @@ def _update_artifact_status(  # noqa: C901
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
@@ -678,9 +701,9 @@ def _update_artifact_status(  # noqa: C901
         condition = 'attribute_not_exists(#s) OR #s <> :cancelled'
         attr_values[':cancelled'] = 'CANCELLED'
 
-    artifact_id = f'ARTIFACT#COVER_LETTER#{job_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(job_id)
     primary_kwargs: dict[str, Any] = {
-        'Key': {'applicationId': user_id, 'artifactId': artifact_id},
+        'Key': table_registry.canonical_item_key(user_id, artifact_id),
         'UpdateExpression': update_expr,
         'ExpressionAttributeNames': attr_names,
         'ExpressionAttributeValues': attr_values,
@@ -697,7 +720,7 @@ def _update_artifact_status(  # noqa: C901
             raise CancelledBeforePersist(job_id) from exc
         if error_code == 'ValidationException':
             fallback_kwargs: dict[str, Any] = {
-                'Key': {'pk': user_id, 'sk': artifact_id},
+                'Key': table_registry.legacy_item_key(user_id, artifact_id),
                 'UpdateExpression': update_expr,
                 'ExpressionAttributeNames': attr_names,
                 'ExpressionAttributeValues': attr_values,
@@ -780,9 +803,32 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # no
     api_request = request_result.data
 
     dal = _get_dal()
-    dependency_response = _resolve_cover_letter_dependency_response(api_request=api_request, user_id=user_id, dal=dal)
+    dependency_resolution, dependency_response = _resolve_cover_letter_dependency_response(
+        api_request=api_request,
+        user_id=user_id,
+        dal=dal,
+    )
     if dependency_response is not None:
         return dependency_response
+    application_id = api_request.application_id or api_request.job_id
+    resolved_vpr_ref = dependency_resolution.resolved_upstream.get('vpr')
+    vpr_artifact_id = resolved_vpr_ref.artifact_id if resolved_vpr_ref is not None else None
+    if resolved_vpr_ref is not None and not vpr_artifact_id:
+        vpr_artifact_id = application_id
+    if not vpr_artifact_id:
+        repository = CoreRepository(dal=dal, vpr_jobs_repository=JobsRepository())
+        resolved_id = repository.resolve_artifact_id(
+            application_id=application_id,
+            artifact_type='vpr',
+            user_id=user_id,
+        )
+        if resolved_id.success:
+            vpr_artifact_id = resolved_id.data
+    if not vpr_artifact_id:
+        job_record = JobsRepository().get_job(application_id)
+        if isinstance(job_record, dict):
+            return _build_response(HTTPStatus.FORBIDDEN, vpr_access_denied_envelope())
+        vpr_artifact_id = application_id
 
     try:
         user_cv = _load_user_cv(dal=dal, user_id=user_id)
@@ -800,6 +846,7 @@ def _submit_cover_letter_request(event: dict[str, Any]) -> dict[str, Any]:  # no
             user_id=user_id,
             user_cv=user_cv,
             dal=dal,
+            vpr_artifact_id=vpr_artifact_id,
         )
     except Exception as e:
         logger.error('Cover letter generation failed', user_id=user_id, error=str(e), exc_info=True)
@@ -867,21 +914,39 @@ def _resolve_cover_letter_dependency_response(
     api_request: CoverLetterRequest,
     user_id: str,
     dal: DynamoDalHandler,
-) -> dict[str, Any] | None:
+) -> tuple[DependencyResolution, dict[str, Any] | None]:
     application_id = api_request.application_id or api_request.job_id
-    dependency_resolution = resolve_handler_dependencies(
-        artifact_type='cover_letter',
-        application_id=application_id,
-        user_id=user_id,
-        dal=dal,
-    )
+    try:
+        dependency_resolution = resolve_handler_dependencies(
+            artifact_type='cover_letter',
+            application_id=application_id,
+            user_id=user_id,
+            dal=dal,
+        )
+    except ArtifactUnavailableError as exc:
+        # The upstream read failed; it is NOT known to be missing (F-DEVX-1).
+        logger.error('Upstream artifact unavailable', artifact_type=exc.artifact_type, failure_code=exc.code)
+        return (
+            DependencyResolution(
+                status='upstream_required',
+                requested_artifact='cover_letter',
+                http_status=int(HTTPStatus.SERVICE_UNAVAILABLE),
+            ),
+            _build_response(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {'error': 'Upstream artifact is temporarily unavailable', 'code': exc.code},
+            ),
+        )
     if dependency_resolution.status == 'ready':
-        return None
+        return dependency_resolution, None
     if dependency_resolution.status == 'dependency_generating':
         mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='cover_letter')
-    return _build_response(
-        HTTPStatus(dependency_resolution.http_status),
-        dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
+    return (
+        dependency_resolution,
+        _build_response(
+            HTTPStatus(dependency_resolution.http_status),
+            dependency_response_body(dependency_resolution, requested_artifact='cover_letter'),
+        ),
     )
 
 
@@ -984,17 +1049,15 @@ def _extract_cover_letter_id(event: dict[str, Any]) -> str | None:
 
 
 def _load_user_cv(dal: DynamoDalHandler, user_id: str) -> UserCV | None:
-    users_table_name = os.environ.get('USERS_TABLE_NAME', '').strip()
-    cv_table_name = os.environ.get('CVS_TABLE_NAME', '').strip()
-    dal_candidates: list[DynamoDalHandler] = []
-    if users_table_name:
-        dal_candidates.append(DynamoDalHandler(users_table_name))
-    if cv_table_name:
-        dal_candidates.append(DynamoDalHandler(cv_table_name))
-    if (not cv_table_name and not users_table_name) or (cv_table_name != dal.table_name and users_table_name != dal.table_name):
-        dal_candidates.append(dal)
+    # The CV table is the one home of parsed CVs. This previously tried
+    # USERS_TABLE_NAME first and only then the CV table, so it resolved against
+    # the legacy home even when the canonical one held the record.
+    #
+    # `dal` is retained only as a last resort while the users-table copy still
+    # exists; it goes away with the dual write.
+    cv_dal_candidates: list[DynamoDalHandler] = [DynamoDalHandler(table_registry.resolve_cv_table_name()), dal]
 
-    for cv_dal in dal_candidates:
+    for cv_dal in cv_dal_candidates:
         try:
             raw_cv = cv_dal.get_cv(user_id)
         except Exception as exc:
@@ -1023,12 +1086,14 @@ def _generate_cover_letter_result(
     user_id: str,
     user_cv: UserCV,
     dal: DynamoDalHandler | None = None,
+    vpr_artifact_id: str | None = None,
 ) -> Result[Any]:
     resolved_dal = dal or _get_dal()
     context = _resolve_cover_letter_context(
         dal=resolved_dal,
         user_id=user_id,
         api_request=api_request,
+        vpr_artifact_id=vpr_artifact_id,
     )
     logic_request = LogicCoverLetterRequest(
         user_id=user_id,
@@ -1042,17 +1107,19 @@ def _generate_cover_letter_result(
         company_research_id=api_request.company_research_id,
         options=_to_logic_options(api_request),
     )
-    maybe_async_result = generate_cover_letter(
-        request=logic_request,
-        user_cv=user_cv,
-        vpr=cast(Any, context['vpr']),
-        gap_responses=cast(Any, context['gap_responses']),
-        company_research=cast(Any, context.get('company_research')),
-    )
-    if asyncio.iscoroutine(maybe_async_result):
-        return asyncio.run(maybe_async_result)
-    if isinstance(maybe_async_result, Result):
-        return maybe_async_result
+    application_id = str(api_request.application_id or api_request.job_id).strip()
+    with bind_llm_usage_context(application_id=application_id, user_id=user_id):
+        maybe_async_result = generate_cover_letter(
+            request=logic_request,
+            user_cv=user_cv,
+            vpr=cast(Any, context['vpr']),
+            gap_responses=cast(Any, context['gap_responses']),
+            company_research=cast(Any, context.get('company_research')),
+        )
+        if asyncio.iscoroutine(maybe_async_result):
+            return asyncio.run(maybe_async_result)
+        if isinstance(maybe_async_result, Result):
+            return maybe_async_result
     return Result(
         success=False,
         error='Invalid cover letter generation response',
@@ -1114,7 +1181,7 @@ def _find_cover_letter_item(user_id: str, cover_letter_id: str) -> dict[str, Any
     dal = _get_dal()
 
     # Canonical read: construct the expected artifactId
-    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(cover_letter_id)
     canonical_result = dal.read_cover_letter_by_artifact_id(
         application_id=user_id,
         artifact_id=artifact_id,
@@ -1158,7 +1225,7 @@ def _matches_cover_letter_id(item: dict[str, Any], cover_letter_id: str) -> bool
     artifact_id_attr = str(item.get('artifactId', '')).strip()
     if artifact_id_attr == cover_letter_id:
         return True
-    if artifact_id_attr == f'ARTIFACT#COVER_LETTER#{cover_letter_id}':
+    if artifact_id_attr == table_registry.cover_letter_artifact_id(cover_letter_id):
         return True
 
     nested_payload = item.get('cover_letter')
@@ -1366,12 +1433,12 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     if not cover_letter_id:
         return _build_response(HTTPStatus.BAD_REQUEST, {'error': 'Missing coverLetterId'})
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
-    artifact_id = f'ARTIFACT#COVER_LETTER#{cover_letter_id}'
+    artifact_id = table_registry.cover_letter_artifact_id(cover_letter_id)
 
     try:
-        get_resp = table.get_item(Key={'applicationId': user_id, 'artifactId': artifact_id})
+        get_resp = table.get_item(Key=table_registry.canonical_item_key(user_id, artifact_id))
         item = (get_resp or {}).get('Item')
     except Exception as exc:
         logger.error('DynamoDB error during cover letter cancel', error=str(exc))
@@ -1380,10 +1447,10 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     if not item:
         try:
             query_resp = table.query(
-                KeyConditionExpression='applicationId = :uid AND begins_with(artifactId, :prefix)',
+                KeyConditionExpression=table_registry.CANONICAL_PREFIX_KEY_CONDITION_EXPRESSION,
                 ExpressionAttributeValues={
                     ':uid': user_id,
-                    ':prefix': f'ARTIFACT#COVER_LETTER#{cover_letter_id}',
+                    ':prefix': table_registry.cover_letter_artifact_id(cover_letter_id),
                 },
                 Limit=1,
             )
@@ -1401,7 +1468,7 @@ def _handle_cover_letter_cancel(event: dict[str, Any], user_id: str) -> dict[str
     item_app_id = str(item.get('applicationId', user_id))
     item_artifact_id = str(item.get('artifactId', artifact_id))
     table.update_item(
-        Key={'applicationId': item_app_id, 'artifactId': item_artifact_id},
+        Key=table_registry.canonical_item_key(item_app_id, item_artifact_id),
         UpdateExpression='SET #s = :status',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={':status': 'CANCELLED'},
@@ -1443,14 +1510,17 @@ def _patch_cover_letter(event: dict[str, Any]) -> dict[str, Any]:
 
     import boto3 as _boto3
 
-    table_name = os.environ.get('ARTIFACTS_TABLE_NAME') or os.environ.get('DYNAMODB_TABLE_NAME') or os.environ.get('TABLE_NAME') or ''
+    table_name = table_registry.resolve_artifacts_table_name()
     table = _boto3.resource('dynamodb').Table(table_name)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     if 'applicationId' in item:
-        key: dict[str, Any] = {'applicationId': item['applicationId'], 'artifactId': item['artifactId']}
+        key: dict[str, Any] = table_registry.canonical_item_key(item['applicationId'], item['artifactId'])
     else:
-        key = {'pk': item.get('pk', user_id), 'sk': item.get('sk', f'ARTIFACT#COVER_LETTER#{cover_letter_id}')}
+        key = table_registry.legacy_item_key(
+            item.get('pk', user_id),
+            item.get('sk', table_registry.cover_letter_artifact_id(cover_letter_id)),
+        )
 
     existing_cl = item.get('cover_letter') or {}
     updated_cl: dict[str, Any] = {**existing_cl, 'full_text': new_text} if isinstance(existing_cl, dict) else {'full_text': new_text}

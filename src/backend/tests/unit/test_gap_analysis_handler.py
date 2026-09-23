@@ -32,6 +32,9 @@ def gap_test_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
     monkeypatch.setenv('DYNAMODB_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('USERS_TABLE_NAME', 'test-gap-table')
+    # Gap resolves CVs through CVS_TABLE_NAME only; this fixture's table holds
+    # the seeded CV, so it is the CV table for this test.
+    monkeypatch.setenv('CVS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_QUESTIONS_TABLE_NAME', 'test-gap-table')
     monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
     yield
@@ -118,10 +121,32 @@ def _context() -> Any:
     return context
 
 
-def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
-    """POST /gap-analysis/questions returns 200 and stores generated questions."""
-    from careervp.handlers.gap_handler import lambda_handler
+def test_generate_questions_returns_202_and_worker_persists(gap_table: Any) -> None:
+    """POST /gap-analysis/questions returns 202; the SQS worker then persists the
+    generated questions (HANDOFF-09: generation no longer runs inline)."""
+    from careervp.handlers.gap_handler import _process_gap_generation_job, lambda_handler
     from careervp.models.result import Result, ResultCode
+
+    gap_table.put_item(
+        Item={
+            'pk': 'user-1',
+            'sk': 'CV#cv-123',
+            'user_id': 'user-1',
+            'full_name': 'Legacy Test User',
+            'work_experience': [
+                {
+                    'company': 'ExistingCorp',
+                    'role': 'Engineer',
+                    'achievements': ['Shipped production systems'],
+                }
+            ],
+            'skills': [{'name': 'Python'}],
+            'education': [],
+            'certifications': [],
+            'languages': [],
+            'is_parsed': True,
+        }
+    )
 
     event = _event(
         path='/gap-analysis/questions',
@@ -146,26 +171,29 @@ def test_generate_questions_returns_200_and_persists(gap_table: Any) -> None:
     ]
 
     with (
-        patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
         patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+        patch('careervp.handlers.gap_handler._get_sqs_queue_url', return_value='https://sqs.example/queue'),
+        patch('careervp.handlers.gap_handler.sqs'),
     ):
         trial_service = MagicMock()
         trial_service.check_trial_status.return_value = {'is_active': True}
         trial_service.consume_credit.return_value = None
         mock_trial_service.return_value = trial_service
+        response = lambda_handler(event, _context())
+
+    assert response['statusCode'] == 202
+    payload = json.loads(response['body'])
+    assert payload['job_id'] == 'job-123'
+    assert payload['cv_id'] == 'cv-123'
+    assert payload['status'] == 'processing'
+
+    with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
         mock_generate.return_value = Result(
             success=True,
             data=generated_questions,
             code=ResultCode.GAP_QUESTIONS_GENERATED,
         )
-        response = lambda_handler(event, _context())
-
-    # Handler returns 201 for creation, accept both 200 and 201
-    assert response['statusCode'] in [200, 201]
-    payload = json.loads(response['body'])
-    assert payload['job_id'] == 'job-123'
-    assert payload['cv_id'] == 'cv-123'
-    assert len(payload['questions']) == 3
+        _process_gap_generation_job({'user_id': 'user-1', 'cv_id': 'cv-123', 'job_id': 'job-123', 'application_id': 'job-123', 'max_questions': 3})
 
     stored = gap_table.get_item(
         Key={

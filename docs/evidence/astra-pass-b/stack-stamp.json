@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "cloudformation",
+    "describe-stacks",
+    "--stack-name",
+    "CareerVpCrudDevx",
+    "--query",
+    "Stacks[].{StackId:StackId,LastUpdatedTime:LastUpdatedTime,Stamp:Outputs[?OutputKey=='DeployedGitSha']}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:42.579296+00:00",
+  "exit_code": 0,
+  "stdout": "[\n    {\n        \"StackId\": \"arn:aws:cloudformation:us-east-1:788159322332:stack/CareerVpCrudDevx/eb8ebd80-8470-11f1-9c03-0e333fc57071\",\n        \"LastUpdatedTime\": \"2026-08-08T08:20:44.117000+00:00\",\n        \"Stamp\": []\n    }\n]\n",
+  "stderr": ""
+}

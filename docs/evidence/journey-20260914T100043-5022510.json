@@ -1,0 +1,36 @@
+{
+  "kind": "journey",
+  "journey_reached": 3,
+  "journey_total": 9,
+  "steps": {
+    "J1": "pass",
+    "J2": "pass",
+    "J3": "pass",
+    "J4": "fail: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed",
+    "J5": "not run",
+    "J6": "not run",
+    "J7": "not run",
+    "J8": "not run",
+    "J9": "not run"
+  },
+  "step_names": {
+    "J1": "sign in",
+    "J2": "upload base CV",
+    "J3": "create application",
+    "J4": "gap analysis submit",
+    "J5": "VPR generates",
+    "J6": "tailored CV",
+    "J7": "cover letter",
+    "J8": "interview prep",
+    "J9": "export"
+  },
+  "git_sha": "5022510f8bf0316617217d25b46cbd937baf1c14",
+  "git_short": "5022510",
+  "git_dirty": true,
+  "git_branch": "tools/proof-harness",
+  "deployed_sha": "",
+  "base_url": "http://localhost:3000",
+  "stack": "CareerVpCrudDevx",
+  "screenshots": "docs/evidence/journey/20260914T100043-5022510",
+  "timestamp": "2026-09-14T10:09:18.566Z"
+}

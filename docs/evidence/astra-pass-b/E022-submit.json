@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "get-function-configuration",
+    "--function-name",
+    "careervp-vpr-submit-lambda-devx",
+    "--query",
+    "{FunctionName:FunctionName,FunctionArn:FunctionArn,LastModified:LastModified,CodeSha256:CodeSha256,RevisionId:RevisionId,Sha:Environment.Variables.DEPLOYED_GIT_SHA}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:19.407358+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"FunctionName\": \"careervp-vpr-submit-lambda-devx\",\n    \"FunctionArn\": \"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-submit-lambda-devx\",\n    \"LastModified\": \"2026-08-08T08:21:30.000+0000\",\n    \"CodeSha256\": \"FvIo0I3Kkl7C8DQCrU+Y51tS/UH3DPafiwcnFZescEU=\",\n    \"RevisionId\": \"7f435504-b9f8-4f42-8cac-b021ae03c2eb\",\n    \"Sha\": null\n}\n",
+  "stderr": ""
+}

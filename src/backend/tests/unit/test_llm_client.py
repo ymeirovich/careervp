@@ -3,7 +3,6 @@ LLM Router unit tests per docs/specs/00-llm-router.md:14 test coverage.
 """
 
 import json
-import os
 from time import monotonic
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +20,7 @@ from careervp.logic.utils.llm_client import (
     TaskMode,
     get_llm_router,
 )
+from careervp.logic.utils.llm_metering import COST_PER_APP_ALARM_THRESHOLD, PRICE_PER_APP
 from careervp.models.result import ResultCode
 
 
@@ -31,8 +31,8 @@ def _calculate_cost(model_id: str, input_tokens: int, output_tokens: int) -> flo
         input_cost = (input_tokens / 1_000_000) * 3.0
         output_cost = (output_tokens / 1_000_000) * 15.0
     else:  # Haiku
-        input_cost = (input_tokens / 1_000_000) * 0.25
-        output_cost = (output_tokens / 1_000_000) * 1.25
+        input_cost = (input_tokens / 1_000_000) * 1.0
+        output_cost = (output_tokens / 1_000_000) * 5.0
     return input_cost + output_cost
 
 
@@ -65,9 +65,9 @@ class TestCostCalculation:
         assert cost == 18.0  # $3 + $15
 
     def test_haiku_cost_calculation(self):
-        """Haiku 4.5: $0.25/1M input, $1.25/1M output."""
+        """Haiku 4.5: $1.00/1M input, $5.00/1M output."""
         cost = _calculate_cost(HAIKU_MODEL_ID, input_tokens=1_000_000, output_tokens=1_000_000)
-        assert cost == 1.5  # $0.25 + $1.25
+        assert cost == 6.0  # $1.00 + $5.00
 
     def test_small_token_count(self):
         """Verify fractional costs for small token counts."""
@@ -93,31 +93,26 @@ class TestTaskMode:
 class TestLLMRouter:
     """Test LLMRouter core functionality with mocked Anthropic client."""
 
-    def setup_method(self):
-        """Reset singleton before each test."""
-        llm_client_module._llm_router = None
-        # Clear env vars that might interfere
-        env_to_clear = ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY_SSM_PARAM']
-        self.original_env = {k: os.environ.get(k) for k in env_to_clear}
-        for k in env_to_clear:
-            os.environ.pop(k, None)
+    @pytest.fixture(autouse=True)
+    def _isolate_router_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Reset the singleton and clear the API-key env vars for each test.
 
-    def teardown_method(self):
-        """Restore env vars after each test."""
-        for k, v in self.original_env.items():
-            if v is not None:
-                os.environ[k] = v
-            else:
-                os.environ.pop(k, None)
+        monkeypatch.delenv restores the prior value on teardown, so this cannot
+        leak a deletion into the rest of the session the way an unconditional
+        os.environ.pop() cleanup can.
+        """
+        llm_client_module._llm_router = None
+        monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+        monkeypatch.delenv('ANTHROPIC_API_KEY_SSM_PARAM', raising=False)
 
     def test_init_with_explicit_api_key(self):
         """Router should use explicit API key."""
         router = LLMRouter(api_key='explicit-key')
         assert router._api_key == 'explicit-key'
 
-    def test_init_with_env_var(self):
+    def test_init_with_env_var(self, monkeypatch: pytest.MonkeyPatch):
         """Router should fall back to environment variable."""
-        os.environ['ANTHROPIC_API_KEY'] = 'env-key'
+        monkeypatch.setenv('ANTHROPIC_API_KEY', 'env-key')
         router = LLMRouter()
         assert router._api_key == 'env-key'
 
@@ -173,6 +168,33 @@ class TestLLMRouter:
         assert result.data is not None
         assert result.data['cost'] == pytest.approx(expected_cost)
 
+    @patch.object(Anthropic, 'messages')
+    def test_invoke_records_prompt_cache_usage_fields(self, mock_messages):
+        """Provider cache-read usage should be surfaced directly, not re-estimated."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(type='text', text='Response')]
+        mock_response.usage.input_tokens = 120
+        mock_response.usage.output_tokens = 45
+        mock_response.usage.cache_read_input_tokens = 80
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.stop_reason = 'end_turn'
+        mock_messages.create.return_value = mock_response
+
+        router = LLMRouter(api_key='test-key')
+        result = router.invoke(
+            mode=TaskMode.TEMPLATE,
+            system_prompt='System',
+            user_prompt='User',
+            use_system_cache=True,
+        )
+
+        assert result.data is not None
+        assert result.data['input_tokens'] == 120
+        assert result.data['output_tokens'] == 45
+        assert result.data['cache_read_input_tokens'] == 80
+        assert result.data['cache_creation_input_tokens'] == 0
+        assert result.data['prompt_cache_hit'] is True
+
     def test_invoke_without_api_key_returns_error(self):
         """Invoke without API key should return error Result."""
         router = LLMRouter(api_key='test-key')
@@ -191,9 +213,9 @@ class TestLLMRouter:
             assert result.success is False
             assert result.code == ResultCode.INTERNAL_ERROR
 
-    def test_singleton_pattern(self):
+    def test_singleton_pattern(self, monkeypatch: pytest.MonkeyPatch):
         """get_llm_router should return singleton instance."""
-        os.environ['ANTHROPIC_API_KEY'] = 'test-key'
+        monkeypatch.setenv('ANTHROPIC_API_KEY', 'test-key')
 
         with patch.object(Anthropic, '__init__', return_value=None):
             with patch.object(Anthropic, 'messages', create=MagicMock()):
@@ -211,6 +233,11 @@ class TestCostThresholds:
         from careervp.logic.utils.llm_client import MAX_COST_PER_APPLICATION
 
         assert MAX_COST_PER_APPLICATION == 0.25
+
+    # scope_lock_clause: Q-10
+    def test_q10_price_per_app_threshold_is_derived_from_subscription_midpoint(self):
+        assert PRICE_PER_APP == pytest.approx(1.25)
+        assert COST_PER_APP_ALARM_THRESHOLD == pytest.approx(0.375)
 
 
 class TestLLMClientCircuitBreaker:
@@ -263,6 +290,39 @@ class TestLLMClientCircuitBreaker:
         assert llm_client._circuit_breaker.can_proceed() is True
         assert llm_client._circuit_breaker.state == CircuitState.HALF_OPEN
 
+    def test_generate_returns_real_provider_usage_metadata(self):
+        response = _anthropic_text_response('{"ok": true}')
+        response.usage.input_tokens = 321
+        response.usage.output_tokens = 123
+        response.usage.cache_read_input_tokens = 0
+        response.usage.cache_creation_input_tokens = 0
+
+        llm_client, _ = self._build_client(create_return_value=response)
+        payload = llm_client.generate(prompt='return {"ok": true}')
+
+        assert payload['input_tokens'] == 321
+        assert payload['output_tokens'] == 123
+        assert payload['cost'] > 0
+
+    def test_complete_returns_real_provider_usage_metadata(self):
+        response = _anthropic_text_response('hello')
+        response.usage.input_tokens = 222
+        response.usage.output_tokens = 111
+        response.usage.cache_read_input_tokens = 75
+        response.usage.cache_creation_input_tokens = 0
+
+        llm_client, _ = self._build_client(create_return_value=response)
+        payload = llm_client.complete(
+            prompt='hello',
+            system_prompt='system',
+            use_system_cache=True,
+        )
+
+        assert payload.text == 'hello'
+        assert payload.input_tokens == 222
+        assert payload.output_tokens == 111
+        assert payload.prompt_cache_hit is True
+
     def test_circuit_breaker_closed_after_success(self):
         llm_client, mock_client = self._build_client(create_side_effect=RuntimeError('provider unavailable'))
 
@@ -276,7 +336,8 @@ class TestLLMClientCircuitBreaker:
 
         result = llm_client.generate(prompt='return {"ok": true}')
 
-        assert result == {'status': 'ok'}
+        assert result['status'] == 'ok'
+        assert result['input_tokens'] >= 0
         assert llm_client._circuit_breaker.state == CircuitState.CLOSED
         assert llm_client._circuit_breaker.failure_count == 0
 
@@ -304,7 +365,8 @@ class TestLLMClientCircuitBreaker:
 
         result = llm_client.generate(prompt='return {"ok": true}')
 
-        assert result == {'status': 'ok'}
+        assert result['status'] == 'ok'
+        assert result['input_tokens'] >= 0
         assert mock_client.messages.create.call_count == 2
         mock_sleep.assert_called_once()
 

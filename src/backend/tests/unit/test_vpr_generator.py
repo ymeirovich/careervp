@@ -358,7 +358,6 @@ def test_full_pipeline_produces_valid_vpr(
     mock_llm_client_cls.return_value = mock_llm_instance
 
     mock_dal = MagicMock()
-    mock_dal.save_vpr.return_value = Result(success=True, data=None, code=ResultCode.SUCCESS)
 
     result = generate_vpr(sample_request, sample_user_cv, mock_dal)
 
@@ -371,4 +370,6 @@ def test_full_pipeline_produces_valid_vpr(
     assert result.data.token_usage is not None
     assert result.data.token_usage.input_tokens == 600
     assert result.data.token_usage.output_tokens == 400
-    mock_dal.save_vpr.assert_called_once()
+    # F-DEVX-1: generation no longer persists. The caller writes the canonical VPR
+    # artifact so that write can be the completion boundary for the job and the hub.
+    mock_dal.save_vpr.assert_not_called()

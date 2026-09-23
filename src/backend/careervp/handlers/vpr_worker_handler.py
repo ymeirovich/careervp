@@ -25,11 +25,14 @@ import boto3
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 
+from careervp.dal import table_registry
 from careervp.dal.application_repository import ApplicationRepository
+from careervp.dal.core_repository import CoreRepository
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.dal.jobs_repository import JobsRepository
 from careervp.handlers.utils.observability import logger, metrics, tracer
 from careervp.logic.company_research import load_confident_company_research_artifact
+from careervp.logic.utils.env import resource_env
 from careervp.logic.vpr_generator import generate_vpr
 from careervp.models.job import CompanyContext, GapResponse, JobPosting
 from careervp.models.result import ResultCode
@@ -46,8 +49,7 @@ def _get_results_bucket() -> str:
     if bucket_name:
         return bucket_name
     # Fallback to naming convention
-    env = os.environ.get('ENVIRONMENT', 'dev')
-    return f'careervp-{env}-vpr-results-us-east-1'
+    return f'careervp-{resource_env()}-vpr-results-us-east-1'
 
 
 def _generate_presigned_url(result_key: str) -> str:
@@ -396,9 +398,20 @@ def _execute_job(  # noqa: C901
     input_data: dict[str, Any] = input_data_raw if isinstance(input_data_raw, dict) else {}
     application_id = str(job.get('application_id', ''))
 
-    # Fetch CV from DynamoDB
-    cv_table = os.environ.get('DYNAMODB_TABLE_NAME', 'careervp-users-dev')
-    cv_dal = DynamoDalHandler(cv_table)
+    # A canonical VPR artifact is keyed by applicationId. Without one the job can
+    # never produce a readable artifact, so fail it now rather than generating a
+    # VPR that nothing downstream could ever find (F-DEVX-1).
+    if not application_id:
+        error_msg = 'VPR job has no application_id; cannot write a canonical artifact'
+        jobs_repo.update_job_status(job_id=job_id, status='FAILED', error=error_msg)
+        logger.error('VPR job missing application_id', job_id=job_id)
+        _send_task_failure(task_token, cause=error_msg)
+        return
+
+    # Fetch CV from the CV table. This used to read DYNAMODB_TABLE_NAME, which
+    # on this worker is the users table, with a hardcoded `careervp-users-dev`
+    # default that would have pointed a devx worker at a dev table.
+    cv_dal = DynamoDalHandler(table_registry.resolve_cv_table_name())
     user_cv = cv_dal.get_cv(user_id)
 
     if not user_cv:
@@ -435,9 +448,11 @@ def _execute_job(  # noqa: C901
         _send_task_failure(task_token, cause=error_msg)
         return
 
-    next_version = cv_dal.get_next_vpr_version(vpr_request.application_id)
+    # Version authority is the canonical artifacts table, never the users table.
+    core_repository = CoreRepository()
+    next_version = core_repository.next_vpr_version(vpr_request.application_id)
     vpr_request = vpr_request.model_copy(update={'target_version': next_version})
-    result = generate_vpr(vpr_request, user_cv, cv_dal)
+    result = generate_vpr(vpr_request, user_cv)
 
     if not result.success or not result.data:
         error_msg = result.error or 'VPR generation failed'
@@ -489,13 +504,34 @@ def _execute_job(  # noqa: C901
         _send_task_failure(task_token, cause=error_msg)
         return
 
+    # Write the canonical VPR artifact BEFORE anything reports completion. This is the
+    # completion boundary (F-DEVX-1): a job or hub that says "completed" must have a
+    # readable canonical artifact behind it. On failure we raise so SQS retries; the
+    # write is idempotent because artifactId is the stable job id.
+    completed_at = datetime.now(timezone.utc).isoformat()
+    canonical_result = core_repository.save_vpr_artifact(
+        application_id=application_id,
+        artifact_id=job_id,
+        user_id=user_id,
+        vpr_payload=vpr.model_dump(mode='json'),
+        version=vpr.version,
+        now_iso=completed_at,
+    )
+    if not canonical_result.success:
+        error_msg = canonical_result.error if isinstance(canonical_result.error, str) else 'Failed to persist canonical VPR artifact'
+        jobs_repo.update_job_status(job_id=job_id, status='FAILED', error=error_msg)
+        logger.error('Canonical VPR artifact write failed', job_id=job_id, application_id=application_id, error=error_msg)
+        _send_task_failure(task_token, cause=error_msg)
+        raise RuntimeError(error_msg)
+
+    logger.info('Canonical VPR artifact written', job_id=job_id, application_id=application_id, version=vpr.version)
+
     # Update job to COMPLETED — CANCELLED guard (FE-UI-043 § worker_cancelled_guard).
     # A concurrent cancel may have set status=CANCELLED while generation was running.
     # update_job_status applies an atomic ConditionExpression (status == PROCESSING);
     # if a cancel moved the job off PROCESSING the conditional write fails. On that
     # failure we delete the partial S3 result we just uploaded, signal task_failure,
     # and return cleanly (no DLQ).
-    completed_at = datetime.now(timezone.utc).isoformat()
     result_url = _generate_presigned_url(result_key)
     one_year_ttl = int(datetime.now(timezone.utc).timestamp() + 365 * 24 * 3600)
 
@@ -605,15 +641,20 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     jobs_repo = JobsRepository()
     bucket = _get_results_bucket()
 
+    batch_item_failures: list[dict[str, str]] = []
+
     # Process each record in the SQS event
     for record in event.get('Records', []):
+        message_id = str(record.get('messageId', ''))
         try:
             _process_job_record(jobs_repo, record, bucket)
 
         except Exception as e:
             logger.exception(
                 'Unexpected error processing job',
+                message_id=message_id,
                 error=str(e),
             )
+            batch_item_failures.append({'itemIdentifier': message_id})
 
-    return {'statusCode': 200, 'body': json.dumps({'message': 'Jobs processed'})}
+    return {'batchItemFailures': batch_item_failures}

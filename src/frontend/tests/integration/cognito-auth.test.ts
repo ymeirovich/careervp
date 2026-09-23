@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import React from "react";
 import { useAuth, AuthProvider } from "../../contexts/AuthContext";
-import { CognitoUser } from "amazon-cognito-identity-js";
+import { beginPkceSignIn } from "../../lib/pkce";
+
+vi.mock("../../lib/pkce", () => ({
+  beginPkceSignIn: vi.fn().mockResolvedValue(undefined),
+  hostedUiLogoutUrl: vi.fn().mockReturnValue(null),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -49,33 +54,24 @@ const wrapper = ({ children }: { children: React.ReactNode }) =>
   React.createElement(AuthProvider, null, children);
 
 describe("AuthContext — signIn", () => {
-  it("sets user and idToken on successful sign-in", async () => {
+  it("starts authorization-code PKCE sign-in", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      await result.current.signIn("user@example.com", "Password1!");
+      await result.current.signIn("user@example.com");
     });
 
-    expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.idToken).toBe("mock-id-token");
+    expect(beginPkceSignIn).toHaveBeenCalledWith("user@example.com");
   });
 
-  it("sets error state on NotAuthorizedException", async () => {
-    vi.mocked(CognitoUser).mockImplementationOnce(function() {
-      return {
-        authenticateUser: vi.fn(function(_: unknown, handlers: { onSuccess: Function; onFailure: Function }) {
-          handlers.onFailure({ code: "NotAuthorizedException", message: "Incorrect username or password." });
-        }),
-      } as unknown as CognitoUser;
-    });
+  it("surfaces a failure to start the PKCE redirect", async () => {
+    vi.mocked(beginPkceSignIn).mockRejectedValueOnce(new Error("redirect failed"));
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await expect(
-      act(async () => result.current.signIn("user@example.com", "wrongpassword"))
-    ).rejects.toThrow();
-
-    expect(result.current.isAuthenticated).toBe(false);
+      act(async () => result.current.signIn("user@example.com"))
+    ).rejects.toThrow("redirect failed");
   });
 });
 
@@ -84,7 +80,7 @@ describe("AuthContext — signOut", () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      await result.current.signIn("user@example.com", "Password1!");
+      await result.current.signIn("user@example.com");
     });
 
     expect(result.current.isAuthenticated).toBe(true);

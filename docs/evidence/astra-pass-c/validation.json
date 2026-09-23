@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-09-14T04:20:38.294744+00:00",
+  "manifest_count": 20,
+  "pass_c_count": 20,
+  "manifest_order_matches": true,
+  "required_fields_present": true,
+  "verdict_counts": {
+    "CONFIRMED": 12,
+    "UNPROVABLE-WITHOUT-DEPLOY": 5,
+    "REFUTED": 3
+  },
+  "bucket_counts": {
+    "AGREE-SUBSTANTIVE": 12,
+    "DISAGREE": 1,
+    "BOTH-UNCERTAIN": 5,
+    "AGREE-SUPERFICIAL": 2
+  },
+  "all_uncertainty_buckets_preserved": true,
+  "unadjudicated_claims": 14,
+  "current_application_python_files_matching_HEAD": 137,
+  "current_source_mismatches": [],
+  "existing_unit_passes": 58,
+  "existing_integration_passes": 9,
+  "expected_scratch_result": "3 failed, 13 passed",
+  "historical_delta": "9 failed, 3 passed -> 10 failed, 2 passed; exactly one added failure",
+  "narrative_yaml_labels_verified": 40,
+  "base_rate_counts_validated": true,
+  "broken_links": [],
+  "errors": [],
+  "source_code_edits": [],
+  "live_write_operations": []
+}

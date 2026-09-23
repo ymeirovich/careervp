@@ -1,0 +1,244 @@
+{
+    "StackResourceSummaries": [
+        {
+            "LogicalResourceId": "CDKMetadata",
+            "PhysicalResourceId": "42f25850-7e2e-11f1-870b-0afb44ab0dd9",
+            "ResourceType": "AWS::CDK::Metadata",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:22.791000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVParserDynamoValidationExceptionAlarm2787C5D2",
+            "PhysicalResourceId": "careervp-cv-parser-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.497000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVParserDynamoValidationExceptionMetric9CAB09A3",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVParserDynamoValidationExceptionMetric9CAB09A3-M955tkO6j65s",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.207000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVTailorDynamoValidationExceptionAlarm3BF54859",
+            "PhysicalResourceId": "careervp-cvtailor-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.537000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVTailorDynamoValidationExceptionMetricBF335085",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCVTailorDynamoValidationExceptionMetricBF335085-LzdpFU0bX588",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.138000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudHighFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpcoreapirtoeuw120260712a1prodFaultRateinternalerror79DDC734",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-core-api-rto-euw1-20260712-a1-prod-Fault-Rate-internal_error",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.495000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpcompanyresearchlambdartoeuw120260712a1LatencyP90p90E2193B2D",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-company-research-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.425000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpcoverletterapilambdartoeuw120260712a1LatencyP90p9036C0A64E",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-cover-letter-api-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.458000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpcvparserlambdartoeuw120260712a1LatencyP90p90A064C3C9",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-cv-parser-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.608000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpcvtailorlambdartoeuw120260712a1LatencyP90p9005A01AC3",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-cvtailor-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.453000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpgapapilambdartoeuw120260712a1LatencyP90p90753DD9D8",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-gap-api-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.506000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpinterviewprepapilambdartoeuw120260712a1LatencyP90p90E8AAADA9",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-interview-prep-api-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:25.693000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCareerVpCrudRtoEuw120260712A1CrudLowFacadeCareerVpCrudRtoEuw120260712A1Crudcareervpvprsubmitlambdartoeuw120260712a1LatencyP90p906ACDCDE3",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-Crud-careervp-vpr-submit-lambda-rto-euw1-20260712-a1-Latency-P90-p90",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.677000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCompanyResearchDynamoValidationExceptionAlarm9E80A545",
+            "PhysicalResourceId": "careervp-company-research-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.409000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCompanyResearchDynamoValidationExceptionMetric60609832",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCompanyResearchDynamoValidationExceptionMetric60609832-i0ze62uqVe4q",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.226000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCoverLetterApiLambdaDynamoValidationExceptionAlarm6093CAF7",
+            "PhysicalResourceId": "careervp-cover-letter-api-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.507000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCoverLetterApiLambdaDynamoValidationExceptionMetric01C4765E",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudCoverLetterApiLambdaDynamoValidationExceptionMetric01C4765E-HJNSo64NDcXP",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.134000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudGapApiLambdaDynamoValidationExceptionAlarm205E2796",
+            "PhysicalResourceId": "careervp-gap-api-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.539000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudGapApiLambdaDynamoValidationExceptionMetric42D73AB1",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudGapApiLambdaDynamoValidationExceptionMetric42D73AB1-V7tNbAsoGfPs",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:25.407000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudInterviewPrepApiLambdaDynamoValidationExceptionAlarm6F299232",
+            "PhysicalResourceId": "careervp-interview-prep-api-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.549000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudInterviewPrepApiLambdaDynamoValidationExceptionMetric18229856",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudInterviewPrepApiLambdaDynamoValidationExceptionMetric18229856-reXVkTIRgnIN",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.348000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudvprsubmitDynamoValidationExceptionAlarm2D52BF7C",
+            "PhysicalResourceId": "careervp-vpr-submit-lambda-rto-euw1-20260712-a1-DynamoValidationException",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.472000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudvprsubmitDynamoValidationExceptionMetric9112E0EB",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1CrudvprsubmitDynamoValidationExceptionMetric9112E0EB-BWQCEuzqxo8l",
+            "ResourceType": "AWS::Logs::MetricFilter",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.297000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "CostPerApplicationAlarm7AEF8036",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-MonitoringNestedStackNestedStackMonitoringNestedStackNes-1IT4LXATY8F57-CostPerApplicationAlarm7AEF8036-0l7bnBsv5zo8",
+            "ResourceType": "AWS::CloudWatch::Alarm",
+            "LastUpdatedTimestamp": "2026-07-12T20:14:24.555000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        }
+    ]
+}

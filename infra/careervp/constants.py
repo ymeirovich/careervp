@@ -31,6 +31,8 @@ GAP_RESPONSES_TABLE_NAME = "gap-responses"
 KNOWLEDGE_TABLE_NAME = "knowledge"
 ARTIFACTS_TABLE_NAME = "artifacts"
 COMPANY_RESEARCH_CACHE_TABLE_NAME = "company-research-cache"
+# P-24 identity surrogate: sub -> internal user_id mapping (own sub-keyed table).
+IDENTITY_MAP_TABLE_NAME = "identity-map"
 
 # Output keys for CDK
 TABLE_NAME_OUTPUT = "UsersTableOutput"
@@ -44,9 +46,12 @@ GAP_RESPONSES_TABLE_OUTPUT = "GapResponsesTableOutput"
 KNOWLEDGE_TABLE_OUTPUT = "KnowledgeTableOutput"
 ARTIFACTS_TABLE_OUTPUT = "ArtifactsTableOutput"
 COMPANY_RESEARCH_CACHE_TABLE_OUTPUT = "CompanyResearchCacheTableOutput"
+IDENTITY_MAP_TABLE_OUTPUT = "IdentityMapTableOutput"
 
 # Lambda environment variable keys
 LLM_CACHE_TABLE_NAME_ENV = "LLM_CACHE_TABLE_NAME"
+# P-24: the authorizer reads this to activate sub -> user_id surrogate resolution.
+IDENTITY_MAP_TABLE_NAME_ENV = "IDENTITY_MAP_TABLE_NAME"
 
 # =============================================================================
 # SQS QUEUES
@@ -141,6 +146,7 @@ FAILURE_HANDLER_FEATURE = "failure-handler"
 FAILURE_HANDLER_ROLE = "FailureHandlerRole"
 # FE-UI-043: orphan-cleanup reaper Lambda + schedule
 ARTIFACT_CLEANUP_FEATURE = "artifact-cleanup"
+ARTIFACT_CLEANUP_SCHEDULE_DLQ = "artifact-cleanup-schedule-dlq"
 ARTIFACT_CLEANUP_LAMBDA = "ArtifactCleanupLambda"
 
 LAMBDA_LAYER_NAME = "common"
@@ -173,6 +179,7 @@ BILLING_FEATURE = "billing"
 EXPORT_FEATURE = "export"
 BILLING_RECONCILE_LAMBDA = "billing-reconcile"
 BILLING_RECONCILE_FEATURE = "billing-reconcile"
+BILLING_RECONCILE_SCHEDULE_DLQ = "billing-reconcile-schedule-dlq"
 
 # SQS — webhook partial-failure DLQ
 BILLING_WEBHOOK_DLQ = "billing-webhook-dlq"
@@ -184,6 +191,13 @@ ANTHROPIC_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/anthropic-api-key"
 ANTHROPIC_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY_SSM_PARAM"
 TAVILY_API_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/tavily-api-key"
 TAVILY_API_KEY_SSM_PARAM_ENV = "TAVILY_API_KEY_SSM_PARAM"
+
+# JWT signing key material (P-06): Lambda env carries only the parameter name;
+# the runtime secret provider fetches the SecureString value with decryption.
+JWT_PRIVATE_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/jwt-private-key"
+JWT_PUBLIC_KEY_SSM_PARAM = f"/careervp/{ENVIRONMENT}/jwt-public-key"
+JWT_PRIVATE_KEY_ENV_VAR = "JWT_PRIVATE_KEY_SSM_PARAM"
+JWT_PUBLIC_KEY_ENV_VAR = "JWT_PUBLIC_KEY_SSM_PARAM"
 
 # =============================================================================
 # LLM MODEL IDs  — update here + cdk deploy to swap models, no code change needed

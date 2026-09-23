@@ -1,13 +1,25 @@
+import os
 from typing import Literal
 
 import aws_cdk.aws_sns as sns
-from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_apigateway
+from aws_cdk import (
+    CfnOutput,
+    Duration,
+    NestedStack,
+    RemovalPolicy,
+    Tags,
+    aws_apigateway,
+)
+from aws_cdk import aws_budgets as budgets
+from aws_cdk import aws_ce as ce
 from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_cloudwatch_actions as cloudwatch_actions
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from cdk_monitoring_constructs import (
     AlarmFactoryDefaults,
     CustomMetricGroup,
@@ -22,8 +34,75 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 MonitoringMode = Literal["all", "notifications", "dashboards", "alarms"]
+_Q10_PRICE_PER_APP = 25.0 / 20.0
+_Q10_COST_PER_APP_ALARM_THRESHOLD = 0.30 * _Q10_PRICE_PER_APP
+
+# P-32 (Wave 0 slice, moved console-only -> CDK by explicit human decision
+# 2026-07-12 — see specs/P-32-cost-obs-edge-spec.md Fix Plan item 4). A
+# retry-storm or runaway agent chain during Waves 0-4 must trip a dollar
+# threshold instead of burning unbounded LLM/AWS spend unmonitored.
+_P32_BUDGET_MONTHLY_LIMIT_USD = 100.0
+_P32_ANOMALY_THRESHOLD_ABSOLUTE_USD = 10.0
+
+# AWS::CE::AnomalyMonitor / AWS::CE::AnomalySubscription treat ResourceTags as
+# an immutable (replacement-triggering) property. The stack-wide `owner` tag
+# (service_stack.py) derives from whoever runs cdk deploy/diff, so a human
+# running `cdk diff` after CI last deployed would otherwise show these two
+# resources as `replace` just from a tag-identity mismatch. Pin their owner
+# tag to the deploy identity CI actually uses so it stays stable regardless
+# of who is running cdk locally (see P-23 ledger step 1.0, 2026-07-18).
+_P32_ANOMALY_OWNER_TAG = "runner"
+
+# AWS Cost Anomaly Detection allows exactly ONE DIMENSIONAL/SERVICE monitor per
+# AWS *account* — the "watch every AWS service" monitor. The limit is enforced on
+# the account, not the monitor name, so an env-scoped name does NOT avoid it: a
+# second environment requesting `...-anomaly-monitor-devx` still fails with
+# `AlreadyExists` because `...-anomaly-monitor-dev` already occupies the account's
+# single slot. This is invisible to `cdk synth` and to the P-28 change-set
+# Replacement report (both validate shape, not account-level creatability), so it
+# only surfaces ~9 minutes into a real create and takes the whole stack down with
+# it (CareerVpCrudDevx, 2026-07-19T20:13:20Z). `dev` owns the account's monitor;
+# every other environment skips it. One account-wide monitor is also the correct
+# behaviour on its own merits — N per-env monitors would double-alert on the same
+# account spend. The Budget is NOT affected: budget names are genuinely per-account
+# unique, so every environment keeps its own (see _build_budget).
+_P32_ANOMALY_OWNER_ENVIRONMENT = "dev"
+
+# P-21: alarms must reach a real on-call destination. Each environment has a
+# default subscribed endpoint so a synthesized stack is never left with zero
+# subscribers; the human overrides it per deploy via ALARM_SUBSCRIPTION_EMAILS
+# (comma-separated). Email subscriptions require a one-time human inbox
+# confirmation — that confirmation is the P-21 deploy-gate evidence, not
+# something CDK can assert (see scripts/deploy_evidence.py).
+_DEFAULT_ALARM_EMAILS: dict[str, str] = {
+    "dev": "careervp-alerts-dev@careervp.com",
+    "stage": "careervp-alerts-stage@careervp.com",
+    "staging": "careervp-alerts-stage@careervp.com",
+    "prod": "careervp-alerts@careervp.com",
+    "production": "careervp-alerts@careervp.com",
+    # P-26 parallel-cutover stack: no shared distribution list yet since it is a
+    # temporary, personally-operated stack, so alerts go straight to the human
+    # standing it up rather than being silently dropped (the P-21 zero-subscriber
+    # gap this map exists to close).
+    "devx": "ymeirovich@presgen.net",
+}
+
+
+def resolve_alarm_emails(environment: str) -> list[str]:
+    """Return the alarm subscription endpoints for an environment.
+
+    ``ALARM_SUBSCRIPTION_EMAILS`` (comma-separated) overrides the per-env
+    default. Returns at least one endpoint for every known environment so the
+    monitoring topic is never synthesized without a subscriber.
+    """
+    override = os.getenv("ALARM_SUBSCRIPTION_EMAILS", "").strip()
+    if override:
+        return [email.strip() for email in override.split(",") if email.strip()]
+    default = _DEFAULT_ALARM_EMAILS.get(environment)
+    return [default] if default else []
 
 
 class CrudMonitoring(Construct):
@@ -84,6 +163,28 @@ class CrudMonitoring(Construct):
                 resources=[topic.topic_arn],
             )
         )
+        # P-32: AWS Budgets and Cost Anomaly Detection publish through their own
+        # service principals — without these grants the SNS subscribers built in
+        # _build_cost_observability are silently undeliverable.
+        topic.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("budgets.amazonaws.com")],
+                resources=[topic.topic_arn],
+            )
+        )
+        topic.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("costalerts.amazonaws.com")],
+                resources=[topic.topic_arn],
+            )
+        )
+        # P-21: subscribe at least one on-call endpoint so alarms are not silent.
+        for email in resolve_alarm_emails(self.naming.environment):
+            topic.add_subscription(sns_subscriptions.EmailSubscription(email))
         CfnOutput(
             self, id=constants.MONITORING_TOPIC, value=topic.topic_name
         ).override_logical_id(constants.MONITORING_TOPIC)
@@ -188,7 +289,7 @@ class CrudMonitoring(Construct):
                 metric_value="1",
                 default_value=0,
             )
-            cloudwatch.Alarm(
+            validation_alarm = cloudwatch.Alarm(
                 self,
                 f"{func.node.id}DynamoValidationExceptionAlarm",
                 metric=cloudwatch.Metric(
@@ -203,6 +304,9 @@ class CrudMonitoring(Construct):
                 treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
                 alarm_name=f"{func.function_name}-DynamoValidationException",
             )
+            # P-21: this hand-built alarm must also route to the on-call topic
+            # (the MonitoringFacade alarms already do via SnsAlarmActionStrategy).
+            validation_alarm.add_alarm_action(cloudwatch_actions.SnsAction(topic))
 
         low_level_facade.monitor_dynamo_table(
             table=db, billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
@@ -236,8 +340,16 @@ class MonitoringNestedStack(NestedStack):
         functions: list[_lambda.Function],
         notification_topic: sns.ITopic,
         naming: NamingUtils,
+        scratch_settings: ScratchDeploymentSettings | None = None,
     ) -> None:
         super().__init__(scope, id_)
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
         self.monitoring = CrudMonitoring(
             self,
             monitoring_id,
@@ -249,3 +361,129 @@ class MonitoringNestedStack(NestedStack):
             notification_topic=notification_topic,
             create_dashboards=False,
         )
+        cost_per_application_alarm = cloudwatch.Alarm(
+            self,
+            "CostPerApplicationAlarm",
+            metric=cloudwatch.Metric(
+                namespace=constants.METRICS_NAMESPACE,
+                metric_name="CostPerApplicationUSD",
+                statistic="Maximum",
+                period=Duration.minutes(5),
+                dimensions_map={"TrafficOrigin": "product"},
+            ),
+            threshold=_Q10_COST_PER_APP_ALARM_THRESHOLD,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        cost_per_application_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(notification_topic)
+        )
+        if scratch_settings is None:
+            self._build_cost_observability(notification_topic, naming)
+
+    def _build_cost_observability(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """P-32 Wave 0: AWS Budget + Cost Anomaly Detection, both routed to the
+        shared monitoring SNS topic (whose resource policy already grants
+        budgets.amazonaws.com / costalerts.amazonaws.com publish rights — see
+        CrudMonitoring._build_topic).
+
+        The two halves have different scoping rules and must not be built
+        together: the Budget is per-environment (its name is env-scoped and
+        genuinely unique per account), while the anomaly monitor is an
+        account-wide singleton owned by ``dev``. See
+        ``_P32_ANOMALY_OWNER_ENVIRONMENT``.
+        """
+        self._build_budget(notification_topic, naming)
+        if naming.environment == _P32_ANOMALY_OWNER_ENVIRONMENT:
+            self._build_cost_anomaly(notification_topic, naming)
+
+    def _build_budget(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """Per-environment $100/mo cost budget. Safe in every environment —
+        ``naming.resource_name`` makes the budget name unique per env, and AWS
+        Budgets enforces uniqueness on that name alone."""
+        budgets.CfnBudget(
+            self,
+            "P32Budget",
+            budget=budgets.CfnBudget.BudgetDataProperty(
+                budget_type="COST",
+                time_unit="MONTHLY",
+                budget_name=naming.resource_name("cost-obs", "monthly-budget"),
+                budget_limit=budgets.CfnBudget.SpendProperty(
+                    amount=_P32_BUDGET_MONTHLY_LIMIT_USD, unit="USD"
+                ),
+            ),
+            notifications_with_subscribers=[
+                budgets.CfnBudget.NotificationWithSubscribersProperty(
+                    notification=budgets.CfnBudget.NotificationProperty(
+                        comparison_operator="GREATER_THAN",
+                        notification_type="ACTUAL",
+                        threshold=80,
+                        threshold_type="PERCENTAGE",
+                    ),
+                    subscribers=[
+                        budgets.CfnBudget.SubscriberProperty(
+                            address=notification_topic.topic_arn,
+                            subscription_type="SNS",
+                        )
+                    ],
+                ),
+                budgets.CfnBudget.NotificationWithSubscribersProperty(
+                    notification=budgets.CfnBudget.NotificationProperty(
+                        comparison_operator="GREATER_THAN",
+                        notification_type="FORECASTED",
+                        threshold=100,
+                        threshold_type="PERCENTAGE",
+                    ),
+                    subscribers=[
+                        budgets.CfnBudget.SubscriberProperty(
+                            address=notification_topic.topic_arn,
+                            subscription_type="SNS",
+                        )
+                    ],
+                ),
+            ],
+        )
+
+    def _build_cost_anomaly(
+        self, notification_topic: sns.ITopic, naming: NamingUtils
+    ) -> None:
+        """Account-wide Cost Anomaly Detection monitor + subscription.
+
+        Only ever built for ``_P32_ANOMALY_OWNER_ENVIRONMENT``: AWS permits one
+        DIMENSIONAL/SERVICE monitor per account, so building this in a second
+        environment fails the whole stack create with ``AlreadyExists``.
+        """
+        anomaly_monitor = ce.CfnAnomalyMonitor(
+            self,
+            "P32AnomalyMonitor",
+            monitor_name=naming.resource_name("cost-obs", "anomaly-monitor"),
+            monitor_type="DIMENSIONAL",
+            monitor_dimension="SERVICE",
+        )
+        Tags.of(anomaly_monitor).add(constants.OWNER_TAG, _P32_ANOMALY_OWNER_TAG)
+        anomaly_subscription = ce.CfnAnomalySubscription(
+            self,
+            "P32AnomalySubscription",
+            subscription_name=naming.resource_name("cost-obs", "anomaly-subscription"),
+            # IMMEDIATE is required for SNS delivery; DAILY/WEEKLY are email-only.
+            frequency="IMMEDIATE",
+            monitor_arn_list=[anomaly_monitor.attr_monitor_arn],
+            threshold_expression=(
+                '{"Dimensions":{"Key":"ANOMALY_TOTAL_IMPACT_ABSOLUTE",'
+                f'"Values":["{_P32_ANOMALY_THRESHOLD_ABSOLUTE_USD}"],'
+                '"MatchOptions":["GREATER_THAN_OR_EQUAL"]}}'
+            ),
+            subscribers=[
+                ce.CfnAnomalySubscription.SubscriberProperty(
+                    address=notification_topic.topic_arn,
+                    type="SNS",
+                )
+            ],
+        )
+        Tags.of(anomaly_subscription).add(constants.OWNER_TAG, _P32_ANOMALY_OWNER_TAG)

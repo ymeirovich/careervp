@@ -37,6 +37,11 @@ const config: Config = {
     {
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      moduleNameMapper: {
+        '^@open-draft/deferred-promise$': '<rootDir>/tests/shims/deferred-promise.ts',
+        '^rettime$': '<rootDir>/tests/shims/rettime.ts',
+        '^until-async$': '<rootDir>/tests/shims/until-async.ts',
+      },
       testPathIgnorePatterns: [
         '<rootDir>/tests/integration/cognito-auth.test.ts',
         '<rootDir>/tests/integration/api-polling.test.ts',
@@ -50,10 +55,6 @@ const config: Config = {
     {
       displayName: 'e2e',
       testMatch: ['<rootDir>/tests/e2e/**/*.test.ts'],
-      testPathIgnorePatterns: [
-        '<rootDir>/tests/e2e/artifact-viewers.e2e.test.ts',
-        '<rootDir>/tests/e2e/application-hub-flow.e2e.test.ts',
-      ],
       transform: { '^.+\\.ts$': 'ts-jest' },
       testEnvironment: 'node',
     },
@@ -64,6 +65,7 @@ const config: Config = {
         '<rootDir>/tests/regression/state-machine-transitions.test.ts',
         '<rootDir>/tests/regression/cross-module-invalidation.test.ts',
         '<rootDir>/tests/regression/cta-label-consistency.test.tsx',
+        '<rootDir>/tests/regression/hub-company-research-cta.test.tsx',
       ],
       transform: { '^.+\\.[tj]sx?$': 'ts-jest' },
       testEnvironment: 'node',

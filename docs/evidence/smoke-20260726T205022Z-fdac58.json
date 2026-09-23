@@ -1,0 +1,36 @@
+{
+  "api_base": "https://ymzhvcxod0.execute-api.us-east-1.amazonaws.com/prod",
+  "checks": [
+    {
+      "detail": "health returned 200",
+      "name": "health",
+      "passed": true,
+      "request_id": "c48c97ef-4921-4c7f-812a-6492bd0d43aa",
+      "status": 200
+    },
+    {
+      "detail": "exact origin echoed: 'https://dev.careervp.com'",
+      "name": "cors_exact_origin",
+      "passed": true,
+      "request_id": "c69c75df-668b-4e09-894a-6fd00b4a4b67",
+      "status": 200
+    },
+    {
+      "detail": "authed 200 and unauth rejected with 401",
+      "name": "authed_read",
+      "passed": true,
+      "request_id": "133b6799-93f8-4995-9658-9611b4d694ba",
+      "status": 200
+    },
+    {
+      "detail": "CV uploaded (cv_id=49ef16d1-1cd3-4f21-8724-d300acc674c4) and read back",
+      "name": "authed_upload",
+      "passed": true,
+      "request_id": "ea32072c-cb29-4a9d-a800-d7c0eaaf4f83",
+      "status": 201
+    }
+  ],
+  "origin": "https://dev.careervp.com",
+  "passed": true,
+  "timestamp": "2026-07-26T20:50:22.469519+00:00"
+}

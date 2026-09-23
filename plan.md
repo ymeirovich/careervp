@@ -8,6 +8,32 @@
 **Cost Target:** 95%+ profit margin via hybrid AI strategy
 **Target Launch:** Q2 2026
 
+## Wave 1 Security Cutover
+
+## Wave 3 — 3.FIX-SECURITY (complete 2026-08-01)
+
+- [x] Fix and live-verify CV-upload authorizer-only ownership plus interview-prep allow-listed logging; cleanup/evidence recorded in `docs/evidence/wave3-3fixsecurity-devx-20260801.md`.
+
+- [x] Step 1.3c implementation window: code+PKCE frontend, dual OAuth grants, Cognito Plus threat protection, OPTIONAL TOTP enrollment grace, 401 contract coverage, and environment-tuned WAF rate rules.
+- [x] ~~Human deployment and soak: observe for at least the 30-day refresh-token lifetime~~ **Superseded 2026-07-22.** The soak was never startable — the PKCE frontend was never deployed (commit `4228346` sits on `db-redesign`; Amplify builds `main`, `ui-upgrade`, `front/ui-update-amplify1`), so the clock had no start date and waiting changed nothing. Replaced by step 1.6's concrete verification. Rationale: `docs/db-redesign/code/code-analysis/project/runbooks/wave-1-status.md` §"Soak reinterpretation (2026-07-22)".
+- [ ] **Step 1.6 (blocks 1.1):** make missing Cognito config fail loudly instead of falling back to the hardcoded dev pool; register devx callback URLs; deploy the PKCE SPA to an Amplify `db-redesign` branch pointed at `CareerVpCrudDevx`; capture one verified end-to-end login (redirect → callback → token exchange → authed call → forced 401 → exactly one refresh → sign-out) as evidence.
+- [ ] **P-07b — final cutover, deferred, blocks STAGING promotion (not step 1.1):** proxy browser-side password/TOTP operations, set the migration phase to `cutover_complete`, remove implicit + `COGNITO_ADMIN`, enforce MFA, and rerun the full auth oracle.
+
+## Wave 1 step 1.1 (P-04/P-05) — two sessions, not one
+
+- [ ] **1.1-RED:** the five P-04/P-05 tests plus the checked-in route×handler matrix, generated from the live `route_map`. Tests only.
+- [ ] **1.1-GREEN:** a fresh session that did not write the tests and may not edit them. Per `RUNBOOK-RULES.md` rule 7 — a test author who also writes the implementation writes tests that agree with their own bugs.
+
+## Wave 1 P-26 devx parallel stack (CLOSED 2026-07-20)
+
+- [x] Preserve `CareerVpCrudDev` as the sole pre-cutover owner of `api.dev.careervp.com` and guard custom-domain creation to the literal `dev` environment.
+- [x] Synthesize `CareerVpCrudDevx` with `ENVIRONMENT=devx` and `-c p26_rehome_features=true`; verify distinct naming and no shared-domain claim.
+- [x] Capture the review-only devx creation change set and P-28 Replacement report (292 additions, zero replacements, `auto_fail: false`), then delete the review change set without execution.
+- [x] Human re-formed and executed the devx creation change set — `CareerVpCrudDevx` is `CREATE_COMPLETE`.
+- [x] P-30 four-wire smoke green against devx's raw execute-api URL (4/4).
+- [x] P-09 assessed against devx's actual resource count: **211 physical resources**, well under the 400 ceiling.
+- [ ] The BasePathMapping flip and old-stack decommission remain later, separate human-only steps. **`CareerVpCrudDevx` is now the deploy target** ("devx *is* dev"); until the flip, devx is reachable only at its raw execute-api URL.
+
 ---
 
 ## IMPORTANT: Documentation-First Development Rule ⚠️
@@ -131,6 +157,7 @@ CREATED → COMPANY_RESEARCH → GAP_ANALYSIS → GENERATING_ARTIFACTS → INTER
 - ✅ FE-UI-020 RichTextEditor TipTap rich text input with toolbar, Markdown storage, paste sanitization, controlled value updates, read-only mode, and unit coverage
 - ✅ FE-UI-045 inline rich-text editing + autosave-on-blur shipped for Cover Letter, Tailored CV, and Interview Prep, including draft restore and 409 conflict UI
 - ✅ FE-UI-048 API Gateway route surface collapsed to per-feature root + `{proxy+}` ANY integrations, with Cognito/public auth parity, explicit collision exceptions, and parent-stack count below 400
+- ✅ F-01/F-06 Wave-0 frontend contract oracle implemented: Zod mirror of `lib/types.ts`, backend Pydantic `model_json_schema()` artifacts validated through AJV, MSW contract tests, and all 10 §3 assertions including `vpr_id:null` vs absent and stale `base_version` 409.
 - ✅ WORKER-LEGS-001 artifact-chain VPR/CV legs: VPR worker now sends Step Functions task-token success/failure, StartVPR no longer uses a 300s heartbeat, CV tailoring is invoked directly by Lambda, and the unused CV tailoring SQS queue/DLQ are removed.
 - ✅ FE-UI-049 Tavily-backed company research now replaces DuckDuckGo retrieval, adds WEB_API identity-gated confidence scoring, expands prompt/context fields, and preserves no-fabrication failure behavior.
 - ✅ FE-UI-050 company research now checks the shared company-research-cache table first, stores split profile/news records with 6-month/120-day TTLs, refreshes stale news with a news-only query, and uses a short in-flight lock to prevent duplicate miss storms.
@@ -2389,6 +2416,16 @@ aws lambda get-function --function-name careervp-interview-prep-lambda-dev \
 
 **Priority:** P0 (Critical)
 **Service:** Stripe
+
+### Task 15.0: Payment Provider Freeze Line
+
+- [x] P-25 provider port and cryptographic MockProvider baseline
+- [x] P-25b StripeProvider with tested real multi-`v1` HMAC verification
+- [x] P-25 follow-up: MockProvider accepts any matching `v1`
+- [x] P-14 stable provider-event webhook idempotency with recorded replay results
+- [x] P-14 stable company-research worker operation idempotency
+- [x] P-15 `customer-id-index` Query path and Scan-free billing Lambda role
+- [ ] P-02 step 2.5 retains and hardens the separate billing reconciliation path
 
 ### Task 15.1: Stripe Models
 

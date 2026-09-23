@@ -1,0 +1,473 @@
+[
+  {
+    "principal": "ask-lambda-Bank-Records",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "ask-lambda-Space-Facts",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "aws-serverless-repository-simplemobilebackendRole-1VUKB5XY59A8E",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "AWSAmplifyDomainRole-Z01014791EGUGL4O7OQJ1",
+    "attached_managed_policy": {
+      "PolicyName": "AdministratorAccess-Amplify",
+      "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+    }
+  },
+  {
+    "principal": "CareerVP-Deploy",
+    "attached_managed_policy": {
+      "PolicyName": "AmazonAPIGatewayAdministrator",
+      "PolicyArn": "arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator"
+    }
+  },
+  {
+    "principal": "CareerVP-Deploy",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambda_FullAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+    }
+  },
+  {
+    "principal": "careervp-role-codedeploy-api-canary-dev",
+    "attached_managed_policy": {
+      "PolicyName": "AWSCodeDeployRoleForLambda",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda"
+    }
+  },
+  {
+    "principal": "careervp-role-codedeploy-api-canary-dev",
+    "attached_managed_policy": {
+      "PolicyName": "AWSCodeDeployRoleForLambdaLimited",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambdaLimited"
+    }
+  },
+  {
+    "principal": "careervp-role-codedeploy-api-canary-devx",
+    "attached_managed_policy": {
+      "PolicyName": "AWSCodeDeployRoleForLambda",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda"
+    }
+  },
+  {
+    "principal": "careervp-role-codedeploy-api-canary-devx",
+    "attached_managed_policy": {
+      "PolicyName": "AWSCodeDeployRoleForLambdaLimited",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambdaLimited"
+    }
+  },
+  {
+    "principal": "careervp-role-lambda-core-dev",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "careervp-role-lambda-core-devx",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "careervp-role-lambda-core-staging",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "careervp-role-lambda-failure-handler-dev",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "careervp-role-lambda-failure-handler-devx",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-BucketNotificationsHandler050a0587b-ttGzkOB2eJNE",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudArtifactChainArt-MhcF7qBfnOIq",
+    "policy": "CareerVpCrudDevCrudArtifactChainArtifactChainStateMachineRoleDefaultPolicy47ABBB30",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-dev:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudArtifactChainArt-MhcF7qBfnOIq",
+    "policy": "CareerVpCrudDevCrudArtifactChainArtifactChainStateMachineRoleDefaultPolicy47ABBB30",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-artifact-failure-handler-lambda-dev",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-artifact-failure-handler-lambda-dev:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudArtifactChainArt-MhcF7qBfnOIq",
+    "policy": "CareerVpCrudDevCrudArtifactChainArtifactChainStateMachineRoleDefaultPolicy47ABBB30",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cr-failure-handler-lambda-dev",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cr-failure-handler-lambda-dev:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudArtifactCleanupL-qdVpj0fFTnc3",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudBillingLambdaSer-qdrywxPmiw68",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudBillingReconcile-LOViRka9vmC4",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudCoverLetterWorke-B1kusmr75p9z",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudCvTailorWorkerLa-89xcihmOVK7r",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudCvUploadWorkerLa-gbFqEiKTCjcp",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudExportLambdaServ-SB8iHjNI4zAb",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudInterviewPrepWor-m4ymycsg591h",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDev-CareerVpCrudDevCrudvprworkerService-NNcGKrgwqoyh",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-BucketNotificationsHandler050a0587-YkOlq7uYjK62",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-ArtifactChainArtifactChai-bbZz8fnu1P00",
+    "policy": "ArtifactChainArtifactChainStateMachineRoleDefaultPolicy2BAABD66",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cvtailor-lambda-devx:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-ArtifactChainArtifactChai-bbZz8fnu1P00",
+    "policy": "ArtifactChainArtifactChainStateMachineRoleDefaultPolicy2BAABD66",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-artifact-failure-handler-lambda-devx",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-artifact-failure-handler-lambda-devx:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-ArtifactChainArtifactChai-bbZz8fnu1P00",
+    "policy": "ArtifactChainArtifactChainStateMachineRoleDefaultPolicy2BAABD66",
+    "statement": {
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cr-failure-handler-lambda-devx",
+        "arn:aws:lambda:us-east-1:788159322332:function:careervp-cr-failure-handler-lambda-devx:*"
+      ],
+      "Effect": "Allow"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-ArtifactCleanupLambdaServ-uVAPOEDTqhOy",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-BillingLambdaServiceRoleB-YOfSod3M91Z2",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-BillingReconcileLambdaSer-KCB6xzVUYj1l",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-CoverLetterWorkerLambdaSe-fWnfplBgfgMd",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-CvTailorWorkerLambdaServi-vzlckjrP6quK",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-CvUploadWorkerLambdaServi-zIcBCaqP1qPL",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-ExportLambdaServiceRoleB1-DqzLchMUroRK",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-InterviewPrepWorkerLambda-MI7aErJXA8Wb",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudDevx-CareerVp-vprworkerServiceRoleE056A-JN9lz8etG1U5",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-BucketNotificationsHandler050a0-Y52mraHZjkns",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudBillingL-vY0lJeCFvBiW",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudBillingR-Taanb3sAdOYX",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudCoverLet-TmTb9J5tDspF",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudCvTailor-FxIPnfwhjdOC",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudCvUpload-h5mQggKBS9b8",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudIntervie-Qx574niAJ09X",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CareerVpCrudStagingCrudvprworke-eUOkoaIPPzP2",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpCrudStaging-CustomS3AutoDeleteObjectsCustom-Pf2AccgXcH7K",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "CareerVpFrontend-Dev-CustomS3AutoDeleteObjectsCusto-yAHwhd6uqide",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "cdk-hnb659fds-cfn-exec-role-788159322332-eu-west-1",
+    "attached_managed_policy": {
+      "PolicyName": "AdministratorAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+    }
+  },
+  {
+    "principal": "cdk-hnb659fds-cfn-exec-role-788159322332-us-east-1",
+    "attached_managed_policy": {
+      "PolicyName": "AdministratorAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+    }
+  },
+  {
+    "principal": "password-manager",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "S3-Object-Read-Only",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaS3ExecutionRole-0a0602cb-3696-4c43-a333-cbcd7254d20e",
+      "PolicyArn": "arn:aws:iam::788159322332:policy/service-role/AWSLambdaS3ExecutionRole-0a0602cb-3696-4c43-a333-cbcd7254d20e"
+    }
+  },
+  {
+    "principal": "S3-Object-Read-Only",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole-c1a74da1-fa92-4663-910e-1f88f4407e68",
+      "PolicyArn": "arn:aws:iam::788159322332:policy/service-role/AWSLambdaBasicExecutionRole-c1a74da1-fa92-4663-910e-1f88f4407e68"
+    }
+  },
+  {
+    "principal": "serverlessrepo-cognito-sync-cognitosynctriggerRole-TKDDG7NLMX4L",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "SimpleMicroservicePermissions",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaVPCAccessExecutionRole-4b3d60d7-7114-4b93-8b6a-bb57f6dc4810",
+      "PolicyArn": "arn:aws:iam::788159322332:policy/service-role/AWSLambdaVPCAccessExecutionRole-4b3d60d7-7114-4b93-8b6a-bb57f6dc4810"
+    }
+  },
+  {
+    "principal": "SimpleMicroservicePermissions",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole-4700c9ff-ab77-4ad1-8e0b-453f8506408f",
+      "PolicyArn": "arn:aws:iam::788159322332:policy/service-role/AWSLambdaBasicExecutionRole-4700c9ff-ab77-4ad1-8e0b-453f8506408f"
+    }
+  },
+  {
+    "principal": "SimpleMicroservicePermissions",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaMicroserviceExecutionRole-d49645a7-afc4-4a16-b804-f467a93fe521",
+      "PolicyArn": "arn:aws:iam::788159322332:policy/service-role/AWSLambdaMicroserviceExecutionRole-d49645a7-afc4-4a16-b804-f467a93fe521"
+    }
+  },
+  {
+    "principal": "TpsPriExternalIdPDemo-APIFunctionServiceRole411B6D-1SAYQ2R42GITS",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "TpsPriExternalIdPDemo-PreTokenGenerationServiceRol-EBKNP266789L",
+    "attached_managed_policy": {
+      "PolicyName": "AWSLambdaBasicExecutionRole",
+      "PolicyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    }
+  },
+  {
+    "principal": "AdminAccess",
+    "attached_managed_policy": {
+      "PolicyName": "AdministratorAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+    }
+  }
+]

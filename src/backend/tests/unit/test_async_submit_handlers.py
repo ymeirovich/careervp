@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +18,7 @@ def _base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('SQS_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123456789012/test-queue')
 
 
-def _event(path: str, body: dict[str, object], user_id: str = 'user-123') -> dict[str, object]:
+def _event(path: str, body: dict[str, object], user_id: str = 'user-123') -> dict[str, Any]:
     return {
         'path': path,
         'httpMethod': 'POST',
@@ -82,6 +84,9 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     event = _event(
         '/interview-prep/generate',
         {
+            # v3.0.0 (scope-lock A1): application_id is required; vpr_id is no
+            # longer accepted as a stand-in application key.
+            'application_id': 'app-1',
             'vpr_id': 'vpr-1',
             'gap_response_ids': ['gap-1'],
             'focus_areas': ['system design'],
@@ -109,6 +114,40 @@ def test_interview_prep_submit_handler_validates_and_queues_with_sqs_queue_url()
     item = mock_table.put_item.call_args.kwargs['Item']
     assert item['artifactId'] == f'ARTIFACT#INTERVIEW_PREP#{body["request_id"]}'
     assert item['applicationId'] == 'user-123'
+
+
+def test_interview_prep_submit_logs_no_bearer_or_request_body_values() -> None:
+    """Logs may describe the request, but may not include credentials or body values."""
+    from careervp.handlers import interview_prep_submit_handler as module
+
+    sentinel_token = 'sentinel-bearer-token-must-not-be-logged'
+    sensitive_body_value = 'sentinel-sensitive-body-must-not-be-logged'
+    event = _event(
+        '/interview-prep/generate',
+        {
+            'application_id': 'app-1',
+            'vpr_id': sensitive_body_value,
+            'gap_response_ids': ['gap-1'],
+        },
+    )
+    event['headers']['Authorization'] = f'Bearer {sentinel_token}'
+    mock_table = MagicMock()
+    mock_logger = MagicMock()
+
+    with (
+        patch.object(module, 'logger', mock_logger),
+        patch.object(module, 'sqs') as mock_sqs,
+        patch.object(module, 'dynamodb_resource') as mock_dynamo,
+        patch.object(module, 'resolve_handler_dependencies', return_value=MagicMock(status='ready', resolved_upstream={})),
+    ):
+        mock_dynamo.Table.return_value = mock_table
+        response = module.lambda_handler(event, _lambda_context('interview-prep-submit'))
+
+    assert response['statusCode'] == 202
+    mock_sqs.send_message.assert_called_once()
+    captured_logs = repr(mock_logger.mock_calls)
+    assert sentinel_token not in captured_logs
+    assert sensitive_body_value not in captured_logs
 
 
 def test_cover_letter_submit_handler_returns_structured_validation_errors() -> None:
@@ -169,6 +208,9 @@ def test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_e
     event = _event(
         '/interview-prep/generate',
         {
+            # v3.0.0 (scope-lock A1): application_id is required; vpr_id is no
+            # longer accepted as a stand-in application key.
+            'application_id': 'app-1',
             'vpr_id': 'vpr-1',
             'gap_response_ids': ['gap-1'],
             'focus_areas': ['system design'],
@@ -177,7 +219,7 @@ def test_interview_prep_submit_handler_marks_failed_with_artifacts_keys_on_sqs_e
     )
     context = _lambda_context('interview-prep-submit')
 
-    sqs_error = module.BotoClientError(
+    sqs_error = ClientError(
         {'Error': {'Code': 'ServiceError', 'Message': 'queue unavailable'}},
         'SendMessage',
     )

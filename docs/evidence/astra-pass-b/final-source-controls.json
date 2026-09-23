@@ -1,0 +1,38 @@
+{
+  "P2": [
+    {
+      "artifacts_env": "artifacts",
+      "canonical": "artifacts",
+      "legacy": "users"
+    },
+    {
+      "artifacts_env": null,
+      "canonical": "users",
+      "legacy": "users"
+    }
+  ],
+  "G1": [
+    {
+      "claims": null,
+      "identity": null
+    },
+    {
+      "claims": {
+        "sub": "real-user"
+      },
+      "identity": "real-user"
+    }
+  ],
+  "P3_result_control": [
+    {
+      "input_success": true,
+      "contains_raise": false,
+      "returned_success": true
+    },
+    {
+      "input_success": false,
+      "contains_raise": false,
+      "returned_success": false
+    }
+  ]
+}

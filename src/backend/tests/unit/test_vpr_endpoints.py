@@ -50,6 +50,8 @@ def vpr_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('JWT_PRIVATE_KEY', TEST_PRIVATE_KEY)
     monkeypatch.setenv('JWT_PUBLIC_KEY', TEST_PUBLIC_KEY)
     monkeypatch.setenv('SQS_QUEUE_URL', 'https://sqs.us-east-1.amazonaws.com/123456789012/test-queue')
+    monkeypatch.setenv('VPR_RESULTS_BUCKET_NAME', 'test-vpr-results-bucket')
+    monkeypatch.setenv('VPR_JOBS_TABLE_NAME', 'test-vpr-jobs-table')
 
     import careervp.handlers.vpr_status_handler as vpr_status_handler
     import careervp.handlers.vpr_submit_handler as vpr_submit_handler

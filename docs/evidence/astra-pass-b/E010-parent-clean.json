@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/unit/",
+    "-q",
+    "--tb=short",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-parent-frb959g3/repo/src/backend",
+  "environment": {
+    "PYTHONPATH": "/var/folders/q2/54yf0jr159l3v09p2h3vz4bh0000gp/T/astra-b-parent-frb959g3/repo/src/backend",
+    "interpreter": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend/.venv/bin/python",
+    "AWS": "fake testing credentials; conftest+moto"
+  },
+  "start": "2026-09-13T09:05:58.459349+00:00",
+  "exit_code": 2,
+  "stdout_file": "E010-parent-clean.log",
+  "stderr": ""
+}

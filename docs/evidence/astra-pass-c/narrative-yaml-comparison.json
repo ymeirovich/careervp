@@ -1,0 +1,14 @@
+[
+  {
+    "pass": "A",
+    "labels_checked": 20,
+    "mismatches": [],
+    "not_found": []
+  },
+  {
+    "pass": "B",
+    "labels_checked": 20,
+    "mismatches": [],
+    "not_found": []
+  }
+]

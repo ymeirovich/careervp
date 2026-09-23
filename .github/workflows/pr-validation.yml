@@ -27,6 +27,50 @@ jobs:
         working-directory: src/backend
         run: uv run ruff check .
 
+  requirements-drift:
+    name: Requirements Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the version the DEPLOY path uses (UV_VERSION in
+      # db-redesign-checks.yml), NOT "latest" like the jobs around it.
+      # uv's requirements-txt format is version-dependent, so a guard running a
+      # different uv than the deploy proves nothing about the deploy: the first
+      # version of this job ran "latest", passed on PR #233, and the deploy was
+      # still stamped -dirty. It has to run what the deploy runs.
+      #
+      # `make deps` now strips comments, so the output is version-independent
+      # anyway -- this pin is the belt to that braces, and it is what makes a
+      # green tick here actually mean "the deploy will not be dirty".
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.21"
+          enable-cache: true
+      # `make build` runs `make deps` as its own step before the deploy step.
+      # If deps rewrites a committed requirements file, the tree is dirty by the
+      # time `make deploy-devx` evaluates GIT_STAMP (src/backend/Makefile:28),
+      # and DeployedGitSha is stamped `<sha>-dirty`. preflight then fails
+      # `deployed commit is known` and every journey proof is marked
+      # non-reproducible -- which is exactly what happened from handoff 08
+      # onward, caused by a stale dev_requirements.txt.
+      #
+      # A dependency change must regenerate BOTH exports. Committing the file
+      # once does not hold: PR #230 bumped four packages, refreshed
+      # lambda_requirements.txt, and left dev_requirements.txt stale again.
+      - name: Regenerate requirements exports
+        working-directory: src/backend
+        run: make deps
+      - name: Fail if the tree is now dirty
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::requirements exports are stale — run 'make deps' in src/backend and commit the result"
+            git status --porcelain
+            git diff --stat
+            exit 1
+          fi
+          echo "requirements exports are up to date; a deploy from this commit will not be stamped -dirty"
+
   typecheck:
     name: Mypy Type Check
     runs-on: ubuntu-latest
@@ -51,34 +95,107 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
-      - name: Run pytest
+      # Per-directory, not a single `uv run pytest`: the combined run is
+      # 606-red from cross-test contamination (sys.modules/sys.path pollution
+      # between files — test_job_handler.py passes 7/7 alone, ModuleNotFoundError
+      # combined). Isolating by directory sidesteps it entirely: ~1792 passed,
+      # 14 failed when the plan measured this. Root cause is unfixed and is
+      # handoff 02's scope (docs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md,
+      # docs/handoff/2026-09-19-PRODUCTION-PROGRAM.md W4.00/W4.01). Do not
+      # "simplify" this back into one bare pytest call without fixing that
+      # first — it will silently drop to 4-of-250 files effectively validated,
+      # which is the exact problem this step exists to close.
+      #
+      # The loop does not stop at the first failing directory — collect all,
+      # fail once — so a broken PR shows every failing directory, not just
+      # the first one alphabetically.
+      - name: Run pytest (per backend test directory)
         working-directory: src/backend
         env:
           AWS_REGION: us-east-1
           AWS_DEFAULT_REGION: us-east-1
           PYTHONPATH: ${{ github.workspace }}/src/backend
         run: |
-          uv run pytest -q \
-            tests/unit/test_auth_handler.py \
-            tests/unit/test_health_handler.py \
-            tests/unit/test_billing_service.py \
-            tests/integration/test_cv_tailoring_delete_roundtrip.py
+          fail=0
+          DIRS=(
+            tests/unit
+            tests/integration
+            tests/infrastructure
+            tests/e2e
+            tests/models
+            tests/regression
+            tests/security
+            tests/infra
+          )
+          # A directory can be absent (pytest exits 4) or present but empty
+          # (pytest exits 5). Neither is a test failure, but neither is a pass
+          # either — both are UNKNOWN (docs/HARNESS.md) and are annotated so
+          # coverage can never silently shrink. tests/infra, for example, does
+          # not exist on main; without this the whole gate would exit non-zero
+          # on every PR for a reason unrelated to the code under review.
+          for d in "${DIRS[@]}"; do
+            if [ ! -d "$d" ]; then
+              echo "::warning title=Test directory absent::$d is not present in this checkout - 0 tests ran from it"
+              continue
+            fi
+            echo "::group::$d"
+            # -rs prints the reason for every skip, so an UNKNOWN cannot read
+            # as a PASS in the log.
+            rc=0
+            uv run pytest "$d" -q --tb=short -rs || rc=$?
+            echo "::endgroup::"
+            if [ "$rc" -eq 5 ]; then
+              echo "::warning title=No tests collected::$d exists but collected 0 tests"
+            elif [ "$rc" -ne 0 ]; then
+              fail=1
+            fi
+          done
+          exit $fail
 
-  cv-tailoring-delete-observability:
-    name: CV Tailoring Delete Observability
+  jest-frontend:
+    name: Jest (unit + integration)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
         with:
-          version: "latest"
-          enable-cache: true
-      - name: Run delete roundtrip integration tests
-        working-directory: src/backend
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+      - name: Run Jest unit
+        run: cd src/frontend && npm run test:unit
         env:
-          PYTHONPATH: ${{ github.workspace }}/src/backend
-        run: uv run pytest tests/integration/test_cv_tailoring_delete_roundtrip.py -q
+          CI: true
+      - name: Run Jest integration
+        run: cd src/frontend && npm run test:integration
+        env:
+          CI: true
+      # test:e2e (jest --selectProjects e2e) is deliberately not run here: it's
+      # 5 billing files that are pure tautologies (mockApi.post.mockResolvedValue
+      # -> expect(response.status).toBe(200), no product code runs) plus the two
+      # real Playwright specs handoff-01 Step 2 renamed out of this project.
+      # Wiring it in would add assertions that prove nothing to the gate — see
+      # docs/handoff/2026-09-19-HANDOFF-01-ci-wiring.md and the sweep-00
+      # evidence it cites. Left for handoff 02.
+
+  vitest-frontend:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+      - name: Run Vitest
+        run: cd src/frontend && npx vitest run --config vitest.config.ts --reporter verbose
+        env:
+          CI: true
 
   deployed-parity:
     name: Deployed Parity Gate (pre_merge)
@@ -168,4 +285,9 @@ jobs:
         run: make build
       - name: Run cdk synth
         working-directory: infra
+        env:
+          # infra/careervp/scratch_deployment.py fails closed on an unset
+          # ENVIRONMENT (P-64) rather than silently guessing "dev" — devx is
+          # this repo's actual live deploy target, see CLAUDE.md's topology.
+          ENVIRONMENT: devx
         run: npx cdk synth

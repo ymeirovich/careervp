@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from contextvars import copy_context
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -480,9 +481,11 @@ async def _structure_raw_content(
     router = get_llm_router()
 
     loop = asyncio.get_running_loop()
+    invocation_context = copy_context()
     llm_result = await loop.run_in_executor(
         None,
-        lambda: router.invoke(
+        lambda: invocation_context.run(
+            router.invoke,
             mode=TaskMode.TEMPLATE,
             system_prompt=build_structure_system_prompt(),
             user_prompt=user_prompt,

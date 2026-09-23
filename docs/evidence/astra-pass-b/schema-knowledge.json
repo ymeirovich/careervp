@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "describe-table",
+    "--table-name",
+    "careervp-knowledge-table-devx",
+    "--query",
+    "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:25.833651+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"TableArn\": \"arn:aws:dynamodb:us-east-1:788159322332:table/careervp-knowledge-table-devx\",\n    \"KeySchema\": [\n        {\n            \"AttributeName\": \"userEmail\",\n            \"KeyType\": \"HASH\"\n        },\n        {\n            \"AttributeName\": \"knowledgeType\",\n            \"KeyType\": \"RANGE\"\n        }\n    ],\n    \"ItemCount\": 0\n}\n",
+  "stderr": ""
+}

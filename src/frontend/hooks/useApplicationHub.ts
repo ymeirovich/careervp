@@ -35,6 +35,15 @@ interface ApplicationResponse extends RawApplicationData {
   };
 }
 
+/**
+ * GET /company-research/{jobId} answers with the result fields plus a `status`
+ * discriminator, or `{ status, company_research: null }` when there is nothing
+ * to return yet. Only a `completed` envelope carries an `id`.
+ */
+type CompanyResearchEnvelope = CompanyResearchResult & { status?: string };
+
+const CR_POLL_INTERVAL_MS = 3000;
+
 function resolveTaskId(
   jobId: string,
   moduleType: ModuleType,
@@ -119,11 +128,15 @@ export function useApplicationHub(jobId: string): {
     placeholderData: keepPreviousData,
   });
 
-  const companyResearchQuery = useQuery<CompanyResearchResult | null>({
+  // company_research_handler.get_company_research returns an envelope whose
+  // `status` is one of not_generated | processing | failed | completed. Keep it:
+  // it is the only signal the hub has that an in-flight research finished, and
+  // company research has no entry in useModuleStatus's POLL_FN_MAP.
+  const companyResearchQuery = useQuery<CompanyResearchEnvelope | null>({
     queryKey: queryKeys.companyResearch.byJob(jobId),
     queryFn: async () => {
       try {
-        const res = await apiClient.get<CompanyResearchResult>(`/company-research/${jobId}`);
+        const res = await apiClient.get<CompanyResearchEnvelope>(`/company-research/${jobId}`);
         return res.data;
       } catch {
         return null;
@@ -131,6 +144,12 @@ export function useApplicationHub(jobId: string): {
     },
     enabled,
     placeholderData: keepPreviousData,
+    // Re-armed from the fetched status, never from React state: two consecutive
+    // polls returning the same in-progress value must still schedule the next
+    // one. A state-keyed effect does not re-fire on an unchanged value, which is
+    // what left gap analysis stuck on "Generating…" forever (PR #226).
+    refetchInterval: (query) =>
+      query.state.data?.status === 'processing' ? CR_POLL_INTERVAL_MS : false,
   });
 
   const appData = applicationQuery.data;
@@ -158,6 +177,12 @@ export function useApplicationHub(jobId: string): {
     (applicationQuery.error as Error | null) ??
     (cvQuery.error as Error | null) ??
     (gapQuery.error as Error | null);
+
+  // Only a completed envelope carries an id — processing / failed / not_generated
+  // all answer with `company_research: null`. Gating on the status keeps an
+  // unfinished research from ever being promoted to a "View" CTA.
+  const completedCompanyResearchId =
+    companyResearchQuery.data?.status === 'completed' ? (companyResearchQuery.data.id ?? null) : null;
 
   let hubState: HubState | null = null;
 
@@ -187,16 +212,26 @@ export function useApplicationHub(jobId: string): {
     if (companyResearchData) {
       moduleData.companyResearch = {
         ...companyResearchData,
-        result_url: companyResearchResult?.id ?? companyResearchData.result_url,
+        result_url: completedCompanyResearchId ?? companyResearchData.result_url,
       };
     }
-    if (companyResearchResult?.id) {
+    // The live endpoint outranks the application record's artifact row: it is the
+    // one source that reports an in-flight research, which the card needs in
+    // order to show its spinner rather than a second, duplicate "Generate".
+    if (companyResearchResult?.status === 'processing') {
+      moduleData.companyResearch = {
+        job_id: jobId,
+        status: 'processing',
+        created_at: '',
+        updated_at: '',
+      };
+    } else if (completedCompanyResearchId) {
       moduleData.companyResearch = {
         job_id: jobId,
         status: 'completed',
         created_at: '',
         updated_at: '',
-        result_url: companyResearchResult.id,
+        result_url: completedCompanyResearchId,
       };
     }
 
@@ -237,7 +272,7 @@ export function useApplicationHub(jobId: string): {
   const vprId = artifacts?.vpr?.artifact_id ?? null;
 
   // Company research ID — needed by Cover Letter generation
-  const companyResearchId = companyResearchQuery.data?.id ?? null;
+  const companyResearchId = completedCompanyResearchId;
   const companyResearchError = Boolean(
     applicationRecord?.company_research_error ?? appData?.company_research_error ?? false,
   );

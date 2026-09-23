@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from aws_cdk import Aws, Duration, NestedStack, RemovalPolicy
+from aws_cdk import aws_cloudwatch as cw
+from aws_cdk import aws_cloudwatch_actions as cw_actions
+from aws_cdk import aws_codedeploy as codedeploy
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
+from aws_cdk import aws_sns as sns
 from cdk_nag import NagSuppressions
 from constructs import Construct
 
@@ -30,6 +36,10 @@ class ErrorReportNestedStack(NestedStack):
         naming: NamingUtils,
         logs_kms_key: kms.IKey,
         allowed_origins: str,
+        deployment_application: codedeploy.ILambdaApplication,
+        deployment_role: iam.IRole,
+        rollback_alarms: Sequence[cw.IAlarm],
+        notification_topic: sns.ITopic,
     ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
@@ -70,10 +80,43 @@ class ErrorReportNestedStack(NestedStack):
             system_log_level_v2=_lambda.SystemLogLevel.INFO,
             architecture=_lambda.Architecture.X86_64,
             environment={
+                "ENVIRONMENT": naming.environment,
                 constants.POWERTOOLS_SERVICE_NAME: "careervp-client-errors",
                 constants.POWER_TOOLS_LOG_LEVEL: "INFO",
                 "ALLOWED_ORIGINS": allowed_origins,
             },
+        )
+        self.error_report_alias = self.error_report_lambda.add_alias(
+            f"live-{naming.environment}"
+        )
+        canary_error_alarm = cw.Alarm(
+            self,
+            "P23ErrorReportCanaryErrorAlarm",
+            alarm_name=naming.resource_name("error-report-canary-error", "alarm"),
+            metric=self.error_report_alias.metric_errors(
+                period=Duration.minutes(1), statistic="Sum"
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+        )
+        canary_error_alarm.add_alarm_action(cw_actions.SnsAction(notification_topic))
+        codedeploy.LambdaDeploymentGroup(
+            self,
+            "P23ErrorReportCanaryDeploymentGroup",
+            application=deployment_application,
+            alias=self.error_report_alias,
+            deployment_group_name=naming.resource_name(
+                "error-report-canary", "deployment-group"
+            ),
+            deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+            alarms=[canary_error_alarm, *rollback_alarms],
+            auto_rollback=codedeploy.AutoRollbackConfig(
+                deployment_in_alarm=True,
+                failed_deployment=True,
+                stopped_deployment=True,
+            ),
+            role=deployment_role,
         )
 
         # This handler only logs; it needs CloudWatch Logs + X-Ray and nothing else.
@@ -85,7 +128,7 @@ class ErrorReportNestedStack(NestedStack):
             )
         )
 
-        self.error_report_lambda.add_permission(
+        self.error_report_alias.add_permission(
             "AllowErrorReportApiInvoke",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             action="lambda:InvokeFunction",

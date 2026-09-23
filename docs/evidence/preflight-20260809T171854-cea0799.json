@@ -1,0 +1,142 @@
+{
+  "deployed_matches_head": null,
+  "deployed_sha": null,
+  "deployed_sha_detail": "CareerVpCrudDevx has no DeployedGitSha output (deployed before stamping existed?)",
+  "dirty_paths": [
+    "github/workflows/deploy-vpr-async.yml",
+    ".github/workflows/test-changeset.yml",
+    ".gitignore",
+    "CLAUDE.md",
+    "PROGRESS.md",
+    "infra/careervp/service_stack.py",
+    "plan.md",
+    "src/backend/Makefile",
+    "src/backend/tests/unit/test_async_submit_handlers.py",
+    "src/backend/scripts/compare_evidence.py",
+    "src/backend/scripts/evidence_stamp.py",
+    "src/backend/scripts/preflight.py",
+    "src/backend/scripts/review_change.py",
+    "src/backend/scripts/state.py",
+    "src/frontend/tests/e2e/journey.spec.ts"
+  ],
+  "discovery_errors": [],
+  "git_branch": "tools/proof-harness",
+  "git_dirty": true,
+  "git_sha": "cea07992539c09724a4f05be3761f24b8f4e4d5f",
+  "git_short": "cea0799",
+  "kind": "preflight",
+  "nested_stack_count": 5,
+  "premises": [
+    {
+      "command": "aws cloudformation describe-stacks --stack-name CareerVpCrudDevx",
+      "detail": "UPDATE_COMPLETE, last updated 2026-08-08 08:20:44.117000+00:00",
+      "name": "stack healthy",
+      "observed": {
+        "last_updated": "2026-08-08 08:20:44.117000+00:00",
+        "status": "UPDATE_COMPLETE"
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "aws cloudformation describe-stacks --query \"Stacks[0].Outputs[?OutputKey=='DeployedGitSha']\"",
+      "detail": "CareerVpCrudDevx has no DeployedGitSha output (deployed before stamping existed?)",
+      "name": "deployed commit is known",
+      "observed": null,
+      "status": "UNKNOWN"
+    },
+    {
+      "command": "aws apigateway get-stages --rest-api-id ymzhvcxod0",
+      "detail": "1 stage(s) logging",
+      "name": "api access logging enabled",
+      "observed": [
+        "arn:aws:logs:us-east-1:788159322332:log-group:CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E"
+      ],
+      "status": "PASS"
+    },
+    {
+      "command": "aws logs describe-log-groups --log-group-name-prefix CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E",
+      "detail": "CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E: 7d",
+      "name": "access logs kept long enough",
+      "observed": [
+        "CareerVpCrudDevx-CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC-PZQzDAGzG22E: 7d"
+      ],
+      "status": "PASS"
+    },
+    {
+      "command": "aws cloudformation get-template --stack-name CareerVpCrudDevx",
+      "detail": "18/18 Retain",
+      "name": "stateful resources retained",
+      "observed": 18,
+      "status": "PASS"
+    },
+    {
+      "command": "aws lambda get-function-configuration (read TABLE env vars) + aws dynamodb describe-table",
+      "detail": "10/10 table(s) exist but NO CloudFormation stack owns them \u2014 a rebuild would not recreate them: careervp-applications-table-devx, careervp-artifacts-table-devx, careervp-company-research-cache-table-devx, careervp-cvs-table-devx",
+      "name": "tables exist and are managed",
+      "observed": {
+        "inactive": [],
+        "missing": [],
+        "unmanaged": [
+          "careervp-applications-table-devx",
+          "careervp-artifacts-table-devx",
+          "careervp-company-research-cache-table-devx",
+          "careervp-cvs-table-devx",
+          "careervp-gap-responses-table-devx",
+          "careervp-idempotency-table-devx",
+          "careervp-jobs-table-devx",
+          "careervp-knowledge-table-devx",
+          "careervp-llm-cache-devx",
+          "careervp-users-table-devx"
+        ],
+        "wanted": [
+          "careervp-applications-table-devx",
+          "careervp-artifacts-table-devx",
+          "careervp-company-research-cache-table-devx",
+          "careervp-cvs-table-devx",
+          "careervp-gap-responses-table-devx",
+          "careervp-idempotency-table-devx",
+          "careervp-jobs-table-devx",
+          "careervp-knowledge-table-devx",
+          "careervp-llm-cache-devx",
+          "careervp-users-table-devx"
+        ]
+      },
+      "status": "FAIL"
+    },
+    {
+      "command": "aws cloudformation get-template (read Code.S3Key) + aws lambda get-function-configuration --query CodeSha256",
+      "detail": "2 asset group(s), largest has 31 functions on one build; newest change 2026-08-08T08:27:49.000+0000",
+      "name": "one code build per asset",
+      "observed": {
+        "groups": 2,
+        "largest": 31,
+        "last_modified": "2026-08-08T08:27:49.000+0000"
+      },
+      "status": "PASS"
+    },
+    {
+      "command": "aws ssm get-parameter --name /careervp/devx/anthropic-api-key",
+      "detail": "/careervp/devx/anthropic-api-key exists",
+      "name": "llm api key present",
+      "observed": "/careervp/devx/anthropic-api-key",
+      "status": "PASS"
+    },
+    {
+      "command": "aws cognito-idp describe-user-pool-client --user-pool-id <id> --client-id <id>",
+      "detail": "6 callback URL(s)",
+      "name": "sign-in callbacks configured",
+      "observed": [
+        "http://localhost:3000/callback",
+        "https://app.careervp.com/callback",
+        "https://db-redesign.d3j2wnm8g5clnw.amplifyapp.com/callback",
+        "https://dev.careervp.com/callback",
+        "https://front-ui-update-amplify1.d3j2wnm8g5clnw.amplifyapp.com/callback",
+        "https://stage.careervp.com/callback"
+      ],
+      "status": "PASS"
+    }
+  ],
+  "resource_count": 553,
+  "stack": "CareerVpCrudDevx",
+  "timestamp": "2026-08-09T17:18:54.440212+00:00"
+}

@@ -13,6 +13,7 @@ try:
         generate_gap_questions,
         maybe_assert_queue_has_messages,
         poll_until_terminal,
+        requires_live_api,
         submit_gap_responses,
         submit_vpr_generate,
         unwrap_payload,
@@ -26,17 +27,24 @@ except ImportError:  # pragma: no cover
         generate_gap_questions,
         maybe_assert_queue_has_messages,
         poll_until_terminal,
+        requires_live_api,
         submit_gap_responses,
         submit_vpr_generate,
         unwrap_payload,
         upload_cv_and_get_id,
     )
 
+# handoff-01 Step 5: this file calls IntegrationApiClient.from_env(), which needs a
+# real deployed API_BASE. Visible skip at collection time, not a silent runtime skip.
+pytestmark = requires_live_api
 
+
+@pytest.mark.skipif(
+    not os.getenv('INTEGRATION_VPR_FAILURE_PAYLOAD', '').strip(),
+    reason='Set INTEGRATION_VPR_FAILURE_PAYLOAD JSON to force a deterministic worker failure scenario.',
+)
 def test_vpr_failure_recovery_integration() -> None:
     failure_payload_raw = os.getenv('INTEGRATION_VPR_FAILURE_PAYLOAD', '').strip()
-    if not failure_payload_raw:
-        pytest.skip('Set INTEGRATION_VPR_FAILURE_PAYLOAD JSON to force a deterministic worker failure scenario.')
 
     try:
         failure_overrides = json.loads(failure_payload_raw)

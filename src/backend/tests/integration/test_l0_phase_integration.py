@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -45,7 +46,14 @@ TEMPLATE_PATTERNS = (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I1_generators/generator-output-audit.json'
+# sweep-00 finding #2: these writers targeted the working tree, so running the
+# mandatory checks always left tracked files modified and `git_dirty: false` was
+# unreachable for every proof in this chain. Nothing reads prior content — each
+# test writes and then asserts on what it just wrote — so the default target is a
+# temp dir. Set CAREERVP_BETA_EVIDENCE_DIR=<repo>/docs/beta/evidence to refresh
+# the committed artifacts deliberately.
+BETA_EVIDENCE_ROOT = Path(os.environ.get('CAREERVP_BETA_EVIDENCE_DIR', tempfile.gettempdir()))
+EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I1_generators/generator-output-audit.json'
 
 
 def _sample_user_cv() -> UserCV:
@@ -335,7 +343,8 @@ def _run_vpr(run_number: int) -> str:
     assert result.success is True
     assert result.data is not None
     assert result.data.vpr is not None
-    mock_dal.save_vpr.assert_called_once()
+    # No save_vpr assertion here: generate_vpr() no longer persists — the
+    # caller owns persistence (F-DEVX-1; see vpr_generator.py docstring).
     assert mock_llm_instance.invoke.call_count == 1
     return json.dumps(result.data.vpr.model_dump(mode='json'))
 

@@ -54,6 +54,9 @@ def cv_mgmt_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setenv('LOG_LEVEL', 'INFO')
     monkeypatch.setenv('POWERTOOLS_TRACE_DISABLED', 'true')
     monkeypatch.setenv('TABLE_NAME', 'test-cv-mgmt-table')
+    # CVs resolve through CVS_TABLE_NAME now. This fixture's table already uses
+    # the canonical userId/cvId schema, so it is the CV table under both names.
+    monkeypatch.setenv('CVS_TABLE_NAME', 'test-cv-mgmt-table')
     monkeypatch.setenv('CV_BUCKET_NAME', 'test-cv-bucket')
     monkeypatch.setenv('JWT_PRIVATE_KEY', TEST_PRIVATE_KEY)
     monkeypatch.setenv('JWT_PUBLIC_KEY', TEST_PUBLIC_KEY)

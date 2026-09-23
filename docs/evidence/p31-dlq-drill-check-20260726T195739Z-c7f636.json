@@ -1,0 +1,32 @@
+{
+  "ac": "AC-P31-1",
+  "legs": [
+    {
+      "detail": "wired: rule 'CareerVpCrudDevx-CareerVpCrudDevxCrudArtifactCleanu-Dr6AjImnUHKx' \u2192 DeadLetterConfig \u2192 careervp-artifact-cleanup-schedule-dlq-dlq-devx and queue policy admits events.amazonaws.com",
+      "dlq_name": "careervp-artifact-cleanup-schedule-dlq-dlq-devx",
+      "facts": {
+        "dlq_arn": "arn:aws:sqs:us-east-1:788159322332:careervp-artifact-cleanup-schedule-dlq-dlq-devx",
+        "policy_grants_events_send": true,
+        "rule_name": "CareerVpCrudDevx-CareerVpCrudDevxCrudArtifactCleanu-Dr6AjImnUHKx",
+        "target_dlq_arn": "arn:aws:sqs:us-east-1:788159322332:careervp-artifact-cleanup-schedule-dlq-dlq-devx"
+      },
+      "passed": true,
+      "rule_hint": "artifact-cleanup"
+    },
+    {
+      "detail": "wired: rule 'CareerVpCrudDevx-CareerVpCrudDevxCrudBillingReconci-ebrzCUD52W4N' \u2192 DeadLetterConfig \u2192 careervp-billing-reconcile-schedule-dlq-dlq-devx and queue policy admits events.amazonaws.com",
+      "dlq_name": "careervp-billing-reconcile-schedule-dlq-dlq-devx",
+      "facts": {
+        "dlq_arn": "arn:aws:sqs:us-east-1:788159322332:careervp-billing-reconcile-schedule-dlq-dlq-devx",
+        "policy_grants_events_send": true,
+        "rule_name": "CareerVpCrudDevx-CareerVpCrudDevxCrudBillingReconci-ebrzCUD52W4N",
+        "target_dlq_arn": "arn:aws:sqs:us-east-1:788159322332:careervp-billing-reconcile-schedule-dlq-dlq-devx"
+      },
+      "passed": true,
+      "rule_hint": "billing-reconcile"
+    }
+  ],
+  "mode": "check",
+  "passed": true,
+  "timestamp": "2026-07-26T19:57:39.824317+00:00"
+}

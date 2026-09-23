@@ -1,0 +1,74 @@
+register_version: 1
+status: CAPTURED_NOT_ADJUDICATED
+independence_note: These claims are outside the 20-ID manifest. None receives a Pass-C verdict or enters the base-rate denominator. Observations gathered while challenging a manifest claim do not provide an independent blind audit of these new claims.
+claims:
+  - id: U01
+    claim: A failure on page two discards already-read list items and returns an empty list.
+    offered_by: [A, B]
+    evidence: ["A batch5", "B G4 remaining_uncertainty", "docs/evidence/astra-pass-c/C04-page-error-knowledge.json"]
+    proving_run_assessment: Worth a run for both named list helpers with owner-positive data and page-specific throttling, asserting an explicit error instead of success-empty; separate from pagination correctness G4.
+  - id: U02
+    claim: S3 upload before canonical persistence and TTL extension can strand a VPR result on a failed completion path.
+    offered_by: [B]
+    evidence: ["B S0b mechanism/residual", "src/backend/careervp/handlers/vpr_worker_handler.py:497", "src/backend/careervp/handlers/vpr_worker_handler.py:513", "src/backend/careervp/handlers/vpr_worker_handler.py:536"]
+    proving_run_assessment: Worth a sandbox fault-injection run at each persistence boundary, checking S3, canonical record and TTL together; no historical occurrence established.
+  - id: U03
+    claim: Twenty-six of thirty-six observed jobs are active with no TTL; the writer and intended retention are unattributed.
+    offered_by: [B]
+    evidence: ["docs/evidence/astra-pass-b/E005-jobs-corrected.json", "docs/evidence/astra-pass-b/independent-source-notes.md", "docs/evidence/astra-pass-c/C05-receipt-integrity.json"]
+    proving_run_assessment: Worth attribution through retained writer/data-event traces; matching _build_api_job_record shape is a lead, not writer proof or proof of a defect.
+  - id: U04
+    claim: The VPR results bucket has a 365-day lifecycle; its interaction with job TTL and expected product retention is unreviewed.
+    offered_by: [A, B]
+    evidence: ["A lifecycle", "docs/evidence/astra-pass-b/results-lifecycle.json", "docs/evidence/astra-pass-c/C05-receipt-integrity.json"]
+    proving_run_assessment: The configured policy already contradicts S0b's indefinite-retention premise; a separate retention-contract and deletion-order run is worthwhile before changing either lifecycle or TTL. No broader retention-defect verdict assigned.
+  - id: U05
+    claim: CV parsing discards GPA extracted by the provider.
+    offered_by: [A]
+    evidence: ["A S11d remaining_uncertainty", "A batch3", "docs/evidence/astra-pass-c/C03-parser-races-pagination.json", "src/backend/careervp/logic/cv_parser.py:275"]
+    proving_run_assessment: Worth a source-CV preservation test if GPA is part of the product contract; preserving it would also require addressing the separately confirmed DAL float defect.
+  - id: U06
+    claim: The tailored-CV export reader has a separate unpaginated query.
+    offered_by: [B]
+    evidence: ["B G4 reason_for_disagreement", "src/backend/careervp/handlers/export_handler.py:_read_cv_tailored"]
+    proving_run_assessment: Worth a multi-page owner-positive export fixture; correct pagination in G4's list methods cannot certify this reader.
+  - id: U07
+    claim: Paste sanitization has an unsanitized SSR fallback.
+    offered_by: [B]
+    evidence: ["B narrative trust-sweep row: TipTap paste sanitization", "B inspected-files.json frontend semantic reads"]
+    proving_run_assessment: Worth a browser/SSR sink reachability test with controlled markup; source fallback alone does not demonstrate executable XSS.
+  - id: U08
+    claim: Inspected frontend and distribution sources lack configured CSP, framing and HSTS controls.
+    offered_by: [B]
+    evidence: ["B narrative trust-sweep row: CSP / framing / HSTS", "B inspected-files.json frontend/infrastructure reads"]
+    proving_run_assessment: Worth read-only measurements of actual response headers across routes, redirects and custom domains; source absence is not a live-header measurement.
+  - id: U09
+    claim: Source cookies lack Secure and are JavaScript accessible; broader SDK token-storage exposure is inferred.
+    offered_by: [B]
+    evidence: ["B narrative trust-sweep row: Token storage", "B inspected-files.json auth client reads"]
+    proving_run_assessment: Worth a controlled browser storage/refresh-flow inspection separating actual cookie attributes from SDK defaults and exposure assumptions.
+  - id: U10
+    claim: Devx WAF inspects 64 KB, uses Count for the managed body-size rule, and limits 1000 requests per IP per 300 seconds.
+    offered_by: [B]
+    evidence: ["docs/evidence/astra-pass-b/waf-prod.json", "B narrative trust-sweep row: WAF body/rate controls"]
+    proving_run_assessment: Worth a sandbox boundary test tied to the intended upload/rate contract; these configuration values alone are not a vulnerability verdict or proof of future production behavior.
+  - id: U11
+    claim: Interview-prep INFO calls include CV payload and generation context on reached paths.
+    offered_by: [B]
+    evidence: ["B narrative trust-sweep row: PII logging", "src/backend/careervp/handlers/interview_prep_handler.py"]
+    proving_run_assessment: Worth a synthetic-data log-capture run and access/retention review; do not turn source logging into an every-invocation claim or fetch real CV logs unnecessarily.
+  - id: U12
+    claim: validate_cv_upload is unwired and named request fields permit large strings.
+    offered_by: [B]
+    evidence: ["docs/evidence/astra-pass-b/E020-callers.json", "docs/evidence/astra-pass-b/S26-length-controls.json", "B narrative trust-sweep row: Server input bounds"]
+    proving_run_assessment: Worth a bounded synthetic HTTP upload run through all deployed-equivalent size gates; distinct from proving successful prompt injection under S26.
+  - id: U13
+    claim: Owner-positive controls reveal empty or missing resources in the gap/export P-05 fixtures.
+    offered_by: [B]
+    evidence: ["docs/evidence/astra-pass-b/independent-controls.json", "docs/evidence/astra-pass-c/independent-controls.json"]
+    proving_run_assessment: Worth dedicated fixture-contract tests and branch enumeration; this is a test-instrument issue, not evidence that these owner responses are production authorization defects. Cross-reference PREMISE-P4.
+  - id: U14
+    claim: Isolated unit/integration environments contain unmocked AWS fixture paths.
+    offered_by: [B]
+    evidence: ["docs/evidence/astra-pass-b/E010-head-controlled.log", "docs/evidence/astra-pass-b/main-leaked-network-control.json", "docs/evidence/astra-pass-c/C07-existing-tests.json"]
+    proving_run_assessment: Worth a suite-wide deny-transport test job with explicit fixture defaults and baseline accounting; C's corrected P-05 run illustrates isolation needs without changing application source.

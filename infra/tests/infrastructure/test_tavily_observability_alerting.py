@@ -65,15 +65,15 @@ def _alarms_by_name(company_research_template: Template) -> dict[str, dict[str, 
 
 
 def test_cr_handler_and_worker_have_tavily_env_var(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
     expected = "/careervp/dev/tavily-api-key"
     cr_handler_env = _lambda_env_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.company_research_handler.lambda_handler",
     )
     cr_worker_env = _lambda_env_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.company_research_worker_handler.lambda_handler",
     )
 
@@ -81,9 +81,9 @@ def test_cr_handler_and_worker_have_tavily_env_var(
     assert cr_worker_env["TAVILY_API_KEY_SSM_PARAM"] == expected
 
 
-def test_cr_worker_has_cache_table_env(synthesized_template: Template) -> None:
+def test_cr_worker_has_cache_table_env(features_template: Template) -> None:
     cr_worker_env = _lambda_env_by_handler(
-        synthesized_template,
+        features_template,
         "careervp.handlers.company_research_worker_handler.lambda_handler",
     )
     assert cr_worker_env["COMPANY_RESEARCH_CACHE_TABLE_NAME"]

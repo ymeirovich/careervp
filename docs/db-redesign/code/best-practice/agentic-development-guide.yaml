@@ -1,0 +1,566 @@
+version: 1
+title: "Agentic Development Guide — CareerVP"
+purpose: >
+  Structured reference for an AI coding agent (Claude Code) to consult when authoring
+  specs, tests, and workflows for CareerVP. Not auto-loaded — the operator hands this
+  file to the agent explicitly at the start of a task.
+usage_instructions: >
+  Read project_context first to load CareerVP-specific landmines. Then consult
+  part_1_directives when authoring a spec/test/workflow, and part_2_directives when
+  designing or extending infrastructure. Use the matching entry under templates
+  verbatim as a starting point. Treat confidence: verified directives as load-bearing;
+  treat confidence: practitioner_guidance directives as good defaults to confirm
+  against current vendor docs before depending on exact numbers.
+companion_docs:
+  - path: "./careervp-architecture-v2.md"
+    describes: "As-built system + target architecture, findings register, quality-attribute gaps"
+  - path: "./careervp-architecture-deepdive.md"
+    describes: "Per-domain deep analysis: security, database, compute, frontend, API, async, LLM, IaC"
+  - path: "./redesign-runbook.md"
+    describes: "Executable migration plan, phased, with golden rules and rollback discipline"
+  - path: "./agentic-development-guide.md"
+    describes: "Human-readable prose version of this same content"
+
+confidence_tiers:
+  verified: >
+    Confirmed against live primary-vendor documentation (Anthropic, OpenAI, AWS)
+    through adversarial multi-agent verification (3-vote consensus; majority-refute
+    kills the claim). Two research passes, 217 agents total.
+  practitioner_guidance: >
+    Grounded in real vendor documentation that was fetched and read, but not run
+    through the same adversarial verification pipeline — typically because exact
+    numbers (rate limits, concurrency defaults) change frequently. Confirm against
+    current docs before relying on specific figures.
+
+rejected_claims:
+  - claim: "Amazon Bedrock AgentCore has exactly three capabilities: Runtime, Memory, Gateway."
+    reason: "Refuted 0-3 in adversarial verification; actual structure has more nuance. Do not state this."
+  - claim: "AWS names prompt/token length as 'the single largest cost driver' for agentic workloads."
+    reason: "Refuted 1-2. AWS's actual guidance names tiered model routing, tool-call caching, and RAG scoping as the levers — not a single dominant driver."
+
+project_context:
+  name: careervp
+  stack:
+    - "AWS CDK (Python)"
+    - "API Gateway REST"
+    - "Lambda + Powertools"
+    - "DynamoDB (9 tables, migrating to single-table 'core')"
+    - "S3"
+    - "SQS"
+    - "Step Functions (STANDARD)"
+    - "Cognito"
+    - "WAF"
+    - "Next.js 16 App Router / React 19 / TanStack Query v5"
+    - "Direct Anthropic API (Sonnet + Haiku routing), Tavily for web research"
+  reconciled_against: "main @ 4f7c294 (2026-06-29)"
+  known_critical_findings:
+    - id: F1
+      severity: CRITICAL
+      domain: IaC/Reliability
+      finding: "Stateful DynamoDB tables and S3 buckets use RemovalPolicy.DESTROY with no deletion_protection; dedicated RETAIN-based stateful stacks exist as dead code, never instantiated in app.py."
+      implication: "Any in-place data-model migration is unsafe until this is fixed (redesign-runbook Phase 0)."
+    - id: F2
+      severity: CRITICAL
+      domain: Security/Auth
+      finding: "extract_user_id() falls back to a client-supplied x-user-id header when JWT claims are absent (auth_utils.py:44-47)."
+      implication: "Any request reaching a handler without authorizer context can assert an arbitrary user identity. Never reintroduce or rely on this fallback."
+    - id: F3
+      severity: CRITICAL
+      domain: Reliability
+      finding: "No handler is wired to @idempotent (Powertools); the idempotency DynamoDB table exists but is unused."
+      implication: "Stripe webhook retries and other at-least-once deliveries can double-process. New async/webhook handlers must add idempotency explicitly."
+    - id: F4
+      severity: CRITICAL
+      domain: Reliability
+      finding: "3 of 4 SQS workers (VPR, cover letter, interview prep) return statusCode 200 instead of reporting batchItemFailures; only the Company Research worker does this correctly."
+      implication: "Failed messages are deleted instead of retried/DLQ'd — silent message loss. New SQS consumers must follow the CR worker's pattern."
+    - id: F5
+      severity: CRITICAL
+      domain: Reliability/Cost
+      finding: "SQS visibility timeout equals Lambda timeout (1x) on all AI worker queues (e.g. VPR 600s/600s)."
+      implication: "A near-timeout worker can be re-delivered mid-processing, triggering a duplicate (expensive) LLM call. New queues should set visibility timeout >= 6x the function timeout."
+    - id: F6
+      severity: CRITICAL_HIGH
+      domain: Security/IAM
+      finding: "A single shared IAM role (careervp-role-lambda-core) is attached to 13+ Lambdas with wildcard resources=['*'] grants on KMS and AppConfig actions."
+      implication: "Compromise of any one of 13+ functions inherits broad read/write across the datastore. New Lambdas must get their own role with grant_*-scoped ARNs, never join the shared role."
+    - id: F7
+      severity: HIGH
+      domain: Flexibility/DataModel
+      finding: "Three mutually-incompatible key schemas coexist (pk/sk on users, applicationId/artifactId on artifacts, job_id on jobs); table selection is via env-var precedence (ARTIFACTS_TABLE_NAME -> DYNAMODB_TABLE_NAME -> TABLE_NAME), not a typed contract. A wrong-table query throws ValidationException that is swallowed into a false 'not found'."
+      implication: "Never add a fourth env-var alias. New artifact storage must go through the typed artifact_type -> (table, key) contract and, eventually, the single-table 'core' model."
+    - id: F8
+      severity: HIGH
+      domain: IaC
+      finding: "Parent ServiceStack is estimated at 400-550 CloudFormation resources against the 500 hard limit."
+      implication: "New feature resources should default to a new nested stack, not be added directly to the parent."
+  cost_model:
+    per_application_ai_cost_usd: 0.43
+    dominant_cost_driver: "VPR 6-stage Sonnet pipeline, ~74% of spend, output-token dominated (not input bloat)"
+    gross_margin_pct: 88
+    model_routing: "Sonnet for VPR/Gap Analysis (strategic); Haiku for templated artifacts (CV tailoring, cover letter, interview prep, AI assist, company research, CV parse)"
+    known_blind_spot: "A second, older LLMClient (used by Gap/Cover-Letter/Interview-Prep/CV-Tailoring/AI-Assist) estimates tokens as len/4 and captures no real usage data — unify on the cost-aware router client before further cost optimization."
+
+part_1_directives:
+  - id: p1.1
+    title: "Load repo context first"
+    confidence: verified
+    rule: >
+      Before writing a spec, test, or workflow: read this guide, the relevant
+      architecture-doc section(s) for the domain being touched, and the runbook
+      if the task touches anything stateful, IAM, or migration-phase work.
+    why: >
+      OpenAI's and Anthropic's coding-agent guidance converges on an auto-loaded,
+      repo-specific instructions file as the mechanism that prevents an agent from
+      re-deriving (and getting wrong) decisions the team already made.
+    how_to_apply: >
+      Grep the architecture docs for the table/Lambda/construct name before writing
+      new code that touches it. Check the known_critical_findings list above for
+      landmines relevant to the area being changed.
+    sources:
+      - "https://developers.openai.com/codex/learn/best-practices"
+      - "https://developers.openai.com/codex/guides/agents-md"
+
+  - id: p1.2
+    title: "Spec Template usage"
+    confidence: verified
+    rule: >
+      Every non-trivial task starts with a spec using the 4-part structure: goal,
+      context, constraints, done-when — plus explicit, direct, action-oriented
+      phrasing rather than suggestion-style requests.
+    why: >
+      Both OpenAI and Anthropic vendor docs converge on this structure. Models may
+      only suggest changes rather than implement them unless told explicitly to act.
+    how_to_apply: "Use templates.spec_template. Always name AWS resources touched in constraints; always tie done-when to CareerVP's real CI gates (ruff, mypy, pytest, cdk synth, Checkov, Bandit, pip-audit, CodeQL)."
+    sources:
+      - "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview"
+      - "https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices"
+
+  - id: p1.3
+    title: "Explore -> Plan -> Implement -> Commit loop"
+    confidence: verified
+    rule: "Follow a four-phase loop: read-only Explore, write an editable Plan artifact, Implement against it while verifying, then Commit with a descriptive message referencing the runbook phase/finding addressed."
+    why: "This is Anthropic's documented Claude Code workflow; it keeps the agent from editing before understanding, and produces an auditable plan artifact."
+    how_to_apply: "Use templates.workflow_plan_template for the Plan phase."
+    sources:
+      - "https://code.claude.com/docs/en/best-practices"
+
+  - id: p1.4
+    title: "Test Plan Template usage, and the autouse-mock trap"
+    confidence: verified
+    rule: >
+      Any test touching artifact storage/routing must either bypass
+      tests/conftest.py::mock_artifact_dependency_resolver or drive real resolution
+      against moto-mocked tables with the actual key schema. A suite passing only
+      because of this autouse fixture is not evidence of correctness.
+    why: >
+      This fixture currently stubs dependency resolution to 'ready' for every
+      handler test, hiding the entire table-routing defect class (finding F7) from CI.
+    how_to_apply: "Use templates.test_plan_template; its autouse-mock check step is mandatory for any storage/routing-adjacent change."
+    sources: []
+
+  - id: p1.5
+    title: "Verifiable done-when criteria, with the gaming caveat"
+    confidence: verified
+    rule: >
+      A task is done when an automatable check passes (test, build, lint, cdk diff),
+      not when the agent reports it is done. Cap retry loops; add adversarial review
+      subagents for security/data-layer changes; do not let an agent weaken an
+      assertion to make a test pass.
+    why: >
+      Verifiable checks are what let an agent loop close autonomously — but agents
+      can game or fabricate passing checks over long horizons (documented reward-
+      hacking research, the public Replit incident, academic 'Verification Horizon' work).
+    how_to_apply: >
+      For auth/IAM/data-layer diffs, explicitly spawn a subagent to adversarially
+      review the diff against the known_critical_findings list before treating
+      green CI as sufficient. Treat 'cdk diff shows zero resource replacements' as
+      a first-class automatable check for any stateful-resource-adjacent change.
+    sources:
+      - "https://code.claude.com/docs/en/best-practices"
+
+  - id: p1.6
+    title: "Prompt construction for non-prompt-engineers"
+    confidence: verified
+    rule: >
+      Structure requests as goal -> context -> constraints -> done-when; be explicit
+      and action-oriented rather than suggestive; establish success criteria before
+      iterating on wording; prefer model/architecture changes over prompt tuning for
+      cost/latency problems.
+    why: "Vendor docs converge on this structure; ambiguous suggestion-style requests risk the agent only proposing rather than implementing a change."
+    how_to_apply: "Apply inline for smaller asks that don't warrant a full Spec Template."
+    sources:
+      - "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview"
+      - "https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide"
+
+  - id: p1.7
+    title: "Subagent orchestration — when to delegate"
+    confidence: verified
+    rule: >
+      Delegate to a subagent for parallelizable, context-isolated, or genuinely
+      independent work. Do not delegate trivial lookups a single grep would answer.
+    why: "Both OpenAI and Anthropic document over-delegation as a real failure mode that burns context/time for no benefit."
+    how_to_apply: >
+      Good CareerVP candidates: auditing an IAM policy diff for least-privilege
+      compliance; checking a new SQS consumer against the idempotency checklist
+      (p2.4); reviewing a data-model change against the three-schema/three-id
+      landmine (F7).
+    sources:
+      - "https://code.claude.com/docs/en/best-practices"
+      - "https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices"
+      - "https://developers.openai.com/codex/learn/best-practices"
+
+  - id: p1.8
+    title: "Cross-session state persistence"
+    confidence: verified
+    rule: >
+      For work spanning multiple context windows, persist a structured JSON status
+      file, a freeform notes file, and git commits as restore points. On resume,
+      read status + git log before re-deriving anything.
+    why: "Anthropic's documented pattern for long-running agentic tasks across context-window restarts."
+    how_to_apply: "Runbook phase checkboxes already serve as this structured status file — treat them as the machine-checkable contract, not decoration."
+    sources:
+      - "https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices"
+
+  - id: p1.9
+    title: "Workflow/Plan Template usage"
+    confidence: verified
+    rule: >
+      Shape infrastructure-affecting plans as expand -> dual-write -> backfill ->
+      dual-read -> contract: additive, reversible, one flag-gated change at a time.
+      Never mutate or delete a live resource in place.
+    why: "This is the runbook's governing rule, generalized: it is the correct shape for any CareerVP infrastructure change, not just the DynamoDB migration."
+    how_to_apply: "Use templates.workflow_plan_template."
+    sources: []
+
+  - id: p1.10
+    title: "Parallel tool-calling; safe-by-default sandboxing"
+    confidence: verified
+    rule: >
+      Batch independent reads/searches in parallel by default; reserve sequential
+      calls for genuinely dependent steps. Keep agent tool-use sandboxing tight by
+      default, loosening only for an identified need.
+    why: "Default agent behavior in both Claude Code and Codex; industry-reported 1.8x-3.7x speedups on parallelizable work. Mirrors CareerVP's own correct least-privilege pattern in its worker Lambdas."
+    how_to_apply: "No CareerVP-specific override; apply as documented."
+    sources:
+      - "https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide"
+      - "https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices"
+      - "https://developers.openai.com/codex/learn/best-practices"
+
+part_2_directives:
+  - id: p2.1
+    title: "Event-driven architecture as the substrate"
+    confidence: verified
+    rule: "New artifact types/features should follow: sync API Lambda enqueues -> async worker processes -> Step Functions orchestrates cross-artifact dependencies."
+    why: "AWS's prescriptive guidance for agentic AI on serverless names event-driven architecture as the foundational substrate, mapping perceive-decide-act onto event triggers. CareerVP already follows this shape."
+    how_to_apply: "Default any new async feature to this shape unless there's a specific reason not to."
+    sources:
+      - "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/event-driven-architecture.html"
+
+  - id: p2.2
+    title: "Orchestration model: Step Functions vs Bedrock Agents (hybrid)"
+    confidence: verified
+    rule: "Keep the core ArtifactChain deterministic (Step Functions). Do not introduce Bedrock Agents' flexible NL-reasoning mode into the core chain without a specific need that a deterministic state machine can't express."
+    why: "AWS recommends a hybrid: Step Functions for deterministic control-flow with full state trace; Bedrock Agents for flexible reasoning but with only limited audit trace. CareerVP's audit/compliance needs favor the full trace."
+    how_to_apply: "Evaluate any proposed open-ended-reasoning feature against this audit-trail tradeoff explicitly before adopting."
+    sources:
+      - "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/orchestration-models.html"
+
+  - id: p2.3
+    title: "Resilience & durability: Step Functions Retry/Catch, Lambda invocation model, Lambda Durable Functions"
+    confidence: verified
+    rule: >
+      Combine Step Functions Retry (IntervalSeconds, MaxAttempts default 3,
+      BackoffRate default 2.0, optional MaxDelaySeconds, JitterStrategy FULL to
+      avoid thundering-herd against rate-limited dependencies) with Catch
+      (ErrorEquals array incl. States.ALL, routes via Next). Retry fires first,
+      Catch only on exhaustion. Sync Lambda invocations get no automatic retry
+      (caller must handle idempotency); async invocations retry up to 2x by
+      default; DLQ captures what's left. Evaluate AWS Lambda Durable Functions
+      (re:Invent Dec 2025 — new, verify current SDK surface) as a future evolution
+      of the SQS+waitForTaskToken pattern: checkpoint-and-replay means a failure at
+      stage N does not re-pay for stages 1..N-1; requires determinism outside
+      context.step() calls; per-invocation cap still 15 min; total execution
+      timeout configurable up to ~365-366 days (documented inconsistently, treat
+      as 'approximately one year'), default 24h, min 60s.
+    why: >
+      This directly addresses CareerVP's F4 (batchItemFailures) and F5 (visibility
+      timeout == Lambda timeout, causing duplicate expensive LLM calls on retry).
+    how_to_apply: >
+      Do not defer runbook Phase 2 fixes (batchItemFailures, visibility >= 6x
+      timeout, max_concurrency) while evaluating Durable Functions — those are
+      needed regardless and are the cheaper, already-specified fix.
+    sources:
+      - "https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html"
+      - "https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-handling-error-conditions.html"
+      - "https://docs.aws.amazon.com/lambda/latest/dg/invocation-retries.html"
+      - "https://docs.aws.amazon.com/lambda/latest/dg/durable-basic-concepts.html"
+      - "https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html"
+      - "https://aws.amazon.com/blogs/aws/build-multi-step-applications-and-ai-workflows-with-aws-lambda-durable-functions/"
+      - "https://aws.amazon.com/blogs/compute/building-fault-tolerant-multi-agent-ai-workflows-with-aws-lambda-durable-functions/"
+
+  - id: p2.4
+    title: "Idempotency patterns for every at-least-once consumer"
+    confidence: verified
+    rule: >
+      Every new async handler/SQS worker must key idempotency on a stable business
+      identifier (never a client-supplied, re-mintable ID) and implement
+      ReportBatchItemFailures.
+    why: "Lambda provides no idempotency on sync paths and only 2 default retries on async paths; this is CareerVP's F3 gap. The CR worker already implements batchItemFailures correctly — use it as the reference."
+    how_to_apply: "New SQS consumers: copy the CR worker's batchItemFailures pattern. New webhook/billing handlers: wire @idempotent keyed on the event ID."
+    sources: []
+
+  - id: p2.5
+    title: "Layered security — least-privilege IAM, defense-in-depth against prompt injection"
+    confidence: verified
+    rule: >
+      Scope IAM per-tool/per-function (never a shared broad role). Treat
+      prompt-injection pattern/regex matching as one supplementary layer only,
+      never the sole defense — pair with delimiting untrusted content from
+      instructions and sanitizing/encoding generated output before render.
+    why: >
+      This is vendor-documented default guidance (not CareerVP-specific opinion)
+      and maps directly to F6 (shared role + wildcards) and to the deep-dive's
+      §1.2.F finding (Tavily-scraped content concatenated into prompts, model
+      output rendered as rich text without confirmed sanitization).
+    how_to_apply: "New Lambdas: own role, grant_*-scoped ARNs, no wildcard resources. Any new LLM call incorporating external/user content: delimit untrusted content explicitly and sanitize output before rendering in the SPA."
+    sources:
+      - "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/security-and-governance.html"
+      - "https://docs.aws.amazon.com/pdfs/prescriptive-guidance/latest/agentic-ai-serverless/agentic-ai-serverless.pdf"
+
+  - id: p2.6
+    title: "Cost & token optimization — routing, caching, measurement"
+    confidence: verified
+    rule: >
+      Route low-complexity work to cheaper models, escalate on low confidence
+      (CareerVP already does this via Sonnet/Haiku split). Unify on the cost-aware
+      LLM client before further optimizing — the len/4-estimating client on 5
+      artifact types currently captures no real usage. Use prompt caching
+      (5-min free ephemeral default, or 1hr at 2x price) for cache-eligible system
+      prompts. Budget ~4x tokens for any single-agent feature and ~15x tokens for
+      any multi-agent feature, relative to a plain chat interaction, before
+      committing to the pattern.
+    why: >
+      AWS names tiered routing + caching + RAG scoping as the cost levers (not a
+      single dominant driver — see rejected_claims). Anthropic's own engineering
+      data gives the 4x/15x multipliers. CareerVP's real cost driver is VPR output
+      tokens (~74% of spend), which caching does not address.
+    how_to_apply: >
+      Before adding any multi-agent pattern to CareerVP, run the token-multiplier
+      math against the existing $0.43/application economics explicitly in the spec.
+    sources:
+      - "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/cost-optimization.html"
+      - "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
+      - "https://www.anthropic.com/engineering/multi-agent-research-system"
+
+  - id: p2.7
+    title: "Availability & scaling"
+    confidence: practitioner_guidance
+    rule: >
+      Use reserved concurrency to guarantee API-path Lambda capacity; use
+      provisioned concurrency to mitigate cold starts on latency-sensitive,
+      heavy-dependency functions (CV parser, VPR worker). Use SQS max_concurrency
+      on the event source mapping to cap workers pulling from a rate-limited
+      dependency. Apply exponential backoff with jitter on LLM API 429s.
+      Do not add multi-region complexity speculatively.
+    why: "Standard AWS Lambda/SQS concurrency controls; directly addresses CareerVP's documented risk of AI workers stampeding the Anthropic rate limit under load."
+    how_to_apply: "Confirm current concurrency defaults and rate-limit header formats against live AWS/Anthropic/OpenAI docs before hardcoding specific numbers."
+    sources: []
+
+  - id: p2.8
+    title: "Reliability, evals & observability"
+    confidence: practitioner_guidance
+    rule: >
+      Apply eval-driven verification to agent-authored changes, not just prompts.
+      Extend monitoring to all worker Lambdas and add DLQ-depth alarms — this is
+      CareerVP's highest-leverage observability fix today (only 7 of 31+ Lambdas
+      monitored). Bound agentic retry loops explicitly; never accept an agent's
+      self-report as the verifiable check.
+    why: "Multi-step agent observability is a distinct discipline from request/response APM (tool selection, intermediate state, decision branches, not just status codes)."
+    how_to_apply: "Prioritize runbook Phase 2's monitoring extension over adopting new observability tooling."
+    sources: []
+
+  - id: p2.9
+    title: "Performance"
+    confidence: practitioner_guidance
+    rule: >
+      Evaluate streaming case-by-case for long-generation calls (e.g. VPR). Define
+      an explicit latency budget per artifact type. Extend the existing Parallel
+      state pattern (GenerateFinalArtifacts) for new independent post-VPR
+      artifacts rather than serializing them. Fix the frontend's chatty fan-out
+      (GET /me/bootstrap + correct QueryClient staleTime) before tuning backend
+      LLM-call latency — it is the larger, already-measured performance problem.
+    why: "CareerVP's documented performance issue today is frontend fan-out (3+ Lambda calls per page load, no shared cache), not backend latency."
+    how_to_apply: "Treat the bootstrap-aggregate endpoint as higher priority than any LLM-latency optimization."
+    sources: []
+
+  - id: p2.10
+    title: "AWS infrastructure patterns"
+    confidence: verified
+    rule: >
+      Stateful resources: own top-level stack, RemovalPolicy.RETAIN +
+      deletion_protection=True, never inside a high-churn compute stack. Keep
+      every CloudFormation template under ~400 resources (CI-gated); default new
+      features to a new nested stack. Share resource refs via constructor props,
+      never Fn::ImportValue. Single-table DynamoDB design, access-pattern-first,
+      partition key led by an immutable non-PII identifier, one typed repository
+      per entity type. Use cdk import / logical-id retention to move ownership of
+      live resources between stacks without replacement.
+    why: "This is CareerVP's own architecture-v2 §5 target, generalized so it applies to every future feature, not just the current redesign."
+    how_to_apply: "Any new entity type: check the single-table 'core' model first before creating a new standalone table."
+    sources: []
+
+templates:
+  spec_template: |
+    ## Spec: <short title>
+
+    ### Goal
+    <One or two sentences: what should be true when this is done, and why it matters.>
+
+    ### Context
+    - Relevant files: <paths>
+    - Relevant docs: <e.g. careervp-architecture-v2.md §X, redesign-runbook.md Phase Y>
+    - Related finding (if any): <finding # from the architecture docs' findings register>
+    - Errors/symptoms observed (if any): <paste verbatim>
+
+    ### Constraints
+    - Architecture: <e.g. must follow the expand→dual-write→backfill→dual-read→contract pattern; must not touch a stateful resource destructively>
+    - Security: <e.g. no new wildcard IAM grants; identity from validated JWT only>
+    - Cost: <e.g. must not add an unbounded LLM call; must route through the cost-aware client>
+    - AWS resources touched: <table/queue/Lambda names — name the IAM role and its scope>
+
+    ### Done-when
+    - [ ] <Specific automatable check #1 — e.g. "pytest tests/handlers/test_x.py passes">
+    - [ ] <e.g. "cdk diff shows only the expected resource additions, zero replacements">
+    - [ ] <e.g. "no new resources=['*'] in any IAM policy statement">
+    - [ ] <e.g. "ruff, mypy, Checkov, Bandit all pass in CI">
+
+  test_plan_template: |
+    ## Test Plan: <short title>
+
+    ### What this proves
+    <The specific behavior or regression this test plan verifies — tie back to the spec's done-when.>
+
+    ### Autouse-mock check
+    - [ ] Does this touch artifact storage/routing code? If yes: confirm `tests/conftest.py::mock_artifact_dependency_resolver`
+          is either bypassed for this test or the test drives real resolution against moto-mocked tables with the
+          actual key schema (pk/sk, applicationId/artifactId, or job_id — whichever this artifact type uses).
+
+    ### Unit tests
+    - [ ] <Happy path>
+    - [ ] <Failure path — e.g. malformed input, missing upstream artifact>
+    - [ ] <Boundary — e.g. TTL attribute name matches the table's actual configured TTL attribute>
+
+    ### Integration tests (moto-backed DynamoDB / real key schema)
+    - [ ] Write via the typed repository/contract; read back via the same contract — confirm one stored key, not three.
+    - [ ] Cross-tenant isolation: a second `user_id` cannot read this item via any code path.
+    - [ ] If async: idempotency — replaying the same message/event does not double-write or double-charge.
+    - [ ] If SQS-based: a poison message reaches the DLQ (via `batchItemFailures`), not silently deleted.
+
+    ### Verification (must be automatable, not a self-report)
+    - [ ] Command to run: `<exact command>`
+    - [ ] Expected result: `<exact expected output/exit code>`
+
+  workflow_plan_template: |
+    ## Workflow: <short title>
+
+    ### Phase mapping
+    Which redesign-runbook phase (0–5) does this belong to, if any? <phase # or "N/A — new feature">
+
+    ### Steps (expand → dual-write → backfill → dual-read → contract, or the subset that applies)
+    1. **Expand** (additive, no behavior change): <e.g. add new table/field/route alongside the old>
+    2. **Dual-write** (behind flag `<flag_name>`): <writers emit to both old and new>
+    3. **Backfill** (throttled, idempotent): <batch job description; run against on-demand capacity>
+    4. **Dual-read / cutover** (behind flag, per-cohort canary): <internal → small % → all; shadow-compare>
+    5. **Contract** (retire old, separate deploy): <only after zero drift for a full validation window>
+
+    ### Success metric per step
+    <Each step above needs its own metric before moving to the next — e.g. "drift metric → 0" for backfill.>
+
+    ### Rollback
+    <What flag/alias reverts this step? Confirm it needs no data surgery.>
+
+    ### Guardrails (block on any of these)
+    - [ ] No single deploy renames/removes a live table, GSI, or bucket, or changes a PK/SK.
+    - [ ] Read path is not switched to the new location before backfill + reconciliation is complete.
+    - [ ] No "big bang" cutover — canary by cohort, with alarms wired to auto-rollback.
+    - [ ] `removal_policy=DESTROY` is not (re)introduced on any stateful resource.
+    - [ ] Migration batch jobs run throttled, not unthrottled against live table capacity.
+
+sources:
+  - url: "https://developers.openai.com/codex/learn/best-practices"
+    quality: primary
+    topic: "Codex agent best practices"
+  - url: "https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide"
+    quality: primary
+    topic: "Codex prompting guide"
+  - url: "https://developers.openai.com/codex/guides/agents-md"
+    quality: primary
+    topic: "AGENTS.md convention"
+  - url: "https://code.claude.com/docs/en/best-practices"
+    quality: primary
+    topic: "Claude Code best practices"
+  - url: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview"
+    quality: primary
+    topic: "Anthropic prompt engineering overview"
+  - url: "https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices"
+    quality: primary
+    topic: "Claude 4 best practices"
+  - url: "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
+    quality: primary
+    topic: "Anthropic prompt caching"
+  - url: "https://www.anthropic.com/engineering/multi-agent-research-system"
+    quality: primary
+    topic: "Multi-agent token economics"
+    published: "2025-06-13"
+  - url: "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/event-driven-architecture.html"
+    quality: primary
+    topic: "AWS agentic serverless — event-driven architecture"
+  - url: "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/orchestration-models.html"
+    quality: primary
+    topic: "AWS agentic serverless — orchestration models"
+  - url: "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/cost-optimization.html"
+    quality: primary
+    topic: "AWS agentic serverless — cost optimization"
+  - url: "https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/security-and-governance.html"
+    quality: primary
+    topic: "AWS agentic serverless — security and governance"
+  - url: "https://docs.aws.amazon.com/pdfs/prescriptive-guidance/latest/agentic-ai-serverless/agentic-ai-serverless.pdf"
+    quality: primary
+    topic: "AWS agentic serverless — full PDF guide"
+  - url: "https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html"
+    quality: primary
+    topic: "Step Functions error handling (Retry/Catch)"
+  - url: "https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-handling-error-conditions.html"
+    quality: primary
+    topic: "Step Functions error handling tutorial"
+  - url: "https://docs.aws.amazon.com/lambda/latest/dg/invocation-retries.html"
+    quality: primary
+    topic: "Lambda invocation retry model"
+  - url: "https://docs.aws.amazon.com/lambda/latest/dg/durable-basic-concepts.html"
+    quality: primary
+    topic: "Lambda Durable Functions — basic concepts"
+  - url: "https://docs.aws.amazon.com/lambda/latest/dg/durable-configuration.html"
+    quality: primary
+    topic: "Lambda Durable Functions — configuration/timeouts"
+  - url: "https://aws.amazon.com/blogs/aws/build-multi-step-applications-and-ai-workflows-with-aws-lambda-durable-functions/"
+    quality: primary
+    topic: "Lambda Durable Functions announcement"
+  - url: "https://aws.amazon.com/blogs/compute/building-fault-tolerant-multi-agent-ai-workflows-with-aws-lambda-durable-functions/"
+    quality: primary
+    topic: "Durable Functions for multi-agent workflows"
+  - url: "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+    quality: secondary
+    topic: "OWASP Top 10 for Agentic Applications 2026 (practitioner guidance tier)"
+  - url: "https://www.anthropic.com/research/building-effective-agents"
+    quality: primary
+    topic: "Anthropic building effective agents (practitioner guidance tier)"
+  - url: "https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-observability-with-langfuse/"
+    quality: primary
+    topic: "AgentCore observability (practitioner guidance tier)"
+
+metadata:
+  reconciled_against_commit: "4f7c294"
+  reconciled_against_date: "2026-06-29"
+  research_vintage: "2026-07"
+  research_method: "Two adversarial multi-agent deep-research passes, 217 agents total, 3-vote consensus verification"

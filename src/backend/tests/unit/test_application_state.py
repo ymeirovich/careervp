@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -173,6 +174,35 @@ class TestCompanyResearchGate:
         repository.set_company_research_error('app-xyz789', 'user-test-123', False)
         second_call = repository._test_table.update_item.call_args_list[1].kwargs  # type: ignore[attr-defined]
         assert second_call['ExpressionAttributeValues'][':cr_status'] == 'pending'
+
+    def test_record_llm_usage_accumulates_chain_totals(self, repository: ApplicationRepository) -> None:
+        repository._test_table.update_item.return_value = {  # type: ignore[attr-defined]
+            'Attributes': {
+                'llm_cost_usd_total': Decimal('0.410000'),
+                'llm_input_tokens_total': 300,
+                'llm_output_tokens_total': 120,
+                'prompt_cache_hits_total': 1,
+                'prompt_cache_lookups_total': 2,
+            }
+        }
+
+        totals = repository.record_llm_usage(
+            application_id='app-xyz789',
+            user_id='user-test-123',
+            model_id='claude-haiku-4-5-20251001',
+            traffic_origin='product',
+            input_tokens=100,
+            output_tokens=40,
+            cost_usd=0.125,
+            prompt_cache_hit=True,
+            prompt_cache_lookup=True,
+        )
+
+        kwargs = repository._test_table.update_item.call_args.kwargs  # type: ignore[attr-defined]
+        assert 'ADD llm_input_tokens_total :input_tokens' in kwargs['UpdateExpression']
+        assert kwargs['ExpressionAttributeValues'][':cost_usd'] == Decimal('0.125000')
+        assert totals['cost_per_application_usd'] == pytest.approx(0.41)
+        assert totals['prompt_cache_hit_rate'] == pytest.approx(0.5)
 
 
 @pytest.mark.unit

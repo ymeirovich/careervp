@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "lambda",
+    "get-policy",
+    "--function-name",
+    "careervp-vpr-status-lambda-devx",
+    "--qualifier",
+    "live-devx"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:05:06.031911+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"Policy\": \"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Id\\\":\\\"default\\\",\\\"Statement\\\":[{\\\"Sid\\\":\\\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-vprstatusAliaslivedevxAllowApiGatewayRoutes-UDkPOtgVEMZ9\\\",\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"apigateway.amazonaws.com\\\"},\\\"Action\\\":\\\"lambda:InvokeFunction\\\",\\\"Resource\\\":\\\"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx\\\",\\\"Condition\\\":{\\\"ArnLike\\\":{\\\"AWS:SourceArn\\\":\\\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/vpr/*\\\"}}},{\\\"Sid\\\":\\\"CareerVpCrudDevx-CareerVpCrudDevxCrudCrudFe-vprstatusAliaslivedevxAllowApiGatewayRoutes-9W7PoIw4KOYT\\\",\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"apigateway.amazonaws.com\\\"},\\\"Action\\\":\\\"lambda:InvokeFunction\\\",\\\"Resource\\\":\\\"arn:aws:lambda:us-east-1:788159322332:function:careervp-vpr-status-lambda-devx:live-devx\\\",\\\"Condition\\\":{\\\"ArnLike\\\":{\\\"AWS:SourceArn\\\":\\\"arn:aws:execute-api:us-east-1:788159322332:ymzhvcxod0/*/*/vprs\\\"}}}]}\",\n    \"RevisionId\": \"b0d683c4-8a53-4e3f-a175-4cdf711143e1\"\n}\n",
+  "stderr": ""
+}

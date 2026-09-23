@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.db_handler import DalHandler
 from careervp.handlers.utils.observability import logger, tracer
 from careervp.models.cv import UserCV
@@ -20,16 +21,17 @@ from careervp.models.job import GapResponse
 from careervp.models.result import Result, ResultCode
 from careervp.models.vpr import VPR
 
-VPR_SORT_KEY_PREFIX = 'ARTIFACT#VPR#v'
+# Key grammar lives in the D-H2 key authority; re-exported here for existing importers.
+VPR_SORT_KEY_PREFIX = table_registry.VPR_SORT_KEY_PREFIX
 USER_VPRS_INDEX = 'user_id-index'
 # Storage per docs/specs/03-vpr-generator.md:14 uses PK=applicationId with ARTIFACT#VPR#v{version} SK.
 
-TAILORED_CV_SORT_KEY_PREFIX = 'ARTIFACT#CV_TAILORED#'
-COVER_LETTER_SORT_KEY_PREFIX = 'ARTIFACT#COVER_LETTER#'
-GAP_ANALYSIS_SORT_KEY_PREFIX = 'ARTIFACT#GAP_ANALYSIS#'
-GAP_RESPONSES_SORT_KEY_PREFIX = 'ARTIFACT#GAP_RESPONSES#'
-COMPANY_RESEARCH_ARTIFACT_PREFIX = 'ARTIFACT#COMPANY_RESEARCH#'
-COMPANY_RESEARCH_KB_PREFIX = 'COMPANY_RESEARCH#'
+TAILORED_CV_SORT_KEY_PREFIX = table_registry.TAILORED_CV_SORT_KEY_PREFIX
+COVER_LETTER_SORT_KEY_PREFIX = table_registry.COVER_LETTER_SORT_KEY_PREFIX
+GAP_ANALYSIS_SORT_KEY_PREFIX = table_registry.GAP_ANALYSIS_SORT_KEY_PREFIX
+GAP_RESPONSES_SORT_KEY_PREFIX = table_registry.GAP_RESPONSES_SORT_KEY_PREFIX
+COMPANY_RESEARCH_ARTIFACT_PREFIX = table_registry.COMPANY_RESEARCH_ARTIFACT_PREFIX
+COMPANY_RESEARCH_KB_PREFIX = table_registry.COMPANY_RESEARCH_KB_PREFIX
 
 
 class DynamoDalHandler(DalHandler):
@@ -99,8 +101,7 @@ class DynamoDalHandler(DalHandler):
             item['userId'] = user_cv.user_id
             item['cvId'] = user_cv.cv_id
             # Legacy aliases retained for backward compatibility in mixed environments.
-            item['pk'] = user_cv.user_id
-            item['sk'] = f'CV#{user_cv.cv_id}'
+            item.update(table_registry.legacy_item_key(user_cv.user_id, table_registry.cv_sort_key(user_cv.cv_id)))
             table.put_item(Item=item)
         except (ClientError, ValidationError) as exc:  # pragma: no cover
             error_msg = 'failed to save CV'
@@ -283,6 +284,36 @@ class DynamoDalHandler(DalHandler):
         return f'{GAP_RESPONSES_SORT_KEY_PREFIX}v{version}'
 
     @staticmethod
+    def _gap_response_from_stored(item: dict[str, Any]) -> dict[str, Any]:
+        """Translate a stored gap-response entry into the GapResponse shape.
+
+        The writer (gap_handler._normalize_submitted_response_entry, via
+        save_gap_responses_raw) persists {question_id, response}; GapResponse
+        requires {question_id, question, answer}. Reading one as the other
+        raised ValidationError on every call, which get_gap_responses reported
+        as a DAL failure -- so interview prep never saw the candidate's answers.
+
+        Mapping here keeps GapResponse itself untouched, so cover_letter,
+        vpr.VPRRequest and the VPR worker are unaffected.
+
+        'question' is not persisted anywhere: gap_questions is absent from every
+        application record. vpr_worker_handler._fetch_gap_responses_from_application
+        already hit this and falls back to the question_id; do the same rather
+        than inventing a second convention.
+        """
+        question_id = str(item.get('question_id') or item.get('questionId') or '').strip()
+        answer = str(item.get('answer') or item.get('response') or '').strip()
+        mapped: dict[str, Any] = {
+            'question_id': question_id,
+            'question': str(item.get('question') or '').strip() or question_id,
+            'answer': answer,
+        }
+        destination = item.get('destination')
+        if destination in ('CV_IMPACT', 'INTERVIEW_MVP_ONLY'):
+            mapped['destination'] = destination
+        return mapped
+
+    @staticmethod
     def _parse_version_from_sk(sk: str) -> int:
         if '#v' not in sk:
             return 0
@@ -307,10 +338,8 @@ class DynamoDalHandler(DalHandler):
                 **vpr.model_dump(mode='json'),
             }
             table.put_item(Item=item)
-        except (ClientError, ValidationError):
-            error_msg = 'failed to save VPR'
-            logger.exception(error_msg, application_id=vpr.application_id)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(operation='save_vpr', exc=exc, key_names=['pk', 'sk'])
 
         logger.info('VPR saved successfully', application_id=vpr.application_id)
         return Result(success=True, data=None, code=ResultCode.SUCCESS)
@@ -337,10 +366,8 @@ class DynamoDalHandler(DalHandler):
             if vpr.metadata is None:
                 logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError):
-            error_msg = 'failed to get VPR'
-            logger.exception(error_msg, application_id=application_id, version=version)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError) as exc:
+            return self._dal_failure_result(operation='get_vpr', exc=exc, key_names=['pk', 'sk'])
 
     @tracer.capture_method(capture_response=False)
     def get_latest_vpr(self, application_id: str) -> Result[VPR | None]:
@@ -379,10 +406,10 @@ class DynamoDalHandler(DalHandler):
             if vpr.metadata is None:
                 logger.debug('legacy flat VPR loaded', application_id=application_id)
             return Result(success=True, data=vpr, code=ResultCode.SUCCESS)
-        except (ClientError, ValidationError, InvalidVersionError):
-            error_msg = 'failed to get latest VPR'
-            logger.exception(error_msg, application_id=application_id)
-            return Result(success=False, error=error_msg, code=ResultCode.DYNAMODB_ERROR)
+        except (ClientError, ValidationError, InvalidVersionError) as exc:
+            # D-H3: a key-schema mismatch must classify as TABLE_SCHEMA_MISMATCH so it
+            # can never be read downstream as a missing upstream artifact (F-DEVX-1).
+            return self._dal_failure_result(operation='get_latest_vpr', exc=exc, key_names=['pk', 'sk'])
 
     @tracer.capture_method(capture_response=False)
     def list_vprs(self, user_id: str) -> Result[list[VPR]]:
@@ -634,7 +661,13 @@ class DynamoDalHandler(DalHandler):
                     if item:
                         logger.info('cover letter found via legacy key fallback', key_schema='legacy')
                         return Result(success=True, data=item, code=ResultCode.SUCCESS)
-                    return Result(success=True, data=None, code=ResultCode.SUCCESS)
+                    # D-H3: the canonical read failed on key schema and the legacy retry
+                    # missed — surface the mismatch instead of reporting not-found.
+                    return self._dal_failure_result(
+                        operation='read_cover_letter_by_artifact_id',
+                        exc=exc,
+                        key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                    )
                 except (ClientError, ValidationError) as fallback_exc:
                     return self._dal_failure_result(
                         operation='read_cover_letter_by_artifact_id',
@@ -679,7 +712,16 @@ class DynamoDalHandler(DalHandler):
             if error_code == 'ValidationException':
                 try:
                     items = self._query_cover_letter_items(table, application_id, use_canonical_keys=False)
-                    return self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                    matched = self._match_cover_letter_item(items, artifact_id, request_id, allow_sk_match=True)
+                    if matched.success and matched.data is None:
+                        # D-H3: schema mismatch on the scan path with a legacy-retry
+                        # miss — surface it, never a false not-found.
+                        return self._dal_failure_result(
+                            operation='_legacy_read_cover_letter_by_scan',
+                            exc=exc,
+                            key_names=['applicationId', 'artifactId', 'pk', 'sk'],
+                        )
+                    return matched
                 except (ClientError, ValidationError) as fallback_exc:
                     return self._dal_failure_result(
                         operation='_legacy_read_cover_letter_by_scan',
@@ -892,9 +934,11 @@ class DynamoDalHandler(DalHandler):
         job_id: str,
         questions: list[dict[str, Any]],
         ttl_days: int = 90,
+        status: str = 'completed',
+        error: str | None = None,
     ) -> Result[None]:
         logger.append_keys(user_id=user_id, cv_id=cv_id, job_id=job_id)
-        logger.info('saving gap analysis questions to DynamoDB')
+        logger.info('saving gap analysis questions to DynamoDB', status=status)
         try:
             table = self._get_db_handler(self.table_name)
             # Convert floats to Decimals for DynamoDB compatibility
@@ -907,10 +951,13 @@ class DynamoDalHandler(DalHandler):
                 'cv_id': cv_id,
                 'job_id': job_id,
                 'questions': converted_questions,
+                'status': status,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
                 'ttl': self._ttl_timestamp(ttl_days),
             }
+            if error:
+                item['error'] = error
             logger.debug('gap_questions item prepared', item_keys=list(item.keys()), item_size_estimate=len(str(item)))
             # Pre-validate JSON serializability to catch issues before DynamoDB
             try:
@@ -1055,7 +1102,7 @@ class DynamoDalHandler(DalHandler):
                 response = table.get_item(Key={'userId': user_id, 'questionId': self._build_gap_responses_sort_key(version)})
                 item = response.get('Item')
                 payload = item.get('responses') if item else []
-            parsed = [GapResponse.model_validate(item) for item in payload]
+            parsed = [GapResponse.model_validate(self._gap_response_from_stored(item)) for item in payload if isinstance(item, dict)]
             return Result(success=True, data=parsed, code=ResultCode.SUCCESS)
         except (ClientError, ValidationError) as exc:
             return self._dal_failure_result(

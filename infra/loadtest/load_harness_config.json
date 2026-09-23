@@ -1,0 +1,24 @@
+{
+  "endpoints": {
+    "hub_read": {
+      "method": "GET",
+      "path": "/applications/{application_id}"
+    },
+    "generate": {
+      "method": "POST",
+      "path": "/vpr/generate"
+    }
+  },
+  "thresholds": {
+    "p99_ms": 6000,
+    "max_error_rate": 0.05
+  },
+  "evidence": {
+    "measured_2026_07_26": {
+      "hub_read_p99_ms": 4824,
+      "generate_flow_p99_ms": 5652,
+      "note": "3-user / 20s smoke run against live devx; both dominated by cold Lambda init. generate_flow hit the /vpr/generate validation path (409 on a deliberately-missing cv_id) and did not reach the paid model call, to avoid real Sonnet cost during the smoke test.",
+      "no_429_observed": true
+    }
+  }
+}

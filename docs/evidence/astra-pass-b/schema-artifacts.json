@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "describe-table",
+    "--table-name",
+    "careervp-artifacts-table-devx",
+    "--query",
+    "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:24.285774+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"TableArn\": \"arn:aws:dynamodb:us-east-1:788159322332:table/careervp-artifacts-table-devx\",\n    \"KeySchema\": [\n        {\n            \"AttributeName\": \"applicationId\",\n            \"KeyType\": \"HASH\"\n        },\n        {\n            \"AttributeName\": \"artifactId\",\n            \"KeyType\": \"RANGE\"\n        }\n    ],\n    \"ItemCount\": 25\n}\n",
+  "stderr": ""
+}

@@ -409,15 +409,31 @@ class TestScanActiveSubscriptions:
         idempotency_table.scan.assert_not_called()
 
     def test_aliases_reserved_word_status(self) -> None:
-        """status is a DynamoDB reserved word — must use ExpressionAttributeNames."""
+        """status is a DynamoDB reserved word — boto3 must alias it, not the caller.
+
+        The scan filters on ``status`` via a boto3 ``Attr('status')`` condition, so
+        boto3 serializes the reserved word into its own ExpressionAttributeNames
+        placeholder. The repository must NOT hand-roll an ``#s`` alias: injecting one
+        alongside the ``Attr`` condition leaves it unused and DynamoDB rejects the scan
+        with ``ValidationException: ... ExpressionAttributeNames unused in expressions``.
+        """
+        from boto3.dynamodb.conditions import ConditionExpressionBuilder
+
         repo, users_table, _ = _make_repo()
         users_table.scan.return_value = {'Items': []}
 
         repo.scan_active_subscriptions()
 
         kwargs = users_table.scan.call_args.kwargs
-        assert '#s' in kwargs.get('ExpressionAttributeNames', {})
-        assert kwargs['ExpressionAttributeNames']['#s'] == 'status'
+        # boto3 owns the aliasing — no hand-rolled, unused ExpressionAttributeNames.
+        assert 'ExpressionAttributeNames' not in kwargs
+
+        built = ConditionExpressionBuilder().build_expression(kwargs['FilterExpression'], is_key_condition=False)
+        # The reserved word `status` is still aliased (by boto3) and filtered on `active`,
+        # alongside the SUBSCRIPTION#CURRENT sort-key guard.
+        assert 'status' in built.attribute_name_placeholders.values()
+        assert 'active' in built.attribute_value_placeholders.values()
+        assert SUBSCRIPTION_SK in built.attribute_value_placeholders.values()
 
     def test_paginates_until_no_last_evaluated_key(self) -> None:
         """Must loop pages — a single scan is capped at 1 MB."""
@@ -435,3 +451,28 @@ class TestScanActiveSubscriptions:
         assert users_table.scan.call_count == 2
         second_kwargs = users_table.scan.call_args_list[1].kwargs
         assert second_kwargs.get('ExclusiveStartKey') == {'pk': 'USER#u1'}
+
+
+class TestTableNameResolution:
+    """HANDOFF-09 Class A: a missing TABLE_NAME must never resolve to another
+    live environment's table. Before the fix this silently returned
+    ``careervp-users-table-dev`` regardless of the real deploy environment —
+    write this test first and watch it fail (Step 3.4)."""
+
+    def test_raises_when_no_explicit_table_name_and_environment_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv('TABLE_NAME', raising=False)
+        monkeypatch.delenv('IDEMPOTENCY_TABLE_NAME', raising=False)
+        monkeypatch.delenv('ENVIRONMENT', raising=False)
+
+        with pytest.raises(RuntimeError, match='ENVIRONMENT unset'):
+            SubscriptionRepository(dynamodb_resource=MagicMock())
+
+    def test_uses_explicit_table_name_env_vars_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv('TABLE_NAME', 'careervp-users-table-devx')
+        monkeypatch.setenv('IDEMPOTENCY_TABLE_NAME', 'careervp-idempotency-table-devx')
+        monkeypatch.delenv('ENVIRONMENT', raising=False)
+
+        repo = SubscriptionRepository(dynamodb_resource=MagicMock())
+
+        assert repo._table_name == 'careervp-users-table-devx'
+        assert repo._idempotency_table_name == 'careervp-idempotency-table-devx'

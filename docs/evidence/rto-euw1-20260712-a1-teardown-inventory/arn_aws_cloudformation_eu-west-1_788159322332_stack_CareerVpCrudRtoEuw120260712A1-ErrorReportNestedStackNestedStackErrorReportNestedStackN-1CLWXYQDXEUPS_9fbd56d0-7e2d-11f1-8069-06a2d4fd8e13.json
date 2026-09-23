@@ -1,0 +1,74 @@
+{
+    "StackResourceSummaries": [
+        {
+            "LogicalResourceId": "CDKMetadata",
+            "PhysicalResourceId": "9fbd56d0-7e2d-11f1-8069-06a2d4fd8e13",
+            "ResourceType": "AWS::CDK::Metadata",
+            "LastUpdatedTimestamp": "2026-07-12T20:09:48.795000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportLambdaAllowErrorReportApiInvoke0734782E",
+            "PhysicalResourceId": "CareerVpCrudRtoEuw120260712A1-ErrorReportNe-ErrorReportLambdaAllowErrorReportApiInvoke0-4NAIFBBYqycJ",
+            "ResourceType": "AWS::Lambda::Permission",
+            "LastUpdatedTimestamp": "2026-07-12T20:10:36.481000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportLambdaB1776E82",
+            "PhysicalResourceId": "careervp-error-report-lambda-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::Lambda::Function",
+            "LastUpdatedTimestamp": "2026-07-12T20:10:34.978000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportLambdaEventInvokeConfig21FFFDBD",
+            "PhysicalResourceId": "careervp-error-report-lambda-rto-euw1-20260712-a1|$LATEST",
+            "ResourceType": "AWS::Lambda::EventInvokeConfig",
+            "LastUpdatedTimestamp": "2026-07-12T20:10:36.640000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportLogGroup29E55D21",
+            "PhysicalResourceId": "/aws/lambda/careervp-error-report-lambda-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::Logs::LogGroup",
+            "LastUpdatedTimestamp": "2026-07-12T20:09:57.799000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportRole6910451C",
+            "PhysicalResourceId": "careervp-role-lambda-error-report-rto-euw1-20260712-a1",
+            "ResourceType": "AWS::IAM::Role",
+            "LastUpdatedTimestamp": "2026-07-12T20:10:06.666000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "LogicalResourceId": "ErrorReportRoleDefaultPolicy7AA81083",
+            "PhysicalResourceId": "Caree-Error-pl0lzUIMQCZx",
+            "ResourceType": "AWS::IAM::Policy",
+            "LastUpdatedTimestamp": "2026-07-12T20:10:23.461000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        }
+    ]
+}

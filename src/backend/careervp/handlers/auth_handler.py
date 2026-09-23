@@ -21,7 +21,7 @@ from jwt import decode as jwt_decode
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, tracer
 from careervp.handlers.utils.rest_api_resolver import app
 from careervp.logic.auth_service import (
     AuthService,
@@ -259,6 +259,7 @@ def logout_user() -> Response[str]:
 
 @logger.inject_lambda_context(correlation_id_path=API_GATEWAY_REST)
 @tracer.capture_lambda_handler(capture_response=False)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """Lambda entry point for auth API routes."""
     set_request_origin(event)

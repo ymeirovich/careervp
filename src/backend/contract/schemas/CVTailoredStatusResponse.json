@@ -1,0 +1,283 @@
+{
+  "$defs": {
+    "CVTailoringStatusResult": {
+      "additionalProperties": false,
+      "properties": {
+        "ats_grade": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ats Grade"
+        },
+        "ats_result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ats Result"
+        },
+        "ats_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ats Score"
+        },
+        "cv_sections": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cv Sections"
+        },
+        "fact_verification_detail": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fact Verification Detail"
+        },
+        "fvs_validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FVSValidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "keyword_match_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyword Match Score"
+        },
+        "keyword_matches": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeywordMatches"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "keywords_matched": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords Matched",
+          "type": "array"
+        },
+        "keywords_missing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords Missing",
+          "type": "array"
+        },
+        "suggestions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Suggestions",
+          "type": "array"
+        },
+        "tailored_cv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tailored Cv"
+        }
+      },
+      "title": "CVTailoringStatusResult",
+      "type": "object"
+    },
+    "FVSValidation": {
+      "additionalProperties": false,
+      "properties": {
+        "is_valid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Valid"
+        },
+        "violations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Violations",
+          "type": "array"
+        }
+      },
+      "title": "FVSValidation",
+      "type": "object"
+    },
+    "KeywordMatches": {
+      "additionalProperties": false,
+      "properties": {
+        "matched": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Matched",
+          "type": "array"
+        },
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing",
+          "type": "array"
+        }
+      },
+      "title": "KeywordMatches",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generated At"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Id"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CVTailoringStatusResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled",
+        "expired",
+        "not_generated",
+        "edited"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "CVTailoringStatusResponse",
+  "type": "object"
+}

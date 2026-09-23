@@ -1,0 +1,440 @@
+# Wave 3 — corrective slice prompts
+
+**Two independent slices live in this file.** Slice 1 (§0–§3) is **F-DEVX-1, canonical VPR
+persistence**. Slice 2 (§4) is **`I-09`, user-identity provisioning** — added 2026-08-01 by human
+direction. They share nothing but a file: different tables, different handlers, different
+acceptance signals. Do not let one block the other.
+
+**Authored 2026-08-01.** Fold into `wave-3-prompts.md` when convenient — kept separate because that
+file has uncommitted user edits.
+
+**Step ids:** `3.CORR-SPEC` → `3.CORR-RED` → `3.CORR-GREEN` (slice 1) · `3.CORR-IDENTITY` (slice 2).
+
+**Governance decision recorded here (see §0):** this is a **new step**, not a reopening of D-H4/3.2.
+`3.2-GREEN` stays GREEN. The **clause** `D-H4` stays open until `3.CORR-GREEN` lands.
+
+---
+
+## Execution order
+
+These three prompts are runs 4, 6, and 7 of
+`wave-3-remediation-run-order.md`. Run 5 is the human decision on DP-A…DP-E and must happen between
+`3.CORR-SPEC` and `3.CORR-RED`.
+
+| Run | Step id | Fixes | Claude | Codex |
+|---:|---|---|---|---|
+| 4 | `3.CORR-SPEC` | F-DEVX-1 (pin) | `opus/high` | `gpt-5-codex/high` |
+| 5 | **human decision** | DP-A…DP-E, esp. DP-D | — | — |
+| 6 | `3.CORR-RED` | F-DEVX-1 (tests) | `opus/high` | `gpt-5-codex/high` |
+| 7 | `3.CORR-GREEN` | F-DEVX-1 (implementation) | **`fable/xhigh`** | `gpt-5-codex/xhigh` |
+| — | `3.CORR-IDENTITY` | `I-09` (identity provisioning) | `opus/high` | `gpt-5-codex/high` |
+
+`3.CORR-IDENTITY` carries no run number yet: it is independent of runs 4–7 and of their decision
+points, so a human slots it wherever it fits. **`wave-3-remediation-run-order.md`'s master table
+does not yet carry a row for it** — that is the one edit still outstanding, and it is a rule-8
+routing change rather than a fill-in-time correction.
+
+Codex uses `gpt-5-codex` here because the Wave-3 D-H4/P-01 spec frontmatter pins that slug.
+Reasoning follows rule 16: `high` for spec/test work that spans canonical artifact authority, and
+`xhigh` for the GREEN implementation because it changes key authority and data shape.
+
+---
+
+## Human decision recorded — 2026-08-01, direction of the fix
+
+**Read this before `3.CORR-SPEC` starts.** A human was shown the failure and the three candidate
+remedies on 2026-08-01 (see
+`docs/evidence/wave3-3fixharness-failures-explained-20260801T161402Z.md`, "Failure 1 and 2 →
+Options") and selected **Option A**.
+
+**Chosen — Option A: fix the write path.** When a VPR completes, the canonical artifact record is
+written under the application, the way company research already writes itself to the same table.
+This is the direction `3.CORR-SPEC` → `RED` → `GREEN` was already drafted for; the decision
+**confirms** that plan rather than changing it.
+
+**Ruled out by the same decision — Option B: make cover letter and interview prep read the jobs
+record instead**, the way CV tailoring does today. It would have turned both suites green for a
+fraction of the effort and is now **off the table**: it spreads the split-brain instead of removing
+it, and `D-H4` exists precisely to make the canonical artifact authoritative. Do not reintroduce it
+as a "smaller fix" if `3.CORR-GREEN` proves expensive — escalate instead.
+
+**NOT decided by this, and still a hard stop: `DP-D`.** Option C in the material shown to the human
+was a **backfill for existing accounts**, described as "needed alongside A". It was presented as a
+*separate* option and **was not selected**. `DP-D` — what happens to the 89 legacy-grammar VPRs
+(83 in dev, 2 in staging) — therefore remains **open and unanswered**, and `3.CORR-SPEC`'s
+instruction to STOP and ask stands unchanged. **Do not read "Option A was chosen" as authorization
+to delete, migrate, or backfill anything.** DP-A, DP-B, DP-C and DP-E are likewise untouched by
+this decision.
+
+**What this buys the slice.** The harness that would have proved the fix is now working. As of
+`3.FIX-HARNESS` (2026-08-01) the live-API suites authenticate correctly and run green through VPR
+generation and CV tailoring, failing at exactly `POST /cover-letter/generate` with
+`409 {"status":"upstream_required","missing":["vpr"]}`. When the canonical write lands, those two
+suites are the acceptance signal, and interview prep becomes reachable through the public API for
+the first time. Fresh reproduction, independent of the 3.2-CLOSEOUT-A observation: application
+`71cc1d43-…` completed VPR `7b7e4f4f-…` and `careervp-artifacts-table-devx` holds only
+`ARTIFACT#COMPANY_RESEARCH#71cc1d43-…` — no `ARTIFACT#VPR#v1` row.
+
+---
+
+## §0 — Why a new step and not a reopened D-H4
+
+`D-H4`'s verification mode is `contract+integration`. `3.2-GREEN` discharged the **contract** half
+and said so, in its own ledger row, at the time:
+
+> *"UNDEPLOYED DEBT (§0.5): nothing was deployed to `CareerVpCrudDevx` … D-H4 verifies
+> `contract+integration` … so the unit/integration suite does NOT discharge either clause."*
+
+That row was honest. The debt was recorded when it was incurred and has now come due.
+`3.2-CLOSEOUT-A` proved the contract half works live (`HTTP 400 application_id/job_id is required`,
+exactly as `AC-P01-1` pins) and proved the integration half does not.
+
+Reopening `3.2` would therefore **contradict a row that was already correct**, and would re-litigate
+a human-approved v3.0.0 contract amendment that is not in question. It would also not help: the
+corrective work spans `D-H2` (key authority), `D-H4` (canonical artifact) and DAL internals owned by
+`3.5` — a scope no single existing step can carry.
+
+**Practical difference, in one line each:**
+- *Reopen D-H4* = "3.2 was never done." Flips a GREEN row to open, muddies every downstream step
+  that treated 3.2 as complete, and needs no new spec because the old one nominally covers it.
+- *New step* = "3.2 did its half and logged the rest as debt; this step pays the debt." Keeps the
+  audit trail, and can hold a scope that crosses three owners plus findings that belong to no
+  existing clause at all.
+
+**Chosen: new step.** `D-H4` may not be marked done until `3.CORR-GREEN` closes.
+
+---
+
+## §1 — `3.CORR-SPEC`
+
+> **Run:** 4 of 11 · **Step:** `3.CORR-SPEC` · **Fixes:** F-DEVX-1 (pin the spec)
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 excludes Fable — "steps whose real blocker is a human decision"; DP-D stops and asks.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **Run 5 is a HUMAN DECISION on DP-A…DP-E and happens between this prompt and the next.**
+
+```
+You are running step 3.CORR-SPEC of Wave 3 in the CareerVP redesign. Repo root:
+/Users/yitzchak.meirovich/Documents/code5/careervp — anchor every shell block on
+cd "$(git rev-parse --show-toplevel)".
+
+STANDING CHECK — before anything else: read
+docs/db-redesign/code/code-analysis/project/runbooks/wave-3-status.md, then
+docs/evidence/wave3-32closeouta-devx-characterization-20260801T094608Z.md and
+docs/db-redesign/code/code-analysis/redesign/prompts/f-devx-codex-validation-implementation-handoff.md
+in full. Confirm with a real command that 3.CORR's prerequisites are met right now:
+F-DEVX-7 is fixed (make deploy-devx carries -c p26_rehome_features=true) and the
+live-API helpers use the id_token. If either is not true, STOP and say so plainly —
+without them you cannot deploy or verify anything you build here.
+
+YOU ARE WRITING NO TESTS AND NO IMPLEMENTATION IN THIS STEP. You are pinning a spec
+so that 3.CORR-RED can be written against exact values (rule 14).
+
+CONTEXT. A completed VPR is written to the legacy users table under pk/sk by the VPR
+worker, and read from the canonical artifacts table under a pk/sk query by the
+cover-letter and interview-prep submit handlers. The artifacts table is keyed
+applicationId/artifactId, so the read raises
+  ValidationException: Query condition missed key schema element: applicationId
+which get_latest_vpr converts to a failed Result, which
+DynamoArtifactDependencyRepos.get_artifact converts to None, which the resolver
+reports as a missing upstream, which surfaces as HTTP 409 upstream_required. Two of
+six V1 features cannot be produced. Live VPR counts: devx 4 legacy / 0 canonical,
+dev 83 / 0, staging 2 / 0.
+
+DO, IN THIS ORDER:
+
+1. RE-VERIFY THE MECHANISM YOURSELF. Do not take the above on trust. Confirm live: the
+   env split on the VPR worker vs the submit lambdas; the key schema of every table you
+   touch; the CloudWatch ValidationException; and that a completed VPR lands in the
+   users table and not the artifacts table. Record what you confirmed and anything that
+   does not match.
+
+2. SETTLE FIVE DECISION POINTS. Each needs a written answer with its reasoning. Where a
+   decision is a human's, STOP and ask rather than choosing.
+   - DP-A CANONICAL VPR REPRESENTATION. Bounded full payload in DynamoDB, or canonical
+     metadata plus a stable S3 bucket/key that an owned repository read hydrates and
+     validates? Resolve against the real payload sizes you measure, not an estimate.
+     A presigned result_url is NEVER the durable locator.
+   - DP-B CANONICAL ARTIFACT ID. Reuse the existing VPR job id, or mint a new opaque id?
+     The hub already stores a vpr artifact id — check what it holds today before choosing.
+     Whichever you pick, one id must be shared by the hub, the jobs status record and the
+     canonical artifact.
+   - DP-C ERROR CLASSIFICATION. A key-schema failure must not read as a missing
+     dependency. D-H3 already established TABLE_SCHEMA_MISMATCH for exactly this shape —
+     confirm it applies and pin the code, or pin a different explicit infrastructure code.
+     Pin what the resolver does with it and what HTTP status the handler returns.
+   - DP-D LEGACY RECORDS. 89 legacy-grammar VPRs exist across three environments (83 in
+     dev). Scope-lock v2.7.0 calls stored data disposable, so no migration or backfill —
+     but 83 records is somebody's working state. This is a HUMAN decision: delete and
+     re-run, or leave orphaned. Do not infer authorization from the clause. STOP and ask.
+   - DP-E OWNERSHIP OF THE DAL EDIT. save_vpr / get_vpr / get_latest_vpr are DAL
+     internals that 3.5 owns as residue. This slice must change them. Record the
+     cross-owner decision explicitly rather than annexing them silently (rule 5).
+
+3. PIN THE CANONICAL INVARIANT with exact values, in
+   docs/db-redesign/code/code-analysis/project/specs/ — either as a new spec file or an
+   amendment to D-H4-P-01-canonical-artifact-spec.md; say which and why. It must state,
+   at minimum: the exact key shape of the canonical VPR record; the exact artifact type
+   value the table's type-index requires; the owner field CoreRepository reads; that
+   ApplicationRepository stores the same opaque id in artifact_statuses.vpr_artifact_id;
+   that CoreRepository.get_vpr_by_artifact_id returns the real payload and never an
+   id-only stub; that a wrong owner returns FORBIDDEN and a genuinely absent artifact
+   returns successful None; and that the worker does not mark the job or hub completed
+   until the canonical write succeeds.
+
+4. PIN THE JOBS-REPOSITORY TRAP AS A NAMED HAZARD. core_repository.py:173-200
+   (_get_vpr_job) reads job.get('result'). Deployed jobs carry result_key and result_url
+   and NO inline result, so it returns {artifact_id, application_id, user_id} — a
+   non-empty dict that looks like success and contains no VPR. Routing submit handlers
+   through CoreRepository without fixing this trades a visible 409 for silently empty AI
+   context. The spec must require a test that fails if a worker receives a stub.
+
+5. WRITE THE AFFECTED-EXISTING-TESTS INVENTORY (rule 14, and the defect behind two §0.3
+   amendments). Enumerate every existing test that will change behaviour, by node id.
+   Start from: test_vpr_dal.py, test_artifact_dependency_utils.py,
+   test_artifact_dependency_resolver.py, test_cv_tailoring_vpr.py,
+   test_l1_artifact_persistence.py, test_artifact_id_characterization.py,
+   test_table_registry_characterization.py. Verify by running them, not by reading.
+
+DO NOT: write tests or implementation; edit either project-scope-lock twin; edit
+src/backend/tests/unit/test_dh4_p01_canonical_artifact.py; edit infra/; repoint
+DYNAMODB_TABLE_NAME as a shortcut; introduce a dual-write, dual-read, migration,
+backfill or compatibility reader (scope-lock v2.7.0 forbids all of them).
+
+OUTPUT REQUIRED: what you re-verified and anything that contradicted the brief; the five
+decision points with answers or an explicit STOP; the path of the spec you pinned; the
+affected-existing-tests inventory with live evidence; any new defect found, flagged not
+fixed.
+
+ALSO REQUIRED (see runbooks/RUNBOOK-RULES.md): compare what you built against this
+prompt and the matching scope-lock clauses; if anything drifted, STOP, write one
+plain-English sentence a non-engineer could follow, then the technical detail, and flag
+it for human review. Update wave-3-status.md with a plain-English row, the commit,
+today's date, and what the next step must resolve first (or "none").
+```
+
+---
+
+## §2 — `3.CORR-RED`
+
+> **Run:** 6 of 11 · **Step:** `3.CORR-RED` · **Fixes:** F-DEVX-1 (tests only)
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16 — derived in this file's routing table. Rule 18 FORBIDS Fable — "RED steps. Never route to Fable.")
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **Rule 7 applies.** RED and GREEN are two different sessions. This one writes tests only
+> and carries an absolute prohibition on touching implementation files.
+
+```
+You are running step 3.CORR-RED of Wave 3. Repo root as above.
+
+STANDING CHECK: read wave-3-status.md. If 3.CORR-SPEC left anything open — especially
+DP-D (the 89 legacy records) — resolve it FIRST. Then confirm with a real command that
+the spec 3.CORR-SPEC pinned exists, carries an "Affected existing tests (inventory)"
+section, and states exact assertion values. If not, STOP (rule 14).
+
+Write ONLY tests. No implementation file may change. Every test must fail for the reason
+its acceptance criterion names, not on a collection error, an import error or a skip —
+catch missing APIs inside the test and fail with an explicit AC-owned message.
+
+WRITE THESE, each against the REAL table key schemas under moto (users pk/sk, artifacts
+applicationId/artifactId, jobs job_id, applications userId/applicationId, plus S3 if
+DP-A chose a key-based representation):
+
+1. The VPR worker writes a canonical VPR item to the artifacts table at the exact key
+   shape the spec pins.
+2. The VPR worker writes NO VPR-shaped item to the users table.
+3. Worker completion fails or retries if the canonical artifact write fails — the job and
+   hub must not report completed over a missing artifact.
+4. The hub's artifact_statuses.vpr_artifact_id and the canonical artifact carry the SAME
+   opaque id.
+5. Cover-letter submit returns 202 for an owned, completed canonical VPR.
+6. Interview-prep submit returns 202 for the same.
+7. A wrong-owner VPR returns the pinned public forbidden envelope.
+8. A DynamoDB ValidationException surfaces as the code DP-C pinned and NEVER as
+   409/upstream_required.
+9. THE STUB TEST — given a completed VPR job carrying result_key and no inline result,
+   plus a canonical artifact owned by the user, the cover-letter worker's prompt input
+   contains real VPR sections/differentiators and not merely artifact_id/application_id/
+   user_id. Repeat for interview-prep.
+10. CV-tailoring resolves the same canonical VPR rather than the users-table copy.
+11. The repository never treats result_url as the durable locator.
+
+Mocking resolve_handler_dependencies to return ready is INSUFFICIENT for 5, 6 and 9 —
+at least those must execute real repository calls against moto.
+
+DO NOT: touch any implementation file; edit test_dh4_p01_canonical_artifact.py; edit
+either scope-lock twin; edit infra/; weaken or delete an existing assertion. If an
+existing test must change, that is a reconciliation needing human approval and a spec
+inventory entry — raise it, do not perform it.
+
+OUTPUT REQUIRED: each test's node id and its verbatim intended failure; proof no
+implementation file changed (git status --porcelain over src/backend/careervp/,
+src/frontend/, infra/ must be empty); ruff + strict mypy clean on new files; the
+unchanged ratchets (dh2/dh3/dh4/p01, dh7) still passing.
+
+ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
+3.CORR-SPEC.
+```
+
+---
+
+## §3 — `3.CORR-GREEN`
+
+> **Run:** 7 of 11 · **Step:** `3.CORR-GREEN` · **Fixes:** F-DEVX-1 (implementation)
+> **Claude:** **fable/xhigh** · **Codex:** gpt-5-codex/xhigh
+> (rule 15/16 — derived in this file's routing table. Rule 18 ROUTES to Fable: implementation against a pinned spec, long-horizon, blast radius is key authority and data shape.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **BEFORE RUNNING:** confirm the org has 30-day data retention — under ZDR every Fable request
+> returns `400 invalid_request_error`. A refusal is HTTP 200 with `stop_reason: "refusal"`,
+> not an error. **Rule 7 applies** — this is a different session from RED.
+
+```
+You are running step 3.CORR-GREEN of Wave 3. Repo root as above.
+
+STANDING CHECK: read wave-3-status.md and resolve anything 3.CORR-RED left open. Confirm
+with a real command that the 3.CORR-RED tests exist and fail for their stated reasons.
+
+Make them pass with IMPLEMENTATION ONLY. You may not edit a single test file. If you
+believe a RED test is wrong, STOP and flag it — do not edit it.
+
+THE WORK, per the pinned spec:
+- Separate CV reads from artifact writes in the VPR worker. One generic DAL instance must
+  stop representing two storage domains.
+- Persist the canonical VPR artifact through TableRegistry/CoreRepository on the canonical
+  applicationId/artifactId grammar, BEFORE the job or hub is marked completed.
+- Remove the legacy users-table VPR write. Do NOT dual-write.
+- Make the hub, the jobs status record and the canonical artifact share one opaque id.
+- Fix _get_vpr_job so it materializes the real payload; never return an id-only stub.
+- Route cover letter, interview prep and CV tailoring through the same repository
+  authority, preserving ownership and staleness checks.
+- Propagate schema/infrastructure errors with the code DP-C pinned; never collapse them
+  to a missing dependency.
+
+DEPLOY AND VERIFY LIVE — a green unit suite does NOT discharge D-H4, whose verification
+mode is contract+integration. Deploy to CareerVpCrudDevx, resolve the API base live from
+the stack's RawApiInvokeUrl output, and run a full journey. Then re-run the live-API
+suites and quote the real output. A skipped suite is not a passing suite.
+
+DIFF AGAINST THE BASELINE at
+docs/evidence/wave3-32closeouta-devx-characterization-20260801T094608Z.md wire by wire,
+and call out every change, expected or not. Write a dated successor evidence file.
+
+DO NOT: edit any test file, either scope-lock twin, or test_dh4_p01_canonical_artifact.py;
+repoint DYNAMODB_TABLE_NAME as a shortcut; add a dual-read, migration, backfill or
+compatibility reader; delete legacy records unless DP-D authorized it in writing; fix
+F-DEVX-5 (gap async) or F-DEVX-6 (null policy) here — both need human decisions and have
+their own steps.
+
+OUTPUT REQUIRED: the full verification battery (RED tests now passing, unchanged ratchets,
+full backend suite, ruff, mypy --strict, coverage gate with the core-branch ratchet held,
+oracle + route parity, scope-lock integrity OK); the live journey output quoted; the
+baseline diff; a plain statement of whether D-H4's contract+integration and P-01's
+e2e+characterization can NOW be claimed, and if not, exactly what is missing; any new
+defect, flagged not fixed.
+
+ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row. If D-H4 can be
+claimed, say so explicitly so a human can close the clause.
+```
+
+---
+
+## §4 — `3.CORR-IDENTITY` (slice 2 — `I-09`, independent of F-DEVX-1)
+
+> **Run:** not yet numbered · **Step:** `3.CORR-IDENTITY` · **Fixes:** `I-09`
+> **Claude:** opus/high · **Codex:** gpt-5-codex/high
+> (rule 15/16. Rule 18 excludes Fable: this is a small single-domain fix, not multi-file
+> implementation against a pinned spec, and it turns on one open question rather than on breadth.
+> Rule 16 puts Codex at `high` — the P-24 question below is identity/tenancy-adjacent, and getting
+> it wrong writes false identity into an index that owner-resolution reads.)
+> **ONE SESSION, THIS PROMPT ONLY.** Set the model above *before* pasting the fenced
+> block below. Do not chain this with another step in the same session.
+> **INDEPENDENT OF SLICE 1.** It does not wait on `3.CORR-SPEC`, DP-A…DP-E, or `3.CORR-GREEN`,
+> and nothing in slice 1 waits on it. It touches the **users** table; slice 1 touches the
+> **artifacts** table.
+
+```
+You are running step 3.CORR-IDENTITY of Wave 3. Repo root as above.
+
+STANDING CHECK: read wave-3-status.md. Read I-09 in ISSUES.md in full — it carries the
+chosen remedy, the stopping condition and the open question below. Read
+docs/evidence/wave3-3fixharness-failures-explained-20260801T161402Z.md, "Failure 3".
+
+PROBLEM. Every user's profile records an identity they never supplied. POST /auth/register
+creates the Cognito account and a trial record but NEVER writes the profile row. The profile
+is created lazily on the first read of /users/me by user_repository.ensure_user
+(src/backend/careervp/dal/user_repository.py:85), which does not have the registered identity
+to hand and fabricates it: email = f'{user_id}@example.com', name = ''. It is written to
+storage, not computed for display, so it is what every later read returns. Confirmed live on
+careervp-users-table-devx. This was invisible until 3.FIX-HARNESS fixed authentication; the
+failing assertion is test_e2e_happy_path_full_job_application:37 and it was left at full
+strength on purpose.
+
+REMEDY ALREADY CHOSEN BY A HUMAN — do not re-litigate it. Fill the profile from the Cognito
+claims the gateway already supplies. The deployed authorizer is a COGNITO_USER_POOLS
+authorizer, so requestContext.authorizer.claims carries a verified email and name on every
+authenticated request. Two alternatives were considered and rejected: writing the profile at
+registration (leaves the fabrication live as a fallback and needs a backfill), and erroring
+when the profile is missing (a wrong answer becomes an outage). Chosen because it is the
+smallest change AND it self-heals: existing broken profiles correct themselves on next read,
+with no backfill and no migration.
+
+SETTLE THIS FIRST, AND STOP IF IT IS NOT YOURS TO SETTLE. The users table carries an
+email-index, and the P-24 identity resolver uses it for link-by-verified-email owner lookup
+(src/backend/careervp/dal/identity_map_repository.py:98, class UsersDirectory;
+infra/careervp/api_construct.py:2472). Today NO profile carries a real address, so that
+lookup can never find a user by the address they signed up with. That path is DORMANT on
+devx — the live authorizer is the standard Cognito one, not the P-24 resolver — which bounds
+the blast radius now. Determine, and write down: (a) whether writing real emails into
+email-index changes P-24 owner-resolution behaviour for accounts that already exist; (b)
+whether any account could now resolve to an owner it did not resolve to before; (c) whether
+the ~57 existing fabricated addresses must be corrected actively or self-healing on read is
+sufficient. If (b) is anything other than a confident no, STOP and ask a human — this is
+tenancy behaviour, and rule 5 is not satisfied by an inference.
+
+DO, IN THIS ORDER:
+1. REPRODUCE IT YOURSELF before changing anything. Register a user, read /users/me, and
+   show the stored row. Do not take the above on trust. NOTE: the devx Cognito pool is on
+   a 50/day signup-email cap (I-07) — if registration 500s with LimitExceededException,
+   use the TEST_USER_EMAIL / TEST_USER_PASSWORD reuse path 3.FIX-HARNESS added rather than
+   burning the quota, and say which path you used.
+2. Answer the P-24 question above, in writing, before touching code.
+3. RED FIRST (rule 14). Add tests that fail for the stated reason: a profile provisioned
+   from claims carries the registered email and name; a profile provisioned WITHOUT usable
+   claims does not fabricate an address; an existing fabricated row is corrected on next
+   read. Prove they fail before the fix exists, and quote the failure.
+4. Implement. Seed ensure_user from the verified claims rather than from the user id.
+   auth_utils.extract_user_id already walks both claim shapes
+   (requestContext.authorizer.jwt.claims and requestContext.authorizer.claims) — reuse that
+   traversal rather than writing a third one.
+5. REMOVE THE FABRICATION. Once claims are the source, user_repository.py:85 must stop
+   inventing an address. An absent identity is an absent identity; do not substitute a
+   plausible-looking one. This was explicitly recorded as the follow-on to the chosen
+   remedy, and it is in scope for this step.
+6. Re-run the live-API suites against devx and quote the real output.
+
+EXPECTED OUTCOME. test_e2e_happy_path_full_job_application gets PAST line 37. It will then
+fail further along at POST /cover-letter/generate with 409 upstream_required, missing:
+["vpr"] — that is F-DEVX-1, it belongs to slice 1, and it is NOT yours. Do not chase it. If
+slice 1 has already landed when you run, that suite should go green end to end; say which
+state you observed.
+
+DO NOT: weaken or delete any assertion; edit either scope-lock twin; edit
+test_dh4_p01_canonical_artifact.py; touch the artifacts table, the VPR worker or anything
+else in slice 1; fix F-DEVX-1, -5, -6 or -8; change the Cognito construct or anything under
+infra/ (the signup-email cap is I-07 and belongs to 3.4's lock); add a backfill or migration
+script — self-healing on read is the chosen mechanism and a backfill was NOT authorized.
+
+OUTPUT REQUIRED: the reproduction quoted; the written P-24 answer with its reasoning; the
+RED failure quoted before the fix and the same tests passing after; the live suite output
+before and after, quoted, with what now passes, what still fails and why, and what skips;
+proof that no file under infra/ or src/frontend/ changed and that slice 1's surface was not
+touched (git status --porcelain over infra/ src/frontend/ and the artifacts-table modules
+empty); ruff and strict mypy clean; the full backend unit suite unchanged.
+
+ALSO REQUIRED: the standing drift comparison and the wave-3-status.md row, as in
+3.CORR-SPEC. State explicitly whether I-09 can now be closed in ISSUES.md, and if not,
+exactly what is missing.
+```

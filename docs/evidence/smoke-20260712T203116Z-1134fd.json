@@ -1,0 +1,36 @@
+{
+  "api_base": "https://y7mtvv4nw6.execute-api.eu-west-1.amazonaws.com/prod",
+  "checks": [
+    {
+      "detail": "health returned 200",
+      "name": "health",
+      "passed": true,
+      "request_id": "14392155-ddb3-429e-9414-bfa111470be5",
+      "status": 200
+    },
+    {
+      "detail": "exact origin echoed: 'https://p64-scratch.invalid'",
+      "name": "cors_exact_origin",
+      "passed": true,
+      "request_id": "33fe5ccd-ba0b-431e-a853-d4076d1b80f2",
+      "status": 200
+    },
+    {
+      "detail": "authed 200 and unauth rejected with 401",
+      "name": "authed_read",
+      "passed": true,
+      "request_id": "c771de03-4422-4c1a-a6bf-a86d6825c44d",
+      "status": 200
+    },
+    {
+      "detail": "CV uploaded (cv_id=6052f2bc-1f22-4bd0-b930-a4890aceef98) and read back",
+      "name": "authed_upload",
+      "passed": true,
+      "request_id": "f65f7b6e-a735-4144-b115-c80607a3899c",
+      "status": 201
+    }
+  ],
+  "origin": "https://p64-scratch.invalid",
+  "passed": true,
+  "timestamp": "2026-07-12T20:31:16.523740+00:00"
+}

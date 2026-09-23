@@ -8,7 +8,7 @@ import type { GapQuestionCardProps } from '../../../components/GapQuestionCard/G
 // ---------------------------------------------------------------------------
 
 const apiMocks = vi.hoisted(() => ({
-  getGapQuestions: vi.fn(),
+  getGapQuestionsStatus: vi.fn(),
   getApplication: vi.fn(),
   saveGapResponses: vi.fn(),
 }));
@@ -79,6 +79,12 @@ const QUESTIONS = [
   { question_id: 'q5', question: 'Describe a conflict resolution', impact: 'MEDIUM' as const, probability: 'MEDIUM' as const, gap_score: 4, tags: [] },
 ];
 
+type GapStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+function statusOf(questions: typeof QUESTIONS, status: GapStatus = 'completed') {
+  return { job_id: 'job1', cv_id: 'cv1', status, questions };
+}
+
 const HUB_EMPTY = {
   application: { application_id: 'job1', state: 'active', created_at: '', trial_credit_consumed: false },
   job: { job_id: 'job1', user_id: 'u1', title: 'Engineer', company_name: 'Acme', status: 'active', created_at: '', requirements: [] },
@@ -117,7 +123,7 @@ beforeEach(async () => {
   window.history.pushState({}, '', '/applications/job1/gap-analysis');
 
   apiMocks.getApplication.mockResolvedValue(HUB_EMPTY);
-  apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS);
+  apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf(QUESTIONS));
   apiMocks.saveGapResponses.mockResolvedValue(undefined);
 
   const mod = await import('../../../app/applications/[id]/gap-analysis/page');
@@ -143,25 +149,25 @@ async function renderAndWait() {
 
 describe('AC-001 — loading skeleton', () => {
   it('shows 3 skeleton cards before data arrives', () => {
-    let resolveQuestions!: (v: typeof QUESTIONS) => void;
-    apiMocks.getGapQuestions.mockReturnValue(new Promise((r) => { resolveQuestions = r; }));
+    let resolveStatus!: (v: ReturnType<typeof statusOf>) => void;
+    apiMocks.getGapQuestionsStatus.mockReturnValue(new Promise((r) => { resolveStatus = r; }));
 
     renderPage();
 
     expect(screen.getByTestId('skeleton-cards')).toBeDefined();
     expect(screen.queryByTestId('questions-list')).toBeNull();
 
-    act(() => resolveQuestions(QUESTIONS));
+    act(() => resolveStatus(statusOf(QUESTIONS)));
   });
 
   it('does not show a centered spinner while loading', () => {
-    let resolve!: (v: typeof QUESTIONS) => void;
-    apiMocks.getGapQuestions.mockReturnValue(new Promise((r) => { resolve = r; }));
+    let resolve!: (v: ReturnType<typeof statusOf>) => void;
+    apiMocks.getGapQuestionsStatus.mockReturnValue(new Promise((r) => { resolve = r; }));
 
     renderPage();
 
     expect(screen.queryByRole('status')).toBeNull();
-    act(() => resolve(QUESTIONS));
+    act(() => resolve(statusOf(QUESTIONS)));
   });
 });
 
@@ -278,7 +284,7 @@ describe('AC-007 — no generate button', () => {
   });
 
   it('does not show a generate button even when there are no questions', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue([]);
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([]));
 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeDefined());
@@ -293,7 +299,7 @@ describe('AC-007 — no generate button', () => {
 
 describe('AC-008 — empty state', () => {
   it('shows error message and hub link when API returns no questions', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue([]);
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([]));
 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeDefined());
@@ -311,8 +317,8 @@ describe('AC-008 — empty state', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC-009 — error banner', () => {
-  it('shows inline error banner when getGapQuestions rejects', async () => {
-    apiMocks.getGapQuestions.mockRejectedValue(new Error('Network error'));
+  it('shows inline error banner when getGapQuestionsStatus rejects', async () => {
+    apiMocks.getGapQuestionsStatus.mockRejectedValue(new Error('Network error'));
 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('error-banner')).toBeDefined());
@@ -328,19 +334,19 @@ describe('AC-009 — error banner', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC-010 — retry', () => {
-  it('re-calls getGapQuestions on Retry click and shows questions on success', async () => {
-    apiMocks.getGapQuestions.mockRejectedValueOnce(new Error('fail'));
+  it('re-calls getGapQuestionsStatus on Retry click and shows questions on success', async () => {
+    apiMocks.getGapQuestionsStatus.mockRejectedValueOnce(new Error('fail'));
 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('error-banner')).toBeDefined());
 
-    apiMocks.getGapQuestions.mockResolvedValue(QUESTIONS.slice(0, 2));
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf(QUESTIONS.slice(0, 2)));
 
     fireEvent.click(screen.getByTestId('retry-button'));
 
     await waitFor(() => expect(screen.getByTestId('questions-list')).toBeDefined());
     expect(screen.queryByTestId('error-banner')).toBeNull();
-    expect(apiMocks.getGapQuestions).toHaveBeenCalledTimes(2);
+    expect(apiMocks.getGapQuestionsStatus).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -432,7 +438,7 @@ describe('AC-013 — Hebrew locale', () => {
   });
 
   it('displays Hebrew title, subtitle, back link, and empty-state text', async () => {
-    apiMocks.getGapQuestions.mockResolvedValue([]);
+    apiMocks.getGapQuestionsStatus.mockResolvedValue(statusOf([]));
 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeDefined());
@@ -452,7 +458,7 @@ describe('AC-013 — Hebrew locale', () => {
   });
 
   it('shows Hebrew error banner and retry button', async () => {
-    apiMocks.getGapQuestions.mockRejectedValue(new Error('fail'));
+    apiMocks.getGapQuestionsStatus.mockRejectedValue(new Error('fail'));
     renderPage();
     await waitFor(() => expect(screen.getByTestId('error-banner')).toBeDefined());
 

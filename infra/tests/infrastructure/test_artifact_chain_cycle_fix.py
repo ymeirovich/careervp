@@ -4,6 +4,7 @@ from typing import Any, Mapping
 
 from aws_cdk.assertions import Template
 
+from careervp.crud_features_nested_stack import CrudFeaturesNestedStack
 from careervp.service_stack import ServiceStack
 
 
@@ -12,10 +13,17 @@ ARTIFACT_FAILURE_HANDLER = "careervp.handlers.artifact_failure_handler.lambda_ha
 
 
 def _artifact_chain_template(service_stack: ServiceStack) -> Template:
-    # The artifact-chain failure handlers, their dedicated role, and the state
-    # machine live in the PARENT stack (the FE-UI-036 nested-stack split was
-    # reverted because the resources are already deployed under explicit names).
-    return Template.from_stack(service_stack)
+    # P-26 Job 1: the artifact-chain failure handlers, their dedicated role, and
+    # the state machine are re-homed into CrudFeaturesNestedStack via a human-gated
+    # cdk refactor resource-import (logical ids preserved). The dedicated-role
+    # invariants (no states:*, least-privilege on the applications table) are
+    # unchanged — they now hold in the nested template.
+    feature_stack = next(
+        c
+        for c in service_stack.node.find_all()
+        if isinstance(c, CrudFeaturesNestedStack)
+    )
+    return Template.from_stack(feature_stack)
 
 
 def _resources(
@@ -80,15 +88,15 @@ def _policy_statements_for_role(
 
 
 def test_template_synthesizes_without_dependency_cycle(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    Template.from_stack(service_stack)
+    Template.from_stack(rehome_service_stack)
 
 
 def test_failure_handlers_use_dedicated_role_not_shared_service_role(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     cr_function = _lambda_by_handler(template, CR_FAILURE_HANDLER)
     artifact_function = _lambda_by_handler(template, ARTIFACT_FAILURE_HANDLER)
 
@@ -105,9 +113,9 @@ def test_failure_handlers_use_dedicated_role_not_shared_service_role(
 
 
 def test_dedicated_failure_handler_role_has_no_stepfunctions_permission(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )
@@ -124,9 +132,9 @@ def test_dedicated_failure_handler_role_has_no_stepfunctions_permission(
 
 
 def test_dedicated_role_is_least_privilege_on_applications_table(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )
@@ -160,15 +168,18 @@ def test_dedicated_role_is_least_privilege_on_applications_table(
 
 
 def test_shared_role_still_has_stepfunctions_grants(
-    synthesized_template: Template,
+    features_template: Template,
 ) -> None:
+    # P-26 Job 1: the shared service role is re-homed into CrudFeaturesNestedStack
+    # alongside the Lambdas that assume it and the state machine it is granted on,
+    # so the states:* grants now resolve in the nested template (intra-stack).
     shared_role_ids = [
         logical_id
-        for logical_id in _resources(synthesized_template, "AWS::IAM::Role")
+        for logical_id in _resources(features_template, "AWS::IAM::Role")
         if "ServiceRoleArn" in logical_id
     ]
     assert len(shared_role_ids) == 1
-    statements = _policy_statements_for_role(synthesized_template, shared_role_ids[0])
+    statements = _policy_statements_for_role(features_template, shared_role_ids[0])
     actions = {action for statement in statements for action in _actions(statement)}
 
     assert "states:StartExecution" in actions
@@ -180,9 +191,9 @@ def test_shared_role_still_has_stepfunctions_grants(
 
 
 def test_failure_handler_role_name_follows_convention(
-    service_stack: ServiceStack,
+    rehome_service_stack: ServiceStack,
 ) -> None:
-    template = _artifact_chain_template(service_stack)
+    template = _artifact_chain_template(rehome_service_stack)
     role_logical_id = _lambda_role_logical_id(
         _lambda_by_handler(template, CR_FAILURE_HANDLER)
     )

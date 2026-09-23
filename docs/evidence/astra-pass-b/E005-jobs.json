@@ -1,0 +1,22 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "scan",
+    "--table-name",
+    "careervp-jobs-table-devx",
+    "--projection-expression",
+    "job_id,ttl,created_at,updated_at,#s,result_key,completed_at",
+    "--expression-attribute-names",
+    "{\"#s\":\"status\"}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:27.392786+00:00",
+  "exit_code": 254,
+  "stdout": "",
+  "stderr": "\naws: [ERROR]: An error occurred (ValidationException) when calling the Scan operation: Invalid ProjectionExpression: Attribute name is a reserved keyword; reserved keyword: ttl\n"
+}

@@ -60,14 +60,14 @@ export interface CreateJobInput {
 
 // ── Async task response (VPR / Cover Letter / Interview Prep generate) ──
 export interface AsyncTaskResponse {
-  request_id: string; // async task ID — use to poll status (NOT the job posting ID)
+  request_id?: string; // async task ID — use to poll status (NOT the job posting ID)
   job_id?: string;    // alias for request_id returned by some endpoints
   status: "processing" | "completed"; // "completed" returned for idempotent duplicate requests
   estimated_time_seconds?: number;
 }
 
 // ── Artifact status (hub artifacts) ──
-export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+export type ArtifactStatus = "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired" | "not_generated" | "edited";
 
 export interface HubArtifact {
   status: ArtifactStatus;
@@ -159,6 +159,16 @@ export interface GapAnalysisRequest {
 
 export interface GapAnalysisResponse {
   questions: GapQuestion[];
+}
+
+// Gap-question generation is async (submit → SQS worker); poll this until
+// status leaves "pending"/"processing".
+export interface GapAnalysisStatusResponse {
+  job_id: string;
+  cv_id?: string | null;
+  status: ArtifactStatus;
+  questions: GapQuestion[];
+  error?: string;
 }
 
 // ── VPR ──
@@ -442,7 +452,9 @@ export interface InterviewPrep {
 export interface InterviewPrepRequest {
   vpr_id: string;
   gap_response_ids: string[];
-  application_id?: string;
+  // v3.0.0 (scope-lock A1): application_id is required — vpr_id is no longer
+  // accepted as a stand-in application key. job_id remains its accepted alias.
+  application_id: string;
   job_id?: string;
   language?: string;
 }
@@ -649,4 +661,12 @@ export interface ExportRequest {
 export interface ExportResponse {
   download_url: string;
   expires_at: string; // ISO timestamp
+}
+
+export interface ApiErrorEnvelope {
+  error?: string;
+  message?: string;
+  classification?: string;
+  error_code?: string;
+  field?: string;
 }

@@ -4,6 +4,7 @@ DynamoDB tables and S3 buckets for the CV processing pipeline.
 """
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy
+from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_sqs as sqs
@@ -11,6 +12,8 @@ from constructs import Construct
 
 from . import constants
 from .naming_utils import NamingUtils
+from .rehome_map import rehome
+from .scratch_deployment import ScratchDeploymentSettings, validate_scratch_boundary
 
 
 class ApiDbConstruct(Construct):
@@ -30,9 +33,38 @@ class ApiDbConstruct(Construct):
     - CV Upload / Gap Analysis: Async processing queues with DLQs
     """
 
-    def __init__(self, scope: Construct, id_: str, naming: NamingUtils) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        id_: str,
+        naming: NamingUtils,
+        *,
+        scratch_settings: ScratchDeploymentSettings | None = None,
+        queue_scope: Construct | None = None,
+    ) -> None:
         super().__init__(scope, id_)
         self.naming = naming
+        # P-26 Job 1: the async queues carry explicit physical names and are
+        # re-homed into CrudFeaturesNestedStack (queue_scope). The stateful tables
+        # and buckets stay in this construct (the parent stack). Defaults to self
+        # so non-service callers / tests that omit queue_scope keep the old shape.
+        self._queue_scope: Construct = queue_scope if queue_scope is not None else self
+        self._build_dlq_depth_alarms = queue_scope is not None
+        self.dlq_depth_alarms: list[cw.Alarm] = []
+        if scratch_settings is not None:
+            validate_scratch_boundary(
+                scratch_settings,
+                environment=naming.environment,
+                region=naming.region,
+                account=naming.account_id,
+            )
+        self.scratch_teardown_safe = scratch_settings is not None
+        self.removal_policy = (
+            RemovalPolicy.DESTROY
+            if self.scratch_teardown_safe
+            else RemovalPolicy.RETAIN
+        )
+        self.deletion_protection = not self.scratch_teardown_safe
 
         # DynamoDB Tables
         self.users_table: dynamodb.TableV2 = self._build_users_table(id_)
@@ -50,6 +82,9 @@ class ApiDbConstruct(Construct):
         self.company_research_cache_table: dynamodb.TableV2 = (
             self._build_company_research_cache_table(id_)
         )
+        # P-24 identity surrogate: sub -> internal user_id (own sub-keyed table,
+        # looked up BEFORE user_id is known — cannot live in the USER# core).
+        self.identity_map_table: dynamodb.TableV2 = self._build_identity_map_table(id_)
 
         # S3 Buckets
         self.cv_bucket: s3.Bucket = self._build_cv_bucket(id_)
@@ -98,7 +133,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             contributor_insights_specification=dynamodb.ContributorInsightsSpecification(
                 enabled=True,
                 mode=dynamodb.ContributorInsightsMode.THROTTLED_KEYS,
@@ -121,6 +157,13 @@ class ApiDbConstruct(Construct):
                     ),
                     projection_type=dynamodb.ProjectionType.ALL,
                 ),
+                dynamodb.GlobalSecondaryIndexPropsV2(
+                    index_name="customer-id-index",
+                    partition_key=dynamodb.Attribute(
+                        name="customer_id", type=dynamodb.AttributeType.STRING
+                    ),
+                    projection_type=dynamodb.ProjectionType.ALL,
+                ),
             ],
         )
         CfnOutput(
@@ -139,7 +182,8 @@ class ApiDbConstruct(Construct):
                 name="id", type=dynamodb.AttributeType.STRING
             ),
             billing=dynamodb.Billing.on_demand(),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             time_to_live_attribute="expiration",
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=True,
@@ -151,6 +195,66 @@ class ApiDbConstruct(Construct):
         ).override_logical_id(constants.IDEMPOTENCY_TABLE_NAME_OUTPUT)
         return table
 
+    def _build_identity_map_table(self, id_: str) -> dynamodb.TableV2:
+        """P-24 sub -> internal user_id surrogate mapping.
+
+        A bare ``sub``-partitioned lookup (no sort key), separate from the
+        ``pk``/``sk`` ``USER#`` core: it is resolved at the edge BEFORE the
+        internal ``user_id`` is known. Durable (RETAIN + deletion protection +
+        PITR) — losing a row would split one human across two internal ids.
+        """
+        table_id = f"{id_}{constants.IDENTITY_MAP_TABLE_NAME}"
+        table = dynamodb.TableV2(
+            self,
+            table_id,
+            table_name=self.naming.table_name(constants.IDENTITY_MAP_TABLE_NAME),
+            partition_key=dynamodb.Attribute(
+                name="sub", type=dynamodb.AttributeType.STRING
+            ),
+            billing=dynamodb.Billing.on_demand(),
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+                recovery_period_in_days=35,
+            ),
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
+        )
+        CfnOutput(
+            self, id=constants.IDENTITY_MAP_TABLE_OUTPUT, value=table.table_name
+        ).override_logical_id(constants.IDENTITY_MAP_TABLE_OUTPUT)
+        return table
+
+    def _s3_frontend_origins(self) -> list[str]:
+        """P-08: explicit per-env frontend origins for CV/generated bucket CORS.
+
+        Stage/prod map to their deployed frontend domains. No wildcard origin
+        is ever returned.
+
+        devx is NOT localhost-only. The original comment here assumed "no
+        deployed frontend depends on dev bucket CORS from a browser origin
+        other than local dev"; that is false for devx, which serves the
+        Amplify branch db-redesign. Export hands the browser a presigned S3
+        URL and ExportDropdown.handleExport fetches it, so a browser origin
+        missing from this list turns every export into "Download failed.
+        Please try again." -- measured live in the 2026-09-23 journey: the
+        export Lambda ran with 0 errors and the download still never started.
+
+        devx reuses the same allowed_origins context the API already trusts
+        (infra/cdk.json, passed through by `make deploy-devx`), so the two
+        cannot drift apart.
+        """
+        env = self.naming.environment
+        if env in ("stage", "staging"):
+            return ["https://stage.careervp.com"]
+        if env in ("prod", "production"):
+            return ["https://app.careervp.com"]
+        if env == "devx":
+            configured = str(self.node.try_get_context("allowed_origins") or "")
+            origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+            if origins:
+                return origins
+        return ["http://localhost:3000"]
+
     def _build_cv_bucket(self, id_prefix: str) -> s3.Bucket:
         """
         S3 bucket for CV uploads.
@@ -161,8 +265,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.CV_BUCKET_NAME),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
@@ -187,7 +291,7 @@ class ApiDbConstruct(Construct):
                         s3.HttpMethods.POST,
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=["*"],  # Restrict in production
+                    allowed_origins=self._s3_frontend_origins(),
                     allowed_headers=["*"],
                     max_age=3000,
                 )
@@ -217,7 +321,8 @@ class ApiDbConstruct(Construct):
             billing=dynamodb.Billing.on_demand(),
             # ASYNC_005: stream events drive async worker execution.
             dynamo_stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             time_to_live_attribute="ttl",
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
                 point_in_time_recovery_enabled=True,
@@ -264,7 +369,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self, id=constants.CVS_TABLE_OUTPUT, value=table.table_name
@@ -289,7 +395,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="status-index",
@@ -327,7 +434,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self, id=constants.GAP_RESPONSES_TABLE_OUTPUT, value=table.table_name
@@ -353,7 +461,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="entity-index",
@@ -393,7 +502,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
             global_secondary_indexes=[
                 dynamodb.GlobalSecondaryIndexPropsV2(
                     index_name="type-index",
@@ -430,7 +540,8 @@ class ApiDbConstruct(Construct):
                 point_in_time_recovery_enabled=True,
                 recovery_period_in_days=7,
             ),
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=self.removal_policy,
+            deletion_protection=self.deletion_protection,
         )
         CfnOutput(
             self,
@@ -441,98 +552,163 @@ class ApiDbConstruct(Construct):
 
     def _build_cv_upload_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed CV upload processing jobs."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CvUploadDlq",
-            queue_name=self.naming.dlq_name(constants.CV_UPLOAD_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        queue_name = self.naming.dlq_name(constants.CV_UPLOAD_QUEUE)
+        queue = rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CvUploadDlq",
+                queue_name=queue_name,
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="CvUploadDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_cv_upload_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for CV upload async processing."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CvUploadQueue",
-            queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
-            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-            visibility_timeout=Duration.seconds(390),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent CV jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=5,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CvUploadQueue",
+                queue_name=self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(1800),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent CV jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=5,
+                ),
             ),
+            self.naming.queue_name(constants.CV_UPLOAD_QUEUE),
         )
 
     def _build_gap_analysis_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed gap analysis jobs."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}GapAnalysisDlq",
-            queue_name=self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        queue_name = self.naming.dlq_name(constants.GAP_ANALYSIS_QUEUE)
+        queue = rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}GapAnalysisDlq",
+                queue_name=queue_name,
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="GapAnalysisDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_gap_analysis_queue(self, id_prefix: str, dlq: sqs.Queue) -> sqs.Queue:
         """Primary queue for gap analysis async processing."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}GapAnalysisQueue",
-            queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
-            # SQS_003: visibility must exceed Lambda timeout + 60s buffer.
-            visibility_timeout=Duration.seconds(390),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent gap-analysis jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=5,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}GapAnalysisQueue",
+                queue_name=self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(1800),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent gap-analysis jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=5,
+                ),
             ),
+            self.naming.queue_name(constants.GAP_ANALYSIS_QUEUE),
         )
 
     def _build_company_research_dlq(self, id_prefix: str) -> sqs.Queue:
         """Dead-letter queue for failed company research jobs (FE-UI-031)."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CompanyResearchDlq",
-            queue_name=self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE),
-            # SQS_001: retain failed messages for 14 days.
-            retention_period=Duration.days(14),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
+        queue_name = self.naming.dlq_name(constants.COMPANY_RESEARCH_QUEUE)
+        queue = rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CompanyResearchDlq",
+                queue_name=queue_name,
+                # SQS_001: retain failed messages for 14 days.
+                retention_period=Duration.days(14),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+            ),
+            queue_name,
         )
+        self._add_dlq_depth_alarm(
+            id_prefix=id_prefix,
+            construct_id="CompanyResearchDlqDepthAlarm",
+            queue_name=queue_name,
+        )
+        return queue
 
     def _build_company_research_queue(
         self, id_prefix: str, dlq: sqs.Queue
     ) -> sqs.Queue:
         """Primary queue for async company research (Step Functions chain, FE-UI-031)."""
-        return sqs.Queue(
-            self,
-            f"{id_prefix}CompanyResearchQueue",
-            queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
-            # SQS_003: visibility aligned to the chain task heartbeat (180s) + buffer.
-            visibility_timeout=Duration.seconds(120),
-            receive_message_wait_time=Duration.seconds(20),
-            # SQS_002: encrypt queue contents with AWS-managed KMS.
-            encryption=sqs.QueueEncryption.KMS_MANAGED,
-            # SQS_004: ordering is not required for independent research jobs.
-            fifo=False,
-            dead_letter_queue=sqs.DeadLetterQueue(
-                queue=dlq,
-                max_receive_count=3,
+        return rehome(
+            sqs.Queue(
+                self._queue_scope,
+                f"{id_prefix}CompanyResearchQueue",
+                queue_name=self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
+                # SQS_003: visibility must be at least 6x the Lambda timeout.
+                visibility_timeout=Duration.seconds(720),
+                receive_message_wait_time=Duration.seconds(20),
+                # SQS_002: encrypt queue contents with AWS-managed KMS.
+                encryption=sqs.QueueEncryption.KMS_MANAGED,
+                # SQS_004: ordering is not required for independent research jobs.
+                fifo=False,
+                dead_letter_queue=sqs.DeadLetterQueue(
+                    queue=dlq,
+                    max_receive_count=3,
+                ),
             ),
+            self.naming.queue_name(constants.COMPANY_RESEARCH_QUEUE),
         )
+
+    def _add_dlq_depth_alarm(
+        self, *, id_prefix: str, construct_id: str, queue_name: str
+    ) -> None:
+        if not self._build_dlq_depth_alarms:
+            return
+
+        alarm = rehome(
+            cw.Alarm(
+                self._queue_scope,
+                f"{id_prefix}{construct_id}",
+                metric=cw.Metric(
+                    namespace="AWS/SQS",
+                    metric_name="ApproximateNumberOfMessagesVisible",
+                    dimensions_map={"QueueName": queue_name},
+                    statistic="Maximum",
+                    period=Duration.minutes(1),
+                ),
+                threshold=1,
+                evaluation_periods=1,
+                comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+                treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+            ),
+            f"{queue_name}-depth-alarm",
+        )
+        self.dlq_depth_alarms.append(alarm)
 
     def _build_vpr_results_bucket(self, id_prefix: str) -> s3.Bucket:
         """
@@ -544,8 +720,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.results_bucket_name(constants.VPR_RESULTS_BUCKET),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
@@ -562,11 +738,7 @@ class ApiDbConstruct(Construct):
                     allowed_methods=[
                         s3.HttpMethods.GET,
                     ],
-                    allowed_origins=[
-                        "https://careervp.com",
-                        "http://localhost:3000",
-                        "https://*.amplifyapp.com",
-                    ],
+                    allowed_origins=self._s3_frontend_origins(),
                     allowed_headers=["*"],
                     max_age=3000,
                 )
@@ -581,8 +753,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.STATIC_BUCKET_NAME),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -598,8 +770,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.BACKUPS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -633,8 +805,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.LOGS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -667,8 +839,8 @@ class ApiDbConstruct(Construct):
             self,
             bucket_id,
             bucket_name=self.naming.bucket_name(constants.ARTIFACTS_BUCKET_NAME),
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=self.removal_policy,
+            auto_delete_objects=self.scratch_teardown_safe,
             # S3_001: keep public access fully blocked.
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             # Use SSE-S3 for managed at-rest encryption.
@@ -691,5 +863,24 @@ class ApiDbConstruct(Construct):
                     ],
                     enabled=True,
                 ),
+            ],
+            # Export presigns an object in THIS bucket and the browser fetches
+            # it cross-origin (ExportDropdown.handleExport). Without a CORS
+            # rule that fetch is blocked and the download never starts --
+            # exactly what J9 measured on 2026-09-23: the export Lambda was
+            # invoked, returned 200 with 0 errors, and the UI still showed
+            # "Download failed. Please try again." `aws s3api get-bucket-cors`
+            # on the live bucket returned NoSuchCORSConfiguration.
+            #
+            # The sibling CV bucket has carried this rule all along; the
+            # artifacts bucket never got one, so export has been broken in the
+            # browser for every real user, not just for the test.
+            cors=[
+                s3.CorsRule(
+                    allowed_methods=[s3.HttpMethods.GET],
+                    allowed_origins=self._s3_frontend_origins(),
+                    allowed_headers=["*"],
+                    max_age=3000,
+                )
             ],
         )

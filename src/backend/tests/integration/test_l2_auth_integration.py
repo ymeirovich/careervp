@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,8 +16,15 @@ from careervp.handlers.auth_utils import extract_user_id
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 PAYLOAD_PATH = REPO_ROOT / 'docs/refactor/payloads/beta_l2_auth_scenarios_test.json'
-I3_EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I3_auth/auth-abuse-matrix.json'
-I4_EVIDENCE_PATH = REPO_ROOT / 'docs/beta/evidence/I4_identity/identity-extraction-audit.txt'
+# sweep-00 finding #2: these writers targeted the working tree, so running the
+# mandatory checks always left tracked files modified and `git_dirty: false` was
+# unreachable for every proof in this chain. Nothing reads prior content — each
+# test writes and then asserts on what it just wrote — so the default target is a
+# temp dir. Set CAREERVP_BETA_EVIDENCE_DIR=<repo>/docs/beta/evidence to refresh
+# the committed artifacts deliberately.
+BETA_EVIDENCE_ROOT = Path(os.environ.get('CAREERVP_BETA_EVIDENCE_DIR', tempfile.gettempdir()))
+I3_EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I3_auth/auth-abuse-matrix.json'
+I4_EVIDENCE_PATH = BETA_EVIDENCE_ROOT / 'I4_identity/identity-extraction-audit.txt'
 
 SCENARIOS = ('no_token', 'expired_token', 'wrong_user_token', 'valid_token')
 
@@ -182,12 +191,14 @@ def test_l2_auth_scenarios_generate_i3_evidence() -> None:
 
 @pytest.mark.integration
 def test_l2_identity_extraction_audit_generates_i4_evidence() -> None:
+    # P-04: the client-supplied identity-header fallback has been removed entirely. The L2 audit
+    # previously proved the fallback was *contained* to handlers/auth_utils.py; post-P-04 the correct
+    # I4 evidence is that the scan finds it in NO handler at all (including auth_utils.py), matching
+    # test_p04_no_x_user_id_fallbacks_remain.
     output = _run_identity_audit()
 
     assert I4_EVIDENCE_PATH.exists()
-    assert 'handlers/auth_utils.py' in output
-    assert 'handlers/cover_letter_handler.py' not in output
-    assert 'handlers/interview_prep_handler.py' not in output
+    assert output == ''
 
     written = I4_EVIDENCE_PATH.read_text(encoding='utf-8')
-    assert 'handlers/auth_utils.py' in written
+    assert written.strip() == ''

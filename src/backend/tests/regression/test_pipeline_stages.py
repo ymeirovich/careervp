@@ -72,21 +72,27 @@ class TestPipelineStageContracts:
         assert evidence_result is not None
 
     def test_generate_vpr_function_signature_unchanged(self) -> None:
-        """generate_vpr() public function must accept (request, user_cv, dal) in that order."""
+        """generate_vpr() public function must accept (request, user_cv, dal) in that order.
+
+        `dal` became optional (default None) when persistence moved to the
+        caller (F-DEVX-1; see vpr_generator.py's generate_vpr docstring) —
+        it is retained only for call-site compatibility. Updated here
+        (handoff-01, Step 1b) from requiring 3 required params to 2.
+        """
         sig = inspect.signature(generate_vpr)
         params = list(sig.parameters.keys())
         # Must have these 3 parameters (in some order, positional)
         assert 'request' in params, "generate_vpr() missing 'request' parameter"
         assert 'user_cv' in params, "generate_vpr() missing 'user_cv' parameter"
         assert 'dal' in params, "generate_vpr() missing 'dal' parameter"
-        # No more than 3 required positional parameters
+        # No more than 2 required positional parameters — dal is optional.
         required_params = [
             p
             for p in sig.parameters.values()
             if p.default is inspect.Parameter.empty and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
         ]
-        assert len(required_params) == 3, (
-            f'generate_vpr() has {len(required_params)} required params, expected 3. Params: {[p.name for p in required_params]}'
+        assert len(required_params) == 2, (
+            f'generate_vpr() has {len(required_params)} required params, expected 2. Params: {[p.name for p in required_params]}'
         )
 
     def test_max_stage6_retries_is_3(self) -> None:

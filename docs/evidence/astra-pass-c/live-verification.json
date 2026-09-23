@@ -1,0 +1,18 @@
+{
+  "capture_note": "Transcribed verbatim from this session exec_command combined outputs; stderr was not separately captured.",
+  "verifier": {
+    "command": "AWS_DEFAULT_REGION=us-east-1 uv run python scripts/verify_aws_state.py --mode deployed --env devx",
+    "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend",
+    "exit_code": 0,
+    "output": "--- Verifying AWS State (deployed) for environment: devx ---\n✅ Found: Lambda careervp-cv-parser-lambda-devx\n✅ Found: DynamoDB careervp-users-table-devx\n✅ Found: DynamoDB careervp-idempotency-table-devx\n✅ Bucket with prefix careervp-devx-cvs-* found: ['careervp-devx-cvs-use1-747cad']\n\n✨ AWS state verification PASSED\n"
+  },
+  "identity": {
+    "command": "aws sts get-caller-identity --region us-east-1",
+    "exit_code": 0,
+    "response": {
+      "UserId": "AIDA3PAPU3DOLSGOA7KGO",
+      "Account": "788159322332",
+      "Arn": "arn:aws:iam::788159322332:user/presgen_user"
+    }
+  }
+}

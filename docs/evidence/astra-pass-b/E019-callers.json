@@ -1,0 +1,15 @@
+{
+  "command": [
+    "rg",
+    "-n",
+    "\\.save_vpr\\(",
+    "src/backend/careervp",
+    "--glob",
+    "*.py"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T14:04:15.361361+00:00",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": ""
+}

@@ -7,7 +7,6 @@ Per docs/specs/01-cv-parser.md and CLAUDE.md patterns.
 
 import base64
 import json
-import os
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -17,33 +16,35 @@ from moto import mock_aws
 
 from careervp.models.result import Result, ResultCode
 
+_VALID_CV_TEXT = (
+    'John Smith Senior Software Engineer with 8 years experience in Python, AWS, '
+    'distributed systems, mentoring teams, API optimization, CI/CD delivery, and '
+    'microservices architecture across high-scale production platforms.'
+)
+
 
 @pytest.fixture(scope='function', autouse=True)
-def aws_env_vars():
-    """Set up environment variables for moto and Lambda Powertools."""
-    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
-    os.environ['AWS_SECURITY_TOKEN'] = 'testing'
-    os.environ['AWS_SESSION_TOKEN'] = 'testing'
-    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
-    os.environ['POWERTOOLS_SERVICE_NAME'] = 'careervp-test'
-    os.environ['LOG_LEVEL'] = 'DEBUG'
-    os.environ['POWERTOOLS_TRACE_DISABLED'] = 'true'
-    os.environ['TABLE_NAME'] = 'test-users-table'
-    os.environ['CV_BUCKET_NAME'] = 'test-cv-bucket'
-    os.environ['IDEMPOTENCY_TABLE_NAME'] = 'test-idempotency-table'
-    yield
-    # Cleanup
-    for key in [
-        'AWS_ACCESS_KEY_ID',
-        'AWS_SECRET_ACCESS_KEY',
-        'AWS_SECURITY_TOKEN',
-        'AWS_SESSION_TOKEN',
-        'TABLE_NAME',
-        'CV_BUCKET_NAME',
-        'IDEMPOTENCY_TABLE_NAME',
-    ]:
-        os.environ.pop(key, None)
+def aws_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set up environment variables for moto and Lambda Powertools.
+
+    Uses monkeypatch so every key is restored to its prior value on teardown.
+    A plain ``os.environ.pop()`` cleanup here deleted the baseline AWS
+    credentials that tests/conftest.py sets at import time, leaving them unset
+    for the remainder of the session — which made 23 later tests in tests/unit
+    reach real AWS and fail with NoCredentialsError on any machine without
+    ambient credentials. See docs/handoff/2026-09-20-HANDOFF-04-*.md.
+    """
+    monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'testing')
+    monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'testing')
+    monkeypatch.setenv('AWS_SECURITY_TOKEN', 'testing')
+    monkeypatch.setenv('AWS_SESSION_TOKEN', 'testing')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+    monkeypatch.setenv('POWERTOOLS_SERVICE_NAME', 'careervp-test')
+    monkeypatch.setenv('LOG_LEVEL', 'DEBUG')
+    monkeypatch.setenv('POWERTOOLS_TRACE_DISABLED', 'true')
+    monkeypatch.setenv('TABLE_NAME', 'test-users-table')
+    monkeypatch.setenv('CV_BUCKET_NAME', 'test-cv-bucket')
+    monkeypatch.setenv('IDEMPOTENCY_TABLE_NAME', 'test-idempotency-table')
 
 
 @pytest.fixture
@@ -145,12 +146,35 @@ def generate_api_gw_event(body: dict, path: str = '/users/me/cv', method: str = 
             'requestTime': '01/Jan/2025:00:00:00 +0000',
             'requestTimeEpoch': 1735689600000,
             'stage': 'test',
+            'authorizer': {'claims': {'sub': 'test-user-123'}},
         },
         'pathParameters': None,
         'stageVariables': None,
         'body': json.dumps(body) if body else None,
         'isBase64Encoded': False,
     }
+
+
+def _create_cvs_table() -> Any:
+    """Create the dedicated CVs table.
+
+    Since the Stage-1 repoint every CV reader resolves from CVS_TABLE_NAME, and a
+    failed write there is fatal, so any test that expects a 201 must provide it.
+    ``tests/conftest.py`` sets CVS_TABLE_NAME for the whole session.
+    """
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    return dynamodb.create_table(
+        TableName='test-cvs-table',
+        KeySchema=[
+            {'AttributeName': 'pk', 'KeyType': 'HASH'},
+            {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+        ],
+        AttributeDefinitions=[
+            {'AttributeName': 'pk', 'AttributeType': 'S'},
+            {'AttributeName': 'sk', 'AttributeType': 'S'},
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
 
 
 def generate_lambda_context() -> Any:
@@ -277,6 +301,7 @@ class TestCVUploadWithTextContent:
     @mock_aws
     def test_text_content_success(self, mock_llm_success):
         """Successful CV parsing with text content."""
+        _create_cvs_table()
         # Create mock resources
         boto3.client('s3', region_name='us-east-1').create_bucket(Bucket='test-cv-bucket')
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -379,6 +404,7 @@ class TestCVUploadWithFileContent:
     @mock_aws
     def test_txt_file_upload_success(self, mock_llm_success):
         """Successful CV parsing with TXT file upload."""
+        _create_cvs_table()
         # Create mock resources
         s3 = boto3.client('s3', region_name='us-east-1')
         s3.create_bucket(Bucket='test-cv-bucket')
@@ -450,6 +476,7 @@ class TestCVUploadDynamoDBPersistence:
     @mock_aws
     def test_cv_saved_to_dynamodb(self, mock_llm_success):
         """Parsed CV should be saved to DynamoDB."""
+        _create_cvs_table()
         # Create mock resources
         boto3.client('s3', region_name='us-east-1').create_bucket(Bucket='test-cv-bucket')
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -519,6 +546,7 @@ class TestCVUploadDynamoDBPersistence:
     @mock_aws
     def test_openapi_payload_uses_bearer_token_for_user_id(self, mock_llm_success):
         """OpenAPI payload should resolve authenticated user_id from bearer token claims."""
+        _create_cvs_table()
         boto3.client('s3', region_name='us-east-1').create_bucket(Bucket='test-cv-bucket')
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
         dynamodb.create_table(
@@ -562,6 +590,124 @@ class TestCVUploadDynamoDBPersistence:
             assert body['success'] is True
             assert body['status'] == 'parsed'
             assert body['cv_id']
+
+    @mock_aws
+    def test_legacy_payload_ignores_client_user_id_and_stores_authorizer_owner(self, mock_llm_success):
+        """A legacy payload may not choose the owner of a stored CV."""
+        _create_cvs_table()
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        table = dynamodb.create_table(
+            TableName='test-users-table',
+            KeySchema=[
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
+            ],
+            BillingMode='PAY_PER_REQUEST',
+        )
+        table.meta.client.get_waiter('table_exists').wait(TableName='test-users-table')
+
+        with patch('careervp.logic.cv_parser.get_llm_router') as mock_router:
+            mock_router.return_value.invoke.return_value = mock_llm_success
+            from careervp.handlers.cv_upload_handler import lambda_handler
+
+            authenticated_user_id = 'authorizer-user-123'
+            foreign_user_id = 'foreign-user-456'
+            event = generate_api_gw_event(
+                {
+                    'user_id': foreign_user_id,
+                    'text_content': (
+                        'John Smith Senior Software Engineer with 8 years experience in Python, AWS, '
+                        'distributed systems, mentoring teams, API optimization, CI/CD delivery, and '
+                        'microservices architecture across high-scale production platforms.'
+                    ),
+                }
+            )
+            event['requestContext']['authorizer'] = {'claims': {'sub': authenticated_user_id}}
+
+            response = lambda_handler(event, generate_lambda_context())
+
+        assert response['statusCode'] == 201
+        cv_id = json.loads(response['body'])['cv_id']
+        stored = table.get_item(Key={'pk': authenticated_user_id, 'sk': f'CV#{cv_id}'}).get('Item')
+        assert stored is not None
+        assert stored['user_id'] == authenticated_user_id
+        foreign_stored = table.get_item(Key={'pk': foreign_user_id, 'sk': f'CV#{cv_id}'}).get('Item')
+        assert foreign_stored is None
+
+    @mock_aws
+    def test_cv_written_to_both_tables_when_cvs_table_configured(self, mock_llm_success, monkeypatch):
+        """The dual write lands in cvs-table, which is where every reader now looks."""
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        for name in ('test-users-table', 'test-cvs-table'):
+            dynamodb.create_table(
+                TableName=name,
+                KeySchema=[
+                    {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                    {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'pk', 'AttributeType': 'S'},
+                    {'AttributeName': 'sk', 'AttributeType': 'S'},
+                ],
+                BillingMode='PAY_PER_REQUEST',
+            )
+        monkeypatch.setenv('CVS_TABLE_NAME', 'test-cvs-table')
+
+        with patch('careervp.logic.cv_parser.get_llm_router') as mock_router:
+            mock_router.return_value.invoke.return_value = mock_llm_success
+            from careervp.handlers.cv_upload_handler import lambda_handler
+
+            event = generate_api_gw_event({'text_content': _VALID_CV_TEXT})
+            event['requestContext']['authorizer'] = {'claims': {'sub': 'dual-write-user'}}
+            response = lambda_handler(event, generate_lambda_context())
+
+        assert response['statusCode'] == 201
+        cv_id = json.loads(response['body'])['cv_id']
+        key = {'pk': 'dual-write-user', 'sk': f'CV#{cv_id}'}
+        assert dynamodb.Table('test-users-table').get_item(Key=key).get('Item') is not None
+        assert dynamodb.Table('test-cvs-table').get_item(Key=key).get('Item') is not None
+
+    @mock_aws
+    def test_cvs_table_write_failure_is_fatal_not_a_201(self, mock_llm_success, monkeypatch):
+        """Stage-1 closeout 4a.
+
+        Every CV reader resolves from cvs-table since the repoint. A cvs-table write
+        that fails while the request still returns 201 produces a CV that exists to
+        nobody. The request must fail instead.
+        """
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        dynamodb.create_table(
+            TableName='test-users-table',
+            KeySchema=[
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'},
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
+            ],
+            BillingMode='PAY_PER_REQUEST',
+        )
+        # Configured, distinct from TABLE_NAME, and deliberately never created:
+        # the save_cv call raises ResourceNotFoundException.
+        monkeypatch.setenv('CVS_TABLE_NAME', 'test-cvs-table-does-not-exist')
+
+        with patch('careervp.logic.cv_parser.get_llm_router') as mock_router:
+            mock_router.return_value.invoke.return_value = mock_llm_success
+            from careervp.handlers.cv_upload_handler import lambda_handler
+
+            event = generate_api_gw_event({'text_content': _VALID_CV_TEXT})
+            event['requestContext']['authorizer'] = {'claims': {'sub': 'fatal-write-user'}}
+            response = lambda_handler(event, generate_lambda_context())
+
+        assert response['statusCode'] == 500
+        body = json.loads(response['body'])
+        assert body['success'] is False
+        assert 'cv_id' not in body
 
 
 class TestCVUploadErrorHandling:

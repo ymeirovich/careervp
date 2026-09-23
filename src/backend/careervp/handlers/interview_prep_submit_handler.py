@@ -23,6 +23,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from botocore.exceptions import ClientError as BotoClientError
 from pydantic import ValidationError
 
+from careervp.dal import table_registry
 from careervp.dal.dynamo_dal_handler import DynamoDalHandler
 from careervp.handlers.artifact_dependency_utils import (
     dependency_response_body,
@@ -31,7 +32,8 @@ from careervp.handlers.artifact_dependency_utils import (
 )
 from careervp.handlers.auth_utils import extract_user_id
 from careervp.handlers.cors_utils import get_cors_headers, set_request_origin
-from careervp.handlers.utils.observability import logger, metrics, tracer
+from careervp.handlers.utils.observability import log_response_status, logger, metrics, tracer
+from careervp.logic.artifact_dependency_resolver import ArtifactUnavailableError
 from careervp.logic.utils.constants import INTERVIEW_PREP_JOBS_QUEUE_NAME
 from careervp.models.api_models import InterviewPrepRequest
 from careervp.models.result import ResultCode
@@ -69,16 +71,13 @@ def _get_sqs_queue_url() -> str:
 
 
 def _get_artifacts_table_name() -> str:
-    for env_key in ('ARTIFACTS_TABLE_NAME', 'DYNAMODB_TABLE_NAME', 'TABLE_NAME'):
-        value = os.environ.get(env_key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    raise RuntimeError('Artifacts table environment variable is not configured')
+    return table_registry.resolve_artifacts_table_name(required=True)
 
 
 @logger.inject_lambda_context(log_event=False)
 @tracer.capture_lambda_handler(capture_response=False)
 @metrics.log_metrics(capture_cold_start_metric=True)
+@log_response_status
 def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     """
     Handle POST /interview-prep/generate requests for async interview prep generation.
@@ -102,7 +101,6 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     tracer.put_annotation(key='endpoint', value=endpoint)
     logger.info(
         'Interview prep submit request received',
-        api_gateway_event=event,
         endpoint=endpoint,
         request_id=_get_request_id(event, context),
     )
@@ -117,9 +115,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
 
     try:
         request_data = _parse_body(event)
-        logger.info('Interview prep submit parsed request body', request_body=request_data)
         api_request = InterviewPrepRequest.model_validate(request_data)
-        logger.info('Interview prep submit validated request body', validated_payload=api_request.model_dump(mode='json'))
+        logger.info('Interview prep submit request validated', request_field_names=sorted(request_data))
     except ValidationError as exc:
         logger.warning('Invalid request body', error=str(exc))
         metrics.add_metric(name='ValidationError', unit='Count', value=1)
@@ -135,33 +132,23 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             validation_errors=[{'code': ResultCode.INVALID_JSON, 'field': 'body', 'message': str(exc)}],
         )
 
-    try:
-        table_name = _get_artifacts_table_name()
-    except RuntimeError:
-        logger.exception('Artifacts table configuration error')
-        metrics.add_metric(name='MissingEnvError', unit='Count', value=1)
-        return _build_error_response(
-            'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
-        )
+    resolved = _resolve_submit_preconditions(api_request, event, context)
+    if isinstance(resolved, dict):
+        return resolved
+    table_name, application_id = resolved
 
-    application_id = api_request.application_id or api_request.job_id or api_request.vpr_id
-    dependency_resolution = resolve_handler_dependencies(
-        artifact_type='interview_prep',
+    not_ready = _resolve_upstream_or_error(
+        table_name=table_name,
         application_id=application_id,
         user_id=authenticated_user_id,
-        dal=DynamoDalHandler(table_name),
+        event=event,
+        context=context,
     )
-    if dependency_resolution.status != 'ready':
-        if dependency_resolution.status == 'dependency_generating':
-            mark_requested_artifact_pending(application_id=application_id, user_id=authenticated_user_id, artifact_type='interview_prep')
-        return {
-            'statusCode': dependency_resolution.http_status,
-            'headers': _json_headers(),
-            'body': json.dumps(dependency_response_body(dependency_resolution, requested_artifact='interview_prep')),
-        }
+    if not_ready is not None:
+        return not_ready
 
     job_id = str(uuid.uuid4())
-    artifact_id = f'ARTIFACT#INTERVIEW_PREP#{job_id}'
+    artifact_id = table_registry.interview_prep_artifact_id(job_id)
     now = datetime.datetime.now(datetime.timezone.utc)
     created_at = now.isoformat()
 
@@ -172,10 +159,8 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
     try:
         table = dynamodb_resource.Table(table_name)
         artifact_item = {
-            'pk': authenticated_user_id,
-            'sk': artifact_id,
-            'applicationId': authenticated_user_id,
-            'artifactId': artifact_id,
+            **table_registry.legacy_item_key(authenticated_user_id, artifact_id),
+            **table_registry.canonical_item_key(authenticated_user_id, artifact_id),
             'artifactType': 'interview_prep',
             'user_id': authenticated_user_id,
             'job_id': job_id,
@@ -184,7 +169,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
             'created_at': created_at,
             'updated_at': created_at,
         }
-        logger.info('Interview prep submit writing DynamoDB artifact', table_name=table_name, dynamodb_item=artifact_item)
+        logger.info('Interview prep submit writing DynamoDB artifact', table_name=table_name, job_id=job_id)
         table.put_item(
             Item=artifact_item,
         )
@@ -208,9 +193,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         }
         logger.info(
             'Interview prep submit sending SQS message',
-            queue_url=queue_url,
-            sqs_message_body=sqs_payload,
-            sqs_message_attributes=sqs_attributes,
+            job_id=job_id,
         )
         sqs.send_message(
             QueueUrl=queue_url,
@@ -226,7 +209,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         try:
             table = dynamodb_resource.Table(_get_artifacts_table_name())
             table.update_item(
-                Key={'applicationId': authenticated_user_id, 'artifactId': artifact_id},
+                Key=table_registry.canonical_item_key(authenticated_user_id, artifact_id),
                 UpdateExpression='SET #s = :status, updated_at = :now',
                 ExpressionAttributeNames={'#s': 'status'},
                 ExpressionAttributeValues={':status': 'FAILED', ':now': now.isoformat()},
@@ -243,7 +226,7 @@ def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, A
         'status': 'processing',
         'estimated_time_seconds': 60,
     }
-    logger.info('Interview prep submit response payload', response_status_code=int(HTTPStatus.ACCEPTED), response_body=response_body)
+    logger.info('Interview prep submit response prepared', response_status_code=int(HTTPStatus.ACCEPTED), job_id=job_id)
 
     return {
         'statusCode': int(HTTPStatus.ACCEPTED),
@@ -272,6 +255,86 @@ def _parse_body(event: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError('Request body must be a JSON object.')
     return parsed
+
+
+def _resolve_upstream_or_error(
+    *,
+    table_name: str,
+    application_id: str,
+    user_id: str,
+    event: dict[str, Any],
+    context: LambdaContext,
+) -> dict[str, Any] | None:
+    """Return ``None`` when upstream is ready, else the response to send.
+
+    Kept out of ``lambda_handler`` because that function is at the C901 ceiling.
+    """
+    try:
+        resolution = resolve_handler_dependencies(
+            artifact_type='interview_prep',
+            application_id=application_id,
+            user_id=user_id,
+            dal=DynamoDalHandler(table_name),
+        )
+    except ArtifactUnavailableError as exc:
+        # The upstream read failed; it is NOT known to be missing. Answering 409
+        # upstream_required here is the F-DEVX-1 defect.
+        logger.error('Upstream artifact unavailable', artifact_type=exc.artifact_type, failure_code=exc.code)
+        metrics.add_metric(name='UpstreamArtifactUnavailable', unit='Count', value=1)
+        return _build_error_response(
+            'Upstream artifact is temporarily unavailable',
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            code=exc.code,
+            request_id=_get_request_id(event, context),
+        )
+
+    if resolution.status == 'ready':
+        return None
+    if resolution.status == 'dependency_generating':
+        mark_requested_artifact_pending(application_id=application_id, user_id=user_id, artifact_type='interview_prep')
+    return {
+        'statusCode': resolution.http_status,
+        'headers': _json_headers(),
+        'body': json.dumps(dependency_response_body(resolution, requested_artifact='interview_prep')),
+    }
+
+
+def _resolve_submit_preconditions(
+    api_request: InterviewPrepRequest,
+    event: dict[str, Any],
+    context: LambdaContext,
+) -> tuple[str, str] | dict[str, Any]:
+    """Resolve `(artifacts_table_name, application_id)`, or return an error response.
+
+    Both preconditions live here so `lambda_handler` spends one decision point on
+    them instead of two — it is already at the C901 complexity ceiling.
+    """
+    try:
+        table_name = _get_artifacts_table_name()
+    except RuntimeError:
+        logger.exception('Artifacts table configuration error')
+        metrics.add_metric(name='MissingEnvError', unit='Count', value=1)
+        return _build_error_response(
+            'Internal server error', HTTPStatus.INTERNAL_SERVER_ERROR, code=ResultCode.MISSING_ENV, request_id=_get_request_id(event, context)
+        )
+
+    # v3.0.0 / scope-lock A1 (P-01): ONE canonical application key. A client-supplied
+    # vpr_id may never stand in for it — that is legacy-id resolution, which O-3 forbids.
+    # Refuse BEFORE dependency resolution so an identity-less request performs no
+    # resolver read and no mark_requested_artifact_pending write into the canonical hub.
+    application_id = api_request.application_id or api_request.job_id
+    if not application_id:
+        logger.warning('Interview prep submit rejected: no application identity')
+        metrics.add_metric(name='MissingApplicationIdentity', unit='Count', value=1)
+        # request_id is deliberately NOT passed here: AC-P01-1 pins this exact
+        # three-key envelope. Adding it would break the pinned contract.
+        return _build_error_response(
+            'application_id/job_id is required',
+            HTTPStatus.BAD_REQUEST,
+            code=ResultCode.MISSING_REQUIRED_FIELD,
+        )
+
+    return table_name, application_id
 
 
 def _build_error_response(

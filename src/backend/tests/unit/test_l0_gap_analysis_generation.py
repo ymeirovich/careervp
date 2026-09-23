@@ -75,25 +75,6 @@ def _gap_questions_json() -> str:
     return json.dumps({'questions': questions})
 
 
-def _api_event() -> dict[str, object]:
-    return {
-        'httpMethod': 'POST',
-        'path': '/gap-analysis/questions',
-        'requestContext': {
-            'authorizer': {'jwt': {'claims': {'sub': USER_ID}}},
-        },
-        'body': json.dumps(
-            {
-                'cv_id': 'cv-abc456',
-                'job_id': 'job-xyz789',
-                'max_questions': 10,
-                'focus_areas': ['python', 'system design'],
-            }
-        ),
-        'headers': {'Content-Type': 'application/json'},
-    }
-
-
 @pytest.mark.unit
 class TestGapAnalysisCallsLLM:
     def test_gap_analysis_calls_llm_client(self) -> None:
@@ -161,8 +142,11 @@ class TestGapAnalysisOutputShape:
             assert len(result.data) == 10
             assert all('question_id' in q and 'question' in q for q in result.data)
 
-    def test_handler_returns_questions_from_llm_generation(self) -> None:
-        from careervp.handlers.gap_handler import lambda_handler
+    def test_worker_persists_questions_from_llm_generation(self) -> None:
+        """The LLM call and persistence now run in the SQS worker, not the
+        synchronous handler (HANDOFF-09: the inline call exceeded the 30s API
+        Gateway budget under real input)."""
+        from careervp.handlers.gap_handler import _process_gap_generation_job
 
         with patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate:
             generated_questions = [
@@ -182,48 +166,78 @@ class TestGapAnalysisOutputShape:
             )
 
             with (
-                patch('careervp.handlers.gap_handler._get_questions_dal') as mock_get_dal,
-                patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
+                patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
                 patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+                patch(
+                    'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                    return_value={
+                        'personal_info': {'full_name': 'Test User'},
+                        'work_experience': [],
+                        'skills': [],
+                        'education': [],
+                    },
+                ),
             ):
                 dal = MagicMock()
                 dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
                 mock_get_dal.return_value = dal
-                trial_service = MagicMock()
-                trial_service.check_trial_status.return_value = {'is_active': True}
-                trial_service.consume_credit.return_value = None
-                mock_trial_service.return_value = trial_service
                 mock_application_repository.return_value = MagicMock()
-                response = lambda_handler(_api_event(), MagicMock())
+                _process_gap_generation_job(
+                    {
+                        'user_id': USER_ID,
+                        'cv_id': 'cv-abc456',
+                        'job_id': 'job-xyz789',
+                        'application_id': 'job-xyz789',
+                        'max_questions': 10,
+                        'focus_areas': ['python', 'system design'],
+                    }
+                )
 
-        assert response['statusCode'] in (200, 201)
-        body = json.loads(response['body'])
-        assert len(body['questions']) == 10
-        assert body['job_id'] == 'job-xyz789'
+        completed_calls = [c for c in dal.save_gap_questions.call_args_list if c.kwargs.get('status') == 'completed']
+        assert len(completed_calls) == 1
+        assert len(completed_calls[0].kwargs['questions']) == 10
+        assert completed_calls[0].kwargs['job_id'] == 'job-xyz789'
 
-    def test_llm_error_maps_to_503(self) -> None:
-        from careervp.handlers.gap_handler import lambda_handler
+    def test_llm_error_marks_job_failed(self) -> None:
+        """A worker-side LLM failure persists status='failed', not an HTTP error —
+        the worker has no caller waiting on a response."""
+        from careervp.handlers.gap_handler import _process_gap_generation_job
 
         with (
             patch('careervp.handlers.gap_handler.generate_gap_questions') as mock_generate,
-            patch('careervp.handlers.gap_handler._get_trial_service') as mock_trial_service,
-            patch('careervp.handlers.gap_handler._get_application_repository') as mock_application_repository,
+            patch('careervp.handlers.gap_handler._get_dal') as mock_get_dal,
+            patch(
+                'careervp.handlers.gap_handler._build_user_cv_prompt_payload',
+                return_value={
+                    'personal_info': {'full_name': 'Test User'},
+                    'work_experience': [],
+                    'skills': [],
+                    'education': [],
+                },
+            ),
         ):
             mock_generate.return_value = Result(
                 success=False,
                 error='LLM timeout',
                 code=ResultCode.LLM_TIMEOUT,
             )
-            trial_service = MagicMock()
-            trial_service.check_trial_status.return_value = {'is_active': True}
-            trial_service.consume_credit.return_value = None
-            mock_trial_service.return_value = trial_service
-            mock_application_repository.return_value = MagicMock()
-            response = lambda_handler(_api_event(), MagicMock())
+            dal = MagicMock()
+            dal.save_gap_questions.return_value = Result(success=True, data=None, code=ResultCode.GAP_QUESTIONS_GENERATED)
+            mock_get_dal.return_value = dal
+            _process_gap_generation_job(
+                {
+                    'user_id': USER_ID,
+                    'cv_id': 'cv-abc456',
+                    'job_id': 'job-xyz789',
+                    'application_id': 'job-xyz789',
+                    'max_questions': 10,
+                    'focus_areas': [],
+                }
+            )
 
-        assert response['statusCode'] == 503
-        body = json.loads(response['body'])
-        assert body['code'] == ResultCode.LLM_TIMEOUT
+        failed_calls = [c for c in dal.save_gap_questions.call_args_list if c.kwargs.get('status') == 'failed']
+        assert len(failed_calls) == 1
+        assert failed_calls[0].kwargs['error'] == 'LLM timeout'
 
 
 @pytest.mark.unit

@@ -21,6 +21,10 @@ requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.12.0",
     "PyJWT>=2.13.0",
+    # auth_service.py imports cryptography.hazmat directly for RSA JWT keys; it must be a
+    # direct production dependency, not pulled in transitively via the moto dev dependency,
+    # or `uv export --no-dev` (which builds lambda_requirements.txt) silently drops it.
+    "cryptography>=50.0.0",
     "email-validator",
     "aws-lambda-powertools[tracer]>=3.22.1",
     "mypy-boto3-dynamodb",
@@ -34,7 +38,8 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "langdetect>=1.0.9",
     "python-docx>=1.1.0",
-    "PyPDF2>=3.0.0",
+    "pypdf>=6.16.1",
+    "soupsieve>=2.9.0",
     "httpx>=0.27.0",
     "urllib3>=2.7.0",
 ]
@@ -55,6 +60,8 @@ dev = [
     "pytest",
     "pytest-asyncio>=1.3.0",
     "pytest-mock",
+    "freezegun",
+    "pytest-randomly",
     "moto[dynamodb,s3]>=5.0.0",
     "pycodestyle",
     "pytest-cov",
@@ -87,9 +94,36 @@ skip-excluded-dirs = true
 
 [tool.pytest.ini_options]
 testpaths = "tests"
+addopts = "--strict-markers"
+xfail_strict = true
+# A coroutine created and never awaited is a real defect: the work silently
+# does not happen and the test still passes anyway. Six such warnings hid in
+# this suite across three handoffs (handoff 05 measured 6, not the 8 it was
+# handed). Measured safe: the suite emits zero RuntimeWarnings of any kind.
+#
+# BOTH lines are required, and the second is the one that actually bites.
+# "coroutine ... was never awaited" is emitted from the coroutine's __del__ at
+# garbage-collection time. error::RuntimeWarning does turn it into an exception
+# there, but an exception raised inside __del__ is unraisable: Python routes it
+# to sys.unraisablehook and the test still passes. Promoting pytest's
+# PytestUnraisableExceptionWarning is what converts it into a failure.
+# Verified by reintroducing the defect: error::RuntimeWarning alone -> 38
+# passed; adding PytestUnraisableExceptionWarning -> 1 failed.
+#
+# Caveat: the failure is attributed to whichever test happened to be running
+# when the GC ran, not the test that leaked the coroutine. It detects the
+# class; it does not localise it.
+filterwarnings = [
+    "error::RuntimeWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
 markers = [
     "unit: unit-level tests",
     "integration: integration-level tests",
+    "e2e: end-to-end tests",
+    "regression: regression tests",
+    "slow: slow-running tests",
+    "static: static/AST-based analysis tests",
 ]
 
 [tool.ruff]

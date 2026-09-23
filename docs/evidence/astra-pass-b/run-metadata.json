@@ -1,0 +1,66 @@
+{
+  "model": {
+    "system_identity": "GPT-6 / Codex",
+    "requested_selector": "GPT-6 Astra",
+    "selector_independently_verified": false,
+    "requested_reasoning_effort": "high",
+    "actual_reasoning_effort": "not exposed by runtime metadata; no claim of verified selector/effort"
+  },
+  "prompt_version": "B/1",
+  "repo_commit": "cea07992539c09724a4f05be3761f24b8f4e4d5f",
+  "branch": "tools/proof-harness",
+  "aws_account": "788159322332",
+  "region": "us-east-1",
+  "deployment_environment": "devx",
+  "api_stage": "prod",
+  "principal": "arn:aws:iam::788159322332:user/presgen_user",
+  "credentials_read_only": false,
+  "credential_note": "IAM account authorization details show AdminAccess group; all audit AWS calls were read-only. Operator checklist read-only credential requirement was not met.",
+  "first_e022_receipt": "2026-09-13T09:03:19.407358+00:00",
+  "assembled_at_utc": "2026-09-13T18:35:21.585093+00:00",
+  "python": "3.14.6",
+  "packages": {
+    "pytest": "9.0.2",
+    "moto": "5.1.21",
+    "boto3": "1.42.49",
+    "botocore": "1.42.49",
+    "pydantic": "2.12.5",
+    "PyYAML": "6.0.3"
+  },
+  "files_inventory": "docs/evidence/astra-pass-b/inspected-files.json",
+  "resources_inventory": "docs/evidence/astra-pass-b/inspected-resources.json",
+  "source_order": "E-022 first, then manifest/register/reproduction source and independent source notes, then P1 verdicts; no Pass A outputs. S1 initial fallback observation refined after full dominating-path inspection.",
+  "worktrees": "worktrees.json; exact refs and paths retained; mutations restored.",
+  "changes": "Only audit documentation/receipts added. Existing dirty source, frontend, infra and planning files preserved. No deploy/commit/merge.",
+  "governing_instructions": {
+    "enumerated": [
+      "AGENTS.md",
+      "CLAUDE.md",
+      ".clauderules (incorporated)"
+    ],
+    "applied": [
+      "Read-only audit and output contract",
+      "Preserve user changes",
+      "Mock-only tests",
+      "Verify recently changed infrastructure with verify_aws_state.py --mode deployed --env devx",
+      "Handler/logic/DAL and Result conventions used to assess mechanisms"
+    ],
+    "not_applied": [
+      "No production implementation, so do not run repository-wide mutating Ruff cleanup or change PROGRESS.md/plan.md. Fault-injection source changes were isolated and restored.",
+      "No infrastructure edits, so no naming validator/deployment checks needed beyond initial deployed verification.",
+      "No frontend edits, so frontend test mandate does not apply.",
+      "Model selection prose cannot verify or alter the runtime selector.",
+      "No delegation; no available skill is needed for this source/AWS audit."
+    ],
+    "test_command": "CLAUDE.md:40 explicitly selects tests/unit/; it excludes executing tests/integration/ although unit tests may import its registry.",
+    "citation_paths": "Manifest intentionally includes unverified citations. A wrong cited path is audited as evidence, not implemented around."
+  },
+  "initial_deployed_verification": {
+    "command": "AWS_DEFAULT_REGION=us-east-1 uv run python scripts/verify_aws_state.py --mode deployed --env devx",
+    "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp/src/backend",
+    "exit_code": 0,
+    "scope": "CV parser Lambda, users and idempotency tables, CV bucket prefix. Transcript observed in session; standalone log not retained."
+  },
+  "completed_at_utc": "2026-09-13T18:38:29.652504+00:00",
+  "final_artifact_validation": "docs/evidence/astra-pass-b/artifact-validation.json"
+}

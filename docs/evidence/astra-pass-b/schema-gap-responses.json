@@ -1,0 +1,20 @@
+{
+  "command": [
+    "aws",
+    "--region",
+    "us-east-1",
+    "--output",
+    "json",
+    "dynamodb",
+    "describe-table",
+    "--table-name",
+    "careervp-gap-responses-table-devx",
+    "--query",
+    "Table.{TableArn:TableArn,KeySchema:KeySchema,ItemCount:ItemCount}"
+  ],
+  "cwd": "/Users/yitzchak.meirovich/Documents/code5/careervp",
+  "timestamp": "2026-09-13T09:03:25.045649+00:00",
+  "exit_code": 0,
+  "stdout": "{\n    \"TableArn\": \"arn:aws:dynamodb:us-east-1:788159322332:table/careervp-gap-responses-table-devx\",\n    \"KeySchema\": [\n        {\n            \"AttributeName\": \"userId\",\n            \"KeyType\": \"HASH\"\n        },\n        {\n            \"AttributeName\": \"questionId\",\n            \"KeyType\": \"RANGE\"\n        }\n    ],\n    \"ItemCount\": 4\n}\n",
+  "stderr": ""
+}

@@ -99,11 +99,11 @@ def detect_language(text: str) -> Literal['en', 'he']:
 
 
 def extract_text_from_pdf(pdf_content: bytes) -> str:
-    """Extract text from PDF using PyPDF2."""
+    """Extract text from PDF using pypdf."""
     try:
         from io import BytesIO
 
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
 
         reader = PdfReader(BytesIO(pdf_content))
         text_parts = []
@@ -178,7 +178,7 @@ def parse_cv(  # noqa: C901 - consolidates extraction, cleaning, LLM parsing, an
     Parse a CV and extract structured data.
 
     Per docs/specs/01-cv-parser.md:
-    1. Extract: Use PyPDF2 or python-docx to pull raw text
+    1. Extract: Use pypdf or python-docx to pull raw text
     2. Clean: Strip excessive whitespace and non-standard characters
     3. Analyze: Send text to Haiku 4.5 with extraction schema
     4. Validate: Verify extraction against Pydantic UserCV model

@@ -36,6 +36,12 @@ permissions:
   id-token: write  # Required for OIDC
   pull-requests: write
 
+# P-28 Sub-clause B: one deploy slot, never cancelled mid-flight — a second push
+# must queue, not abort a CloudFormation update already in progress.
+concurrency:
+  group: deploy-vpr-async
+  cancel-in-progress: false
+
 env:
   PYTHON_VERSION: '3.13'
   NODE_VERSION: '20'
@@ -143,15 +149,24 @@ jobs:
           path: infra/cdk.out/
           retention-days: 7
 
-  cdk-deploy:
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 1: automation, CreateChangeSet ONLY (no execute).
+  # Was `npx cdk deploy --all --require-approval never` — a full auto-execute
+  # deploy with no human gate, targeting stacks by `--all` (resolved here to
+  # the two real stacks for ENVIRONMENT=dev, confirmed via `cdk list`:
+  # CareerVpCrudDev and CareerVpFrontend-Dev — "CareerVpVprAsyncDev", referenced
+  # by the changeset-cleanup/stability-wait steps below, is not a real stack in
+  # the current app and never was matched by anything `cdk list` returns; those
+  # steps have been no-ops for a while).
+  # ===========================================================================
+  create-change-set-vpr-async:
     needs: cdk-synth
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: dev
     outputs:
-      api_url: ${{ steps.stack-outputs.outputs.api_url }}
-      queue_url: ${{ steps.stack-outputs.outputs.queue_url }}
-      table_name: ${{ steps.stack-outputs.outputs.table_name }}
+      changeset_name: ${{ steps.create.outputs.changeset_name }}
+    env:
+      CHANGESET_NAME: cs-vpr-async-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -224,108 +239,112 @@ jobs:
           ensure_string_parameter "/careervp/dev/jwt-private-key" "$JWT_PRIVATE_KEY"
           ensure_string_parameter "/careervp/dev/jwt-public-key" "$JWT_PUBLIC_KEY"
 
-      - name: Clean up stuck changesets
+      - name: CFN State Guard (both real stacks)
         run: |
-          STACK_NAME="CareerVpVprAsyncDev"
-          echo "Checking for stuck changesets..."
-          CHANGESETS=$(aws cloudformation list-change-sets \
-            --stack-name "$STACK_NAME" \
-            --query "Summaries[?Status==\`CREATE_IN_PROGRESS\` || Status==\`FAILED\`].ChangeSetName" \
-            --output text 2>/dev/null || echo "")
+          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "CareerVpCrudDev" "${{ env.AWS_REGION }}"
+          "$GITHUB_WORKSPACE/.github/scripts/cfn-guard.sh" "CareerVpFrontend-Dev" "${{ env.AWS_REGION }}"
 
-          if [ -n "$CHANGESETS" ]; then
-            echo "Found stuck changesets, cleaning up..."
-            echo "$CHANGESETS" | tr '\t' '\n' | while read changeset; do
-              if [ -n "$changeset" ]; then
-                echo "  Deleting: $changeset"
-                aws cloudformation delete-change-set \
-                  --stack-name "$STACK_NAME" \
-                  --change-set-name "$changeset" 2>/dev/null || true
-              fi
-            done
-          else
-            echo "No stuck changesets found."
-          fi
-
-      - name: Wait for stack stability
-        run: |
-          STACK_NAME="CareerVpVprAsyncDev"
-          STATUS=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].StackStatus" \
-            --output text 2>/dev/null || echo "NOT_FOUND")
-
-          case "$STATUS" in
-            *CREATE_IN_PROGRESS*|*UPDATE_IN_PROGRESS*)
-              echo "Stack is $STATUS, waiting for completion..."
-              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
-              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
-              ;;
-            *FAILED*|*ROLLBACK*)
-              echo "Stack is in failed state ($STATUS), deleting for clean deploy..."
-              aws cloudformation delete-stack --stack-name "$STACK_NAME"
-              echo "Waiting for stack deletion..."
-              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
-              ;;
-            *)
-              echo "Stack status: $STATUS"
-              ;;
-          esac
-
-      - name: Deploy VPR Async Stack
+      - name: Create change sets (NO execute)
+        id: create
         working-directory: infra
         run: |
           set -o pipefail
-          npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json 2>&1 | tee /tmp/vpr-async-deploy.log || {
-            if grep -Eq "(_IN_PROGRESS state and can not be updated|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS|is in .*_IN_PROGRESS state)" /tmp/vpr-async-deploy.log; then
-              echo "::warning::Stack update lock detected. Waiting for stack stability and retrying deploy..."
-              STACK_NAME="CareerVpCrudDev"
-              aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" 2>/dev/null || \
-              aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" 2>/dev/null || true
-              npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
-            else
-              exit 1
-            fi
-          }
+          npx cdk deploy CareerVpCrudDev CareerVpFrontend-Dev \
+            --require-approval never --method=change-set --no-execute \
+            --change-set-name "${{ env.CHANGESET_NAME }}"
+          echo "changeset_name=${{ env.CHANGESET_NAME }}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Replacement reports (auto-fail on protected replacement)
+        run: |
+          for stack in CareerVpCrudDev CareerVpFrontend-Dev; do
+            echo "=== DescribeChangeSet Replacement report: $stack (P-28 approval artifact) ==="
+            aws cloudformation describe-change-set \
+              --stack-name "$stack" \
+              --change-set-name "${{ env.CHANGESET_NAME }}" \
+              --region "${{ env.AWS_REGION }}" \
+              --output json > "/tmp/changeset-$stack.json"
+            # Exits 1 (fails the job) if any RestApi/Table/Bucket/UserPool has Replacement:True,
+            # so the human-gated execute-change-set job never runs.
+            python3 scripts/ci/changeset_replacement_report.py --changeset "/tmp/changeset-$stack.json" --summary
+          done
+
+  # ===========================================================================
+  # P-28 Sub-clause C — Job 2: HUMAN-GATED execute.
+  # Reuses the same `deploy-dev` GitHub environment as .github/workflows/deploy.yml
+  # (both target CareerVpCrudDev; one reviewer/gate configuration covers both).
+  # `environment: deploy-dev` must have a REQUIRED REVIEWER in GitHub settings.
+  # ===========================================================================
+  execute-change-set-vpr-async:
+    needs: create-change-set-vpr-async
+    runs-on: ubuntu-latest
+    environment: deploy-dev
+    outputs:
+      api_url: ${{ steps.stack-outputs.outputs.api_url }}
+      queue_url: ${{ steps.stack-outputs.outputs.queue_url }}
+      table_name: ${{ steps.stack-outputs.outputs.table_name }}
+    env:
+      CHANGESET_NAME: ${{ needs.create-change-set-vpr-async.outputs.changeset_name }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_EXECUTE_ROLE || secrets.AWS_ROLE }}
+          role-session-name: execute-vpr-async-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Execute approved change sets
+        run: |
+          for stack in CareerVpCrudDev CareerVpFrontend-Dev; do
+            echo "=== Executing change set on $stack ==="
+            aws cloudformation execute-change-set \
+              --stack-name "$stack" \
+              --change-set-name "${{ env.CHANGESET_NAME }}" \
+              --region "${{ env.AWS_REGION }}"
+          done
+
+      - name: Wait for Stack Stability
+        run: |
+          for stack in CareerVpCrudDev CareerVpFrontend-Dev; do
+            echo "Waiting for $stack to stabilize..."
+            aws cloudformation wait stack-update-complete --stack-name "$stack" --region "${{ env.AWS_REGION }}" 2>/dev/null || \
+            aws cloudformation wait stack-create-complete --stack-name "$stack" --region "${{ env.AWS_REGION }}" 2>/dev/null || true
+          done
 
       - name: Extract stack outputs
         id: stack-outputs
-        working-directory: infra
         run: |
-          if [ -f cdk-outputs.json ]; then
-            # Get the first stack name from outputs
-            STACK_NAME=$(jq -r 'keys[0]' cdk-outputs.json)
-            echo "Detected stack: $STACK_NAME"
+          OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name CareerVpCrudDev \
+            --region "${{ env.AWS_REGION }}" \
+            --query "Stacks[0].Outputs" \
+            --output json 2>/dev/null || echo "[]")
 
-            # Try to extract VPR-related outputs, fallback to general outputs
-            API_URL=$(jq -r ".[\"$STACK_NAME\"].VPRApiUrl // .[\"$STACK_NAME\"].ApiUrl // .[\"$STACK_NAME\"].ApiGatewayUrl // \"\" " cdk-outputs.json)
-            QUEUE_URL=$(jq -r ".[\"$STACK_NAME\"].VPRJobsQueueUrl // .[\"$STACK_NAME\"].JobsQueueUrl // \"\" " cdk-outputs.json)
-            TABLE_NAME=$(jq -r ".[\"$STACK_NAME\"].JobsTableName // .[\"$STACK_NAME\"].TableName // \"\" " cdk-outputs.json)
+          API_URL=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="VPRApiUrl" or .OutputKey=="ApiUrl" or .OutputKey=="Apigateway") | .OutputValue' | head -n1)
+          QUEUE_URL=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="VPRJobsQueueUrl" or .OutputKey=="JobsQueueUrl") | .OutputValue' | head -n1)
+          TABLE_NAME=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="JobsTableOutput" or .OutputKey=="TableName") | .OutputValue' | head -n1)
 
-            echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-            echo "queue_url=$QUEUE_URL" >> $GITHUB_OUTPUT
-            echo "table_name=$TABLE_NAME" >> $GITHUB_OUTPUT
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "queue_url=$QUEUE_URL" >> $GITHUB_OUTPUT
+          echo "table_name=$TABLE_NAME" >> $GITHUB_OUTPUT
 
-            echo "Stack Outputs:"
-            echo "  API URL: $API_URL"
-            echo "  Queue URL: $QUEUE_URL"
-            echo "  Table Name: $TABLE_NAME"
-          else
-            echo "Warning: cdk-outputs.json not found"
-            echo "api_url=" >> $GITHUB_OUTPUT
-            echo "queue_url=" >> $GITHUB_OUTPUT
-            echo "table_name=" >> $GITHUB_OUTPUT
-          fi
+          echo "Stack Outputs:"
+          echo "  API URL: $API_URL"
+          echo "  Queue URL: $QUEUE_URL"
+          echo "  Table Name: $TABLE_NAME"
+
+          cat > cdk-outputs.json <<EOF
+          {"CareerVpCrudDev": $OUTPUTS}
+          EOF
 
       - name: Upload stack outputs
         uses: actions/upload-artifact@v4
         with:
           name: stack-outputs
-          path: infra/cdk-outputs.json
+          path: cdk-outputs.json
           retention-days: 7
 
   e2e-test:
-    needs: cdk-deploy
+    needs: execute-change-set-vpr-async
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -364,7 +383,7 @@ jobs:
       - name: Run E2E tests
         working-directory: src/backend
         env:
-          API_BASE_URL: ${{ needs.cdk-deploy.outputs.api_url }}
+          API_BASE_URL: ${{ needs.execute-change-set-vpr-async.outputs.api_url }}
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           # Check if stack outputs exist
@@ -430,7 +449,7 @@ jobs:
 
             **Push Event:** \`${{ github.event_name }}\`
             **Workflow:** \`${{ github.workflow }}\`
-            **Stack:** \`CareerVpVprAsyncDev\`
+            **Stacks:** \`CareerVpCrudDev\`, \`CareerVpFrontend-Dev\`
 
             Check the workflow logs for detailed CDK diff output.`;
 

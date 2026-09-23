@@ -1,0 +1,1757 @@
+{
+  "changes": [
+    {
+      "LogicalId": "AiAssistNestedStackNestedStackAiAssistNestedStackNestedStackResourceB83ADE0B",
+      "Type": "AWS::CloudFormation::Stack",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
+      "Type": "AWS::Lambda::Function",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+      "Type": "AWS::IAM::Role",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36",
+      "Type": "AWS::IAM::Policy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CDKMetadata",
+      "Type": "AWS::CDK::Metadata",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCognitoUserPoolD64DCEC6",
+      "Type": "AWS::Cognito::UserPool",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCognitoUserPoolUserPoolClient62BD8AFA",
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCognitoUserPoolUserPoolDomainE415E4B6",
+      "Type": "AWS::Cognito::UserPoolDomain",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudApiGatewayAccessLogGroup6F85F8CC",
+      "Type": "AWS::Logs::LogGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudArtifactCleanupScheduleAllowEventRuleCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesArtifactCleanupLambda955F2A64919FCCE9",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudArtifactCleanupScheduleE3E0FE19",
+      "Type": "AWS::Events::Rule",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudBillingLambdaErrorAlarmA92EB360",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudBillingReconcileScheduleRule067D9E01",
+      "Type": "AWS::Events::Rule",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudBillingReconcileScheduleRuleAllowEventRuleCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesBillingReconcileLambda35593F885944F1AA",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudHighFacadeCareerVpCrudDevxCrudHighFacadeDashboardsDashboardA57CAC53",
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudLowFacadeCareerVpCrudDevxCrudLowFacadeDashboardsDashboardACC1FB4C",
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudalarmsBC878480",
+      "Type": "AWS::SNS::Topic",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudalarmsPolicy086E298D",
+      "Type": "AWS::SNS::TopicPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbApplicationsTable2E36AC63",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsBucketCB1183FD",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsBucketPolicyD8C01524",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbArtifactsTableB176B976",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbBackupsBucketE66662B8",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbBackupsBucketPolicy3814CC3F",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbCompanyResearchCacheTable5BB13876",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbCvsTable15442EBB",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbGapResponsesTable1AA36ACB",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbKnowledgeTable26B0B086",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbLogsBucketF2FDDF17",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbLogsBucketPolicy2F793EB9",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbStaticBucketF4F6F368",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbStaticBucketPolicyEF12A027",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvs5D089B0F",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsAllowBucketNotificationsToCareerVpCrudDevxCareerVpCrudDevxCrudCrudFeaturesCvUploadWorkerLambda8F420637AACAD774",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsNotifications979FAF02",
+      "Type": "Custom::S3BucketNotifications",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbcvsPolicy0DE5AAA5",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbidempotency17C1C0A0",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbidentitymap4DC950DE",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbjobsA440A56E",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbusers2F7CC4DB",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbvprresults7C5B85E8",
+      "Type": "AWS::S3::Bucket",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCruddbCareerVpCrudDevxCruddbvprresultsPolicy2A74091F",
+      "Type": "AWS::S3::BucketPolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafApiGatewayWafAssociationCFA28404",
+      "Type": "AWS::WAFv2::WebACLAssociation",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafProductApiGatewayWebAcl830EA135",
+      "Type": "AWS::WAFv2::WebACL",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLogGroup739167B3",
+      "Type": "AWS::Logs::LogGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLogGroupPolicyResourcePolicy05453F23",
+      "Type": "AWS::Logs::ResourcePolicy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCareerVpCrudDevxCrudwafWafLoggingConfiguration1E2273FA",
+      "Type": "AWS::WAFv2::LoggingConfiguration",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCloudWatchLogsKeyF9BBB657",
+      "Type": "AWS::KMS::Key",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCognitoAuth43E2B3EA",
+      "Type": "AWS::ApiGateway::Authorizer",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCoverLetterSQSKey25BB207D",
+      "Type": "AWS::KMS::Key",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudCrudFeaturesNestedStackCrudFeaturesNestedStackResource4518FF9C",
+      "Type": "AWS::CloudFormation::Stack",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudGatewayResponseAccessDenied1007012F",
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudGatewayResponseDefault4xx1645608A",
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudGatewayResponseDefault5xxB2A8AE63",
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudGatewayResponseUnauthorized15C1552C",
+      "Type": "AWS::ApiGateway::GatewayResponse",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudInterviewPrepSQSKey5FEFA926",
+      "Type": "AWS::KMS::Key",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudMonitoringKeyB1C69D14",
+      "Type": "AWS::KMS::Key",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23ApplicationApiCanaryDeploymentGroup1E15CD53",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23ApplicationApiCanaryErrorAlarmA86497A4",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23AuthApiCanaryDeploymentGroupC734483C",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23AuthApiCanaryErrorAlarm7C57F892",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23AuthResolverFailureAlarm5EB6D1B6",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23AuthResolverStepUpRequiredAlarm70BDECD4",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23BillingCanaryDeploymentGroupA76B2D7F",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23BillingCanaryErrorAlarmFA54A732",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CanaryApplication5851BFD7",
+      "Type": "AWS::CodeDeploy::Application",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CodeDeployRole77039DFD",
+      "Type": "AWS::IAM::Role",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CompanyResearchCanaryDeploymentGroupCDD8B178",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CompanyResearchCanaryErrorAlarm862818E3",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CoverLetterApiCanaryDeploymentGroup654F7469",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CoverLetterApiCanaryErrorAlarm9AE431C7",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CoverLetterStatusCanaryDeploymentGroup1771A078",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CoverLetterStatusCanaryErrorAlarmFD534E13",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CvParserCanaryDeploymentGroupDCFE1615",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CvParserCanaryErrorAlarm449D5A58",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CvtailorCanaryDeploymentGroupCE17F613",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23CvtailorCanaryErrorAlarm29A8AE8C",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23ExportCanaryDeploymentGroupA6F37D99",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23ExportCanaryErrorAlarm23F5BE6A",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23GapApiCanaryDeploymentGroup4E891EEA",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23GapApiCanaryErrorAlarmF497EFEF",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23HealthApiCanaryDeploymentGroupD431A3F4",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23HealthApiCanaryErrorAlarm880C6777",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23InterviewPrepApiCanaryDeploymentGroup786BA1DC",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23InterviewPrepApiCanaryErrorAlarmB410C625",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23InterviewPrepStatusCanaryDeploymentGroupDB01DE61",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23InterviewPrepStatusCanaryErrorAlarmDAA13243",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23JobApiCanaryDeploymentGroup3F0555FC",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23JobApiCanaryErrorAlarm887CE97C",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23UserApiCanaryDeploymentGroup9E2B51D3",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23UserApiCanaryErrorAlarmD0C25E31",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23VprStatusCanaryDeploymentGroup6C0D7F53",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23VprStatusCanaryErrorAlarm99310C1A",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23VprSubmitCanaryDeploymentGroup9B80D470",
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudP23VprSubmitCanaryErrorAlarm8EEBDCBF",
+      "Type": "AWS::CloudWatch::Alarm",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudSQSKey48DBFBAC",
+      "Type": "AWS::KMS::Key",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudllmcachetable5F55E2E8",
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapi2258A47A",
+      "Type": "AWS::ApiGateway::RestApi",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiAccount544EE2BB",
+      "Type": "AWS::ApiGateway::Account",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiCloudWatchRoleCFDB6E35",
+      "Type": "AWS::IAM::Role",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiDeploymentDB3BC6A847af7a0b31dfd72a1a8b18e233b66317",
+      "Type": "AWS::ApiGateway::Deployment",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiDeploymentStageprodB3891A8B",
+      "Type": "AWS::ApiGateway::Stage",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiOPTIONS570C1120",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiaiD87AECE7",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiaiOPTIONS1487A117",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiaiassistD9229D9D",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiaiassistOPTIONS415F78C7",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiaiassistPOST923B058F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiapplicationsAC892F40",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiapplicationsOPTIONS7080D4FD",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidAF880AC5",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidGET2DF7AE04",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiapplicationsapplicationidOPTIONSC28D74BF",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthANY98C9B6FB",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthB26859CC",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthOPTIONSAE3AE2EC",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthproxy091821C1",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthproxyANY4B1ABC10",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiauthproxyOPTIONS4FAE1AD5",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibilling7AC0C778",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingANY12808AC2",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingOPTIONS2323620A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingproxy640555DA",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingproxyANYC0EA8720",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingproxyOPTIONS53657948",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingwebhook4155AABB",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingwebhookOPTIONSDE1A74DB",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapibillingwebhookPOSTA91DE7A8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchDC911112",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchOPTIONS2D837446",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetch89A50383",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetchOPTIONS3D833073",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchfetchPOSTCBB9C4F6",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobId1E1D38BA",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdGET5612C970",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdOPTIONSEF72FEF8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelC42E4041",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelOPTIONS2838464A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicompanyresearchjobIdcancelPOST2F4F8A02",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverletter0E907ED2",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverletterOPTIONS7D9CA870",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterId2C118F4F",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdOPTIONS2DD27428",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdPATCH20275372",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancel9113E301",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancelOPTIONS5523AE0F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdcancelPOSTDE085327",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatus43D19DA0",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatusGET8426B164",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettercoverLetterIdstatusOPTIONS9D3B6404",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettergenerateCB22E846",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettergenerateOPTIONS7F658121",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettergeneratePOST6C16B56D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettersF4DBC682",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettersGET2AC426F3",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicoverlettersOPTIONS7E33147E",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringED576329",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringOPTIONS8FE502A0",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringId8950EFC9",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdDELETED487D2FD",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdOPTIONS9CABD895",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdPATCH8827E8CF",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancel0203EB50",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancelOPTIONSE50CB0C5",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdcancelPOSTEA534498",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatus953BB5F7",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatusGET4E3E7E50",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringcvTailoringIdstatusOPTIONS599159DB",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringgenerate700C3D29",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringgenerateOPTIONS25CF05DA",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringgeneratePOSTE0238E3E",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringsEA979B2C",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringsGETA4E80B5A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapicvtailoringsOPTIONSAE540562",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapierrors45831D36",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapierrorsOPTIONS811954ED",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapierrorsPOST5798860D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysis1EB763CD",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysisANYBE2E0689",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysisOPTIONSFE9D8F1F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxy5084EEBF",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxyANY2BD3A4C0",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapigapanalysisproxyOPTIONS32D77BCC",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapihealth66391471",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapihealthGETA6159D42",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapihealthOPTIONS93FBFDF9",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepAF7E742A",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepOPTIONS45C65AE5",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgenerateFB8501F1",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgenerateOPTIONSB62525FC",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepgeneratePOST3137200C",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepId96DF25B1",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdOPTIONS84879156",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdPATCHE3A8D11F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancel9D1B6D87",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancelOPTIONS2D4CA7D3",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdcancelPOSTD97AD40D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatus40AA9061",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatusGET06903362",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepinterviewPrepIdstatusOPTIONS23419EED",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsFAFECA13",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsGETB341E0F6",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiinterviewprepsOPTIONS8D46584E",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobs948D0D73",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsGETCBF44F6A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsOPTIONSCA2313A8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsPOSTBC96F2D8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdBED12502",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdGETACE88A70",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdOPTIONS365A7EBD",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifacts00AD85CB",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsOPTIONSBAC3586D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleType9023AC04",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeOPTIONS33467E49",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexport62718FD1",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexportGET08A9603A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdartifactsmoduleTypeexportOPTIONS6C5EA633",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestions6C3FB9DF",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsGET2D38FD47",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsOPTIONS9C75760D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapquestionsPOST145B9690",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponses786BC106",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponsesOPTIONSE2220F05",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapijobsjobIdgapresponsesPOSTB29BD6E9",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseC5AD57ED",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseGETCA1B29FF",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiknowledgebaseOPTIONS7BE908CC",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerC615519E",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerGET52FEF793",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswagger347A68A6",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswagger46A9978B",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerOPTIONS8F148BB0",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggercssDAD92766",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggercssGET811799E0",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggercssGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggercssBA733669",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggercssGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggercssC703BCF5",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggercssOPTIONS04820771",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerjs71AAE54E",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETApiPermissionCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggerjs2EE56166",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETApiPermissionTestCareerVpCrudDevxCareerVpCrudDevxCrudservicerestapi60A8298FGETswaggerjs977C1010",
+      "Type": "AWS::Lambda::Permission",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerjsGETFA112478",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiswaggerjsOPTIONS79356560",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersANYCF629F51",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersD1F5CFD7",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersOPTIONSBF35196B",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersme29106F87",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmeGET05BCBC0D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmeOPTIONSB5834951",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmePUT86BA5027",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmecv67A62162",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmecvGETD32BF865",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmecvOPTIONS843D48C8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmecvPOST895F117F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionB34B82D9",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionGET7EA1D52E",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmesubscriptionOPTIONS97556BCB",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmetrial092EA482",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmetrialOPTIONSD7C7CA4D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetAD06DFE0",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetOPTIONS8419D44A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmetrialresetPOST3C86D1D4",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmeusage76C3281C",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmeusageGET34E62F2A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersmeusageOPTIONSC2AE031B",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersproxyANY5770CA7D",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersproxyB53CAD3A",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapiusersproxyOPTIONS7D50F7D5",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprA65A7E42",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprOPTIONS6F4602D2",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprgenerate5DB86857",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprgenerateOPTIONS3D5A2C58",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprgeneratePOST26C15787",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprs4C47097A",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprsGET5E8746FF",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprsOPTIONS1E36859A",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprId59F581DD",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdOPTIONS7C421E2F",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancel3DAA8908",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancelOPTIONS71B3D235",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdcancelPOST4984DC36",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusCAFEBC50",
+      "Type": "AWS::ApiGateway::Resource",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusGET0C5E52F8",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxCrudservicerestapivprvprIdstatusOPTIONSC1607401",
+      "Type": "AWS::ApiGateway::Method",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfCareerVPC9B882B9",
+      "Type": "AWS::AppConfig::Application",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfenvE38DFE55",
+      "Type": "AWS::AppConfig::Environment",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversion1174BB61",
+      "Type": "AWS::AppConfig::HostedConfigurationVersion",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversionConfigurationProfileC805EDBE",
+      "Type": "AWS::AppConfig::ConfigurationProfile",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfversionDeploymentEB485019C1B60",
+      "Type": "AWS::AppConfig::Deployment",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CareerVpCrudDevxDynamicConfCareerVpCrudDevxDynamicConfzeroADA12D36",
+      "Type": "AWS::AppConfig::DeploymentStrategy",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "CompanyResearchNestedStackNestedStackCompanyResearchNestedStackNestedStackResource6DABB58F",
+      "Type": "AWS::CloudFormation::Stack",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "ErrorReportNestedStackNestedStackErrorReportNestedStackNestedStackResourceAAFBDF4F",
+      "Type": "AWS::CloudFormation::Stack",
+      "Action": "Add",
+      "Replacement": "False"
+    },
+    {
+      "LogicalId": "MonitoringNestedStackNestedStackMonitoringNestedStackNestedStackResourceB5E63BB6",
+      "Type": "AWS::CloudFormation::Stack",
+      "Action": "Add",
+      "Replacement": "False"
+    }
+  ],
+  "auto_fail": false
+}

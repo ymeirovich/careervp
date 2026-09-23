@@ -1,17 +1,18 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { CognitoUserPool, CognitoUser, type CognitoUserSession } from 'amazon-cognito-identity-js';
 import * as auth from '../lib/auth';
+import { getPoolConfig } from '../lib/auth-config';
+import { setAuthContext } from '../api/client';
 
 interface AuthContextValue {
   user: CognitoUser | null;
   idToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   confirmSignUp: (email: string, code: string) => Promise<void>;
@@ -20,6 +21,8 @@ interface AuthContextValue {
   confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   refreshSession: () => Promise<string>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  beginTotpEnrollment: () => Promise<string>;
+  confirmTotpEnrollment: (code: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,13 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function getPool(): CognitoUserPool {
     if (!poolRef.current) {
-      poolRef.current = new CognitoUserPool({
-        UserPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? 'us-east-1_WiHMRqLpe',
-        ClientId:
-          process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID ??
-          process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ??
-          '7blipbarsisbctqh6hlsj46sqa',
-      });
+      poolRef.current = new CognitoUserPool(getPoolConfig());
     }
     return poolRef.current;
   }
@@ -76,23 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const signIn = useCallback((email: string, password: string): Promise<void> => {
-    return auth.signIn(email, password).then(({ token, user: cognitoUser }) => {
-      flushSync(() => {
-        setUser(cognitoUser);
-        setIdToken(token);
-      });
-      setTokenCookie(token);
-    }).catch((err) => {
-      flushSync(() => {
-        setUser(null);
-        setIdToken(null);
-      });
-      clearTokenCookie();
-      throw err;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const signIn = useCallback((email: string): Promise<void> => auth.beginPkceSignIn(email), []);
 
   const signOut = useCallback((): Promise<void> => {
     // Fire-and-forget backend logout — do not block UI on failure
@@ -102,11 +83,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { Authorization: `Bearer ${idToken}` },
       }).catch(() => undefined);
     }
-    auth.signOut();
+    const logoutUrl = auth.signOut();
     clearTokenCookie();
     setUser(null);
     setIdToken(null);
-    router.push('/login');
+    if (logoutUrl) {
+      window.location.assign(logoutUrl);
+    } else {
+      router.push('/login');
+    }
     return Promise.resolve();
   }, [idToken, router]);
 
@@ -148,6 +133,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [signOut]);
 
+  // Registers the real Cognito-backed refresh/sign-out with the axios interceptor
+  // (api/client.ts), which otherwise falls back to a stub that never refreshes and
+  // never signs out — the 401-refresh-once contract depends on this wiring.
+  useEffect(() => {
+    setAuthContext({ refreshSession, signOut });
+  }, [refreshSession, signOut]);
+
   const changePassword = useCallback(
     (oldPassword: string, newPassword: string): Promise<void> => {
       return new Promise((resolve, reject) => {
@@ -173,6 +165,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user],
   );
 
+  const beginTotpEnrollment = useCallback((): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const currentUser = user ?? getPool().getCurrentUser();
+      if (!currentUser) {
+        reject(new Error('No authenticated user'));
+        return;
+      }
+      currentUser.associateSoftwareToken({
+        associateSecretCode: resolve,
+        onFailure: reject,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const confirmTotpEnrollment = useCallback((code: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const currentUser = user ?? getPool().getCurrentUser();
+      if (!currentUser) {
+        reject(new Error('No authenticated user'));
+        return;
+      }
+      currentUser.verifySoftwareToken(code, 'CareerVP authenticator', {
+        onFailure: reject,
+        onSuccess: () => {
+          currentUser.setUserMfaPreference(
+            null,
+            { Enabled: true, PreferredMfa: true },
+            (preferenceError) => {
+              if (preferenceError) {
+                reject(preferenceError);
+                return;
+              }
+              resolve();
+            },
+          );
+        },
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -189,6 +223,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         confirmForgotPassword,
         refreshSession,
         changePassword,
+        beginTotpEnrollment,
+        confirmTotpEnrollment,
       }}
     >
       {children}

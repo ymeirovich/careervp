@@ -12,6 +12,22 @@ ArtifactType = Literal['gap_analysis', 'company_research', 'vpr', 'cv_tailored',
 ResolutionStatus = Literal['ready', 'dependency_generating', 'upstream_required']
 
 
+class ArtifactUnavailableError(Exception):
+    """An upstream artifact could not be read for infrastructure reasons.
+
+    This is deliberately NOT a resolution outcome. "I could not look" and "it is not
+    there" are different answers, and collapsing the first into the second is the
+    F-DEVX-1 defect: a key-schema mismatch surfaced as ``upstream_required``/409.
+    Handlers translate this into HTTP 503.
+    """
+
+    def __init__(self, artifact_type: str, code: str, message: str | None = None) -> None:
+        self.artifact_type = artifact_type
+        self.code = code
+        self.message = message or f'{artifact_type} artifact is temporarily unavailable'
+        super().__init__(self.message)
+
+
 class ArtifactDependencyRepos(Protocol):
     """Repository surface required by the pure resolver."""
 
@@ -56,6 +72,16 @@ DEPENDENCIES: dict[str, tuple[str, ...]] = {
 }
 
 GENERATION_ORDER: tuple[str, ...] = ('gap_analysis', 'company_research', 'vpr', 'cv_tailored', 'cover_letter', 'interview_prep')
+
+
+def vpr_access_denied_envelope() -> dict[str, str]:
+    """Shared public denial shape for downstream VPR ownership failures."""
+    return {
+        'error': 'VPR is not available for this application',
+        'classification': 'access_denied',
+        'error_code': 'forbidden',
+        'field': 'vpr_id',
+    }
 
 
 def resolve_dependencies(
@@ -165,10 +191,14 @@ def _is_stale(repos: ArtifactDependencyRepos, artifact_type: str, candidate: Any
 
 
 def _artifact_id(candidate: Any) -> str | None:
-    for field_name in ('artifact_id', 'artifactId', 'vpr_id', 'company_research_id', 'job_id', 'id'):
-        value = _field(candidate, field_name)
-        if value:
-            return str(value)
+    return resolve_artifact_id(candidate)
+
+
+def resolve_artifact_id(candidate: Any) -> str | None:
+    """Return the sole canonical opaque artifact_id; aliases are not ids."""
+    value = _field(candidate, 'artifact_id')
+    if value:
+        return str(value)
     return None
 
 

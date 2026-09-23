@@ -20,6 +20,7 @@ from botocore.exceptions import ClientError
 
 from careervp.dal.api_storage_adapter import ApiStorageAdapter
 from careervp.handlers.utils.observability import logger, tracer
+from careervp.logic.utils.env import resource_env
 from careervp.models.result import Result, ResultCode
 
 # GSI name for idempotency key lookup
@@ -56,8 +57,7 @@ class JobsRepository:
         if env_table:
             return env_table
         # Fallback to naming convention
-        env = os.environ.get('ENVIRONMENT', 'dev')
-        return f'careervp-vpr-jobs-table-{env}'
+        return f'careervp-vpr-jobs-table-{resource_env()}'
 
     @tracer.capture_method(capture_response=False)
     def create_job(self, job_data: dict[str, Any]) -> Result[dict[str, Any]]:
