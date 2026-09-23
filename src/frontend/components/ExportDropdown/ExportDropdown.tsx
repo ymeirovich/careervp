@@ -93,7 +93,6 @@ export function ExportDropdown({ jobId, moduleType, artifactId, companyName, job
               key={format}
               onClick={() => void handleExport(format)}
               className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-surface-subtle first:rounded-t-md last:rounded-b-md"
-              title="Export coming soon"
             >
               {label}
             </button>
