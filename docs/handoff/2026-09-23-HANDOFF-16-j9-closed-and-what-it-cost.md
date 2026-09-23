@@ -1,4 +1,4 @@
-# HANDOFF 16 — J9 closed, and the three defects it was hiding
+# HANDOFF 16 — J9 closed at 9/9, and the three defects it was hiding
 
 **Model: Opus 5, high effort.** This continues HANDOFF-14, which owned J9, the
 gap-response contract, and PRs #230/#232. HANDOFF-15 was written in parallel by
@@ -10,12 +10,24 @@ Fresh session at the repo root on `tools/proof-harness`.
 
 ## The one-sentence version
 
-**Five PRs landed and five deploys were validated; the gap-response contract is
-fixed and proven in the live worker log; J9 now reaches the export Lambda for
-the first time and exposed a real product defect — the artifacts bucket had no
-CORS rule, so browser export has been broken for every user — and the `-dirty`
-stamp turned out to be committed setuptools metadata, not anything to do with
-requirements files.**
+**The journey is 9 of 9 with a reproducible proof — the first since handoff 08 —
+after five PRs, five validated deploys, and three real defects that only became
+visible once the step before them started passing: the gap-response contract
+(interview prep was generated without the candidate's answers), a missing CORS
+rule on the artifacts bucket (browser export was broken for every user), and the
+`-dirty` stamp (committed setuptools metadata, nothing to do with requirements
+files).**
+
+```
+journey_reached: 9
+deployed_sha   : 469db656e2296052fcc75b8f586b3d384c971595   <- no -dirty
+J1..J9         : pass
+preflight      : 9 pass . 0 unknown . 0 fail
+```
+
+J9 is a correct artifact, not just a green tick: a 38107-byte .docx written to
+S3 at 2026-09-23T10:00:40Z under a new job id, by a Lambda that had never been
+invoked once before that day.
 
 ---
 
