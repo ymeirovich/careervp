@@ -32,10 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pinned to the version the DEPLOY path uses (UV_VERSION in
+      # db-redesign-checks.yml), NOT "latest" like the jobs around it.
+      # uv's requirements-txt format is version-dependent, so a guard running a
+      # different uv than the deploy proves nothing about the deploy: the first
+      # version of this job ran "latest", passed on PR #233, and the deploy was
+      # still stamped -dirty. It has to run what the deploy runs.
+      #
+      # `make deps` now strips comments, so the output is version-independent
+      # anyway -- this pin is the belt to that braces, and it is what makes a
+      # green tick here actually mean "the deploy will not be dirty".
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          version: "0.5.21"
           enable-cache: true
       # `make build` runs `make deps` as its own step before the deploy step.
       # If deps rewrites a committed requirements file, the tree is dirty by the
