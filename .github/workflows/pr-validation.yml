@@ -27,6 +27,61 @@ jobs:
         working-directory: src/backend
         run: uv run ruff check .
 
+  # DIAGNOSTIC — remove once the -dirty GIT_STAMP cause is identified.
+  #
+  # DeployedGitSha has carried `-dirty` on every deploy since handoff 08. Two
+  # fixes were attempted from reading the Makefile and both failed live
+  # (67276657, d6b1d1b). Locally, a full `make build` under the deploy's exact
+  # uv 0.5.21 leaves the tree clean, and the Requirements Drift job proves
+  # checkout + `make deps` are clean in CI — so the cause is in a step this
+  # repo has never observed.
+  #
+  # This job replicates the deploy job's step sequence EXACTLY
+  # (db-redesign-checks.yml :: deploy-backend-dev) and reports the tree state
+  # after each one, instead of guessing a third time. It runs on pull_request
+  # and deploys nothing.
+  dirty-stamp-diagnostic:
+    name: Dirty Stamp Diagnostic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: after checkout
+        run: git status --porcelain | tee /tmp/s0; echo "lines=$(wc -l < /tmp/s0)"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.5.21'
+          enable-cache: true
+          cache-dependency-glob: '**/uv.lock'
+      - name: after setup-uv
+        run: git status --porcelain | tee /tmp/s1; echo "lines=$(wc -l < /tmp/s1)"
+      - name: Install Python
+        run: uv python install 3.13
+      - name: after uv python install
+        run: git status --porcelain | tee /tmp/s2; echo "lines=$(wc -l < /tmp/s2)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: after setup-node
+        run: git status --porcelain | tee /tmp/s3; echo "lines=$(wc -l < /tmp/s3)"
+      - name: Install backend dependencies
+        working-directory: src/backend
+        run: uv sync --group dev
+      - name: after uv sync --group dev
+        run: git status --porcelain | tee /tmp/s4; echo "lines=$(wc -l < /tmp/s4)"
+      - name: Build Lambda artifacts
+        working-directory: src/backend
+        run: make build
+      - name: after make build (THIS IS WHAT GIT_STAMP SEES)
+        run: |
+          git status --porcelain | tee /tmp/s5
+          echo "lines=$(wc -l < /tmp/s5)"
+          echo "--- what GIT_STAMP would produce ---"
+          cd src/backend
+          echo "GIT_STAMP=$(git rev-parse HEAD)$(git status --porcelain | grep -q . && echo -dirty)"
+          echo "--- diff of any tracked file that moved ---"
+          git diff --stat || true
+
   requirements-drift:
     name: Requirements Drift
     runs-on: ubuntu-latest

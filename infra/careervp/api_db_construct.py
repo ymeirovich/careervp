@@ -227,15 +227,32 @@ class ApiDbConstruct(Construct):
     def _s3_frontend_origins(self) -> list[str]:
         """P-08: explicit per-env frontend origins for CV/generated bucket CORS.
 
-        Dev is localhost-only (no deployed frontend depends on dev bucket CORS
-        from a browser origin other than local dev). Stage/prod map to their
-        deployed frontend domains. No wildcard origin is ever returned.
+        Stage/prod map to their deployed frontend domains. No wildcard origin
+        is ever returned.
+
+        devx is NOT localhost-only. The original comment here assumed "no
+        deployed frontend depends on dev bucket CORS from a browser origin
+        other than local dev"; that is false for devx, which serves the
+        Amplify branch db-redesign. Export hands the browser a presigned S3
+        URL and ExportDropdown.handleExport fetches it, so a browser origin
+        missing from this list turns every export into "Download failed.
+        Please try again." -- measured live in the 2026-09-23 journey: the
+        export Lambda ran with 0 errors and the download still never started.
+
+        devx reuses the same allowed_origins context the API already trusts
+        (infra/cdk.json, passed through by `make deploy-devx`), so the two
+        cannot drift apart.
         """
         env = self.naming.environment
         if env in ("stage", "staging"):
             return ["https://stage.careervp.com"]
         if env in ("prod", "production"):
             return ["https://app.careervp.com"]
+        if env == "devx":
+            configured = str(self.node.try_get_context("allowed_origins") or "")
+            origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+            if origins:
+                return origins
         return ["http://localhost:3000"]
 
     def _build_cv_bucket(self, id_prefix: str) -> s3.Bucket:
@@ -846,5 +863,24 @@ class ApiDbConstruct(Construct):
                     ],
                     enabled=True,
                 ),
+            ],
+            # Export presigns an object in THIS bucket and the browser fetches
+            # it cross-origin (ExportDropdown.handleExport). Without a CORS
+            # rule that fetch is blocked and the download never starts --
+            # exactly what J9 measured on 2026-09-23: the export Lambda was
+            # invoked, returned 200 with 0 errors, and the UI still showed
+            # "Download failed. Please try again." `aws s3api get-bucket-cors`
+            # on the live bucket returned NoSuchCORSConfiguration.
+            #
+            # The sibling CV bucket has carried this rule all along; the
+            # artifacts bucket never got one, so export has been broken in the
+            # browser for every real user, not just for the test.
+            cors=[
+                s3.CorsRule(
+                    allowed_methods=[s3.HttpMethods.GET],
+                    allowed_origins=self._s3_frontend_origins(),
+                    allowed_headers=["*"],
+                    max_age=3000,
+                )
             ],
         )
