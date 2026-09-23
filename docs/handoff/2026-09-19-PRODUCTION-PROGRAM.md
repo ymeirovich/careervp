@@ -49,10 +49,21 @@ W2  Table architecture           ──┐
 W3  Dead code / dead API sweep  ──┴─→ static, can run today, no deploy needed
 W4  Test integrity + per-feature e2e + feature ledger  ← gates "production ready"
 W5  P-28 completion (9 workflows)                      ← gates "safe to deploy"
+W6  Environment rebuildability
+W7  Lambda runtime configuration ──┐
+W8  Performance and load           │  added 2026-09-23 — the running system,
+W9  API contract correctness       │  not the deploy path. None was covered
+W10 Security (authz, keys, deps) ──┘  by W0-W6.
 ```
 
 W2/W3/W4 are independent of W0/W1 and of each other. W5 is independent of
 everything and is the only one with an active exposure (auto-deploy on push).
+
+**W7-W10 were added 2026-09-23** after an AWS audit found that W0-W6 cover the
+deploy path, the table map and the test estate, but never the configuration,
+performance, contract integrity or authorization model of the running system.
+W7's log-retention item blocks the others: at 1-day retention, any diagnosis
+performed under W8-W10 is unreproducible the next day.
 
 ---
 
@@ -558,6 +569,177 @@ before this branch created them with required reviewers.
 
 ---
 
+## W7 — Lambda runtime configuration
+
+**Added 2026-09-23.** Everything in this section is MEASURED against the 32
+deployed `devx` Lambdas on that date. No prior workstream covers Lambda
+configuration; it has never been reviewed.
+
+**Healthy:** runtime is `python3.13` uniformly. X-Ray tracing is `Active` on
+every function sampled. Async failure handling exists and is real — SQS DLQs
+plus three dedicated handler Lambdas (`vpr-dlq-handler`,
+`artifact-failure-handler`, `cr-failure-handler`).
+
+**Open, in severity order:**
+
+- **31 of 32 Lambdas retain logs for 1 day.** Every diagnosis this chain has
+  produced — J3, J4, J5, J8 — was made by reading CloudWatch after a failure.
+  That evidence evaporates in 24 hours. This is not a cosmetic setting; it is
+  the single point of failure in the project's own debugging method.
+- **`export-lambda` has a 29-second timeout behind API Gateway's hard 30-second
+  integration limit** — one second of margin for a build-and-upload round trip.
+  J9 has never successfully measured this path, so whether it fits has never
+  been observed. `ai-assist` sits at 25s on the same ceiling.
+- **Reserved concurrency is set on exactly 6 async workers, at 5 each.** The
+  other 26 functions are unreserved against an account ceiling of 1000. Two
+  consequences: a runaway API Lambda can starve every worker, and total
+  system throughput for LLM generation is 5 concurrent jobs.
+- Memory is 128–1024 MB and appears to be a CDK-default choice per function
+  rather than a measured one; no duration-vs-memory data exists.
+
+**W7.1 — Instrument.** Extend `preflight.py` (or add `lambda_config.py` as a
+sibling) to emit per-Lambda runtime, memory, timeout, log retention, reserved
+concurrency and DLQ wiring as a reproducible JSON proof, flagging: any timeout
+within 2s of its invoker's limit; any retention below 14 days; any async worker
+with no reserved floor; any function whose memory has never been tuned against
+observed p99 duration.
+
+**W7.2 — Fix what it finds.** Raise log retention before any further journey
+diagnosis — this one blocks the others. Give `export` headroom or move it off
+the synchronous request path. Set concurrency floors deliberately rather than
+by omission.
+
+**Exit criteria.** No Lambda within 2s of its invoker's timeout. Log retention
+≥ 14 days everywhere. Every async worker carries a stated reserved floor.
+`lambda_config.py` reports clean.
+
+---
+
+## W8 — Performance and load
+
+**Added 2026-09-23.** Nothing in this project has ever measured latency,
+throughput, or cost. There is no p50, no p95, no cost-per-journey, and no load
+test. The `35-70 session` effort table mentions "load testing" once, bundled
+with legal work, and no workstream owns it.
+
+**MEASURED 2026-09-23:**
+
+- API Gateway stage `prod` has `throttleSettings.rateLimit = None` and
+  `burstLimit = None`. **There is no stage-level throttle**; the account default
+  applies. The only brake in front of 61 routes — including every LLM-backed
+  endpoint — is the WAF rate-based rule.
+- Six workers are capped at 5 concurrent executions with 300–600s timeouts.
+  System-wide LLM generation throughput is therefore 5 concurrent jobs; the
+  sixth user queues behind a job that may run ten minutes.
+- Observed journey costs, incidentally: J5 took 3.2 minutes end to end; J8
+  performs two LLM round trips; `GENERATION_TIMEOUT_MS` budgets 240s per step.
+  None of this was measured deliberately — it is a by-product of e2e runs.
+
+**W8.1 — Instrument.** A per-journey cost and latency ledger: p50/p95/p99 per
+journey step, dollars per completed journey, tokens per artifact type. The
+journey harness already produces timing; this makes it a tracked output rather
+than an incidental one.
+
+**W8.2 — Set the limits deliberately.** Stage throttle and per-route limits;
+an explicit concurrency model for the worker fleet.
+
+**W8.3 — Load test at a stated volume.** Pick the trial-conversion volume the
+business actually plans for and test at it. A number nobody has committed to is
+not a target.
+
+**Exit criteria.** Documented p95 per journey step. A stage throttle exists.
+A measured dollar cost per completed journey. A load test at N concurrent
+users, with N written down and justified.
+
+---
+
+## W9 — API contract correctness
+
+**Added 2026-09-23.** W3.1's `dead_api.py` answers *"does this route have a
+caller."* It does not answer *"do the caller and the handler agree."* That gap
+is not theoretical — it is where the currently-live defect lives.
+
+**The proof that every existing instrument misses this class.** Interview prep
+reads gap answers as `{question, answer}`; the gap writer stores
+`{question_id, response}`. The handler logs `lookup empty` at INFO and generates
+anyway, so interview prep is built without the user's gap answers and served as
+though complete. Against that defect: `dead_api.py` sees a live route with a
+live caller. `table_map.py` sees a matching read and write table. The unit
+suite passes. `make journey` reports J8 **pass**. Every instrument this project
+has built reports green on a feature that is silently producing degraded
+output.
+
+This is the same pathology as open bug **S8** (*"cover letters generate with no
+gap answers"*), which W2 named in advance. W2 addresses *which table*; W9
+addresses *which shape*.
+
+**W9.1 — Instrument.** A contract check that compares, for every route, the
+request/response model the handler validates against the shape the frontend
+sends and expects; and for every persisted artifact, the writer's shape against
+the reader's model. Fail on mismatch. This is decidable statically — both sides
+are Pydantic models and TypeScript types.
+
+**W9.2 — Fix what it finds,** one contract per commit, each with a test that
+fails before and passes after.
+
+**W9.3 — Make degraded paths fail loud.** A handler that cannot load a required
+dependency must not log at INFO and continue. Every such site needs an explicit,
+tested decision: fail the request, or serve a response that states what is
+missing.
+
+**Exit criteria.** Zero contract mismatches. No handler proceeds past an empty
+required dependency without an explicit tested decision. The check gates CI.
+
+---
+
+## W10 — Security
+
+**Added 2026-09-23.** W5 covers deploy-path security only. Nothing covers the
+running system's authorization model, key management, or dependency posture.
+
+**Healthy, and worth recording so it is not re-litigated:** a WAF is attached
+to the API (`careervp-core-waf-devx`) carrying four AWS managed rule groups —
+Common, IP Reputation, Anonymous IP, Known Bad Inputs — none overridden to
+Count, plus a rate-based Block rule. All 11 DynamoDB tables have deletion
+protection enabled and 10 of 11 have PITR. IAM is tighter than expected: every
+Lambda role sampled carries only `AWSLambdaBasicExecutionRole`, and
+`Resource: "*"` appears only on X-Ray, AppConfig and KMS actions. The ai-assist
+least-privilege guardrail test is real and already blocked one widening attempt
+during J8 work.
+
+**Open:**
+
+- **No per-route authorization model.** 61 routes exist. Beyond P-05's IDOR
+  tests there is no documented statement of who may call each route, whose data
+  it may touch, and which test proves the isolation holds.
+- `kms:Decrypt` and `kms:GenerateDataKey` are granted on `Resource: "*"` rather
+  than scoped to specific key ARNs.
+- All tables use the AWS-owned default key; no customer-managed key exists, and
+  no decision records whether one is required.
+- **`careervp-knowledge-table-devx` partitions on `userEmail`** — PII as a
+  partition key, and inconsistent with the `userId` convention every other
+  user-scoped table uses.
+- 23 known CVEs across 4 packages remain open (PR #230).
+
+**W10.1 — Build the per-route authorization matrix:** route → who may call →
+whose data it touches → the test that proves it. Rows with no test are
+`UNVERIFIED`, in the same spirit as `FEATURE-STATE.md`.
+
+**W10.2 — Scope the KMS grants** to key ARNs; make an explicit, recorded
+decision on customer-managed keys.
+
+**W10.3 — Close the CVEs and put `pip-audit` on a schedule** so the count
+cannot silently drift again.
+
+**W10.4 — Resolve the `userEmail` partition key** — it is both a privacy
+question and a W2 consistency question; scope it with W2.3 rather than alone.
+
+**Exit criteria.** Every route appears in the authorization matrix with a
+passing isolation test and zero `UNVERIFIED` rows. No unscoped KMS grant.
+Zero known-exploitable CVEs, with a scheduled re-check.
+
+---
+
 ## Sequencing
 
 **Now, no dependencies, no deploy needed:**
@@ -654,6 +836,18 @@ mistaken for already-done.
 - Every table has exactly one owner and one name per role; `table_map.py`
   reports no read/write mismatches.
 - The environment can be destroyed and rebuilt from source.
+
+Added 2026-09-23, from W7-W10 — the running system, not the deploy path:
+
+- No Lambda sits within 2s of its invoker's timeout; log retention is **≥ 14
+  days** everywhere; every async worker carries a stated concurrency floor.
+- A **p95 per journey step** and a **measured dollar cost per completed
+  journey** are documented, and a load test has run at a written-down N.
+- The contract check reports **zero mismatches**, and no handler proceeds past
+  an empty required dependency without an explicit tested decision.
+- Every route appears in the **authorization matrix** with a passing isolation
+  test and zero `UNVERIFIED` rows; no unscoped KMS grant; zero known-exploitable
+  CVEs.
 
 ## Validating this plan
 

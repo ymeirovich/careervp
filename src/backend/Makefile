@@ -61,9 +61,27 @@ pre-commit:
 mypy-lint:
 	uv run mypy --pretty careervp --strict
 
+# The `| sed '/^[[:space:]]*#/d'` is load-bearing, not tidiness.
+#
+# uv's requirements-txt export changed format between versions: modern uv emits
+# `# via <package>` provenance annotations, uv 0.5.21 (pinned as UV_VERSION in
+# the deploy workflows) does not. The deploy job runs `make build` -> `make
+# deps` before `make deploy-devx`, so whichever version CI runs rewrote these
+# committed files, leaving the tree dirty. GIT_STAMP (line 28) then appended
+# `-dirty` to DeployedGitSha, preflight failed `deployed commit is known`, and
+# every journey proof was stamped non-reproducible -- from handoff 08 onward.
+#
+# Stripping comments makes the output identical across uv versions: verified
+# byte-for-byte between 0.5.21 and 0.11.29, 414 lines each, order preserved.
+# That fixes it without bumping uv in the deploy path, which would have changed
+# more than formatting. pip ignores these comments entirely.
+#
+# Enforced by the "Requirements Drift" job in pr-validation.yml.
 deps:
-	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt > lambda_requirements.txt
-	uv export --no-editable --no-emit-project --no-color --format=requirements-txt > dev_requirements.txt
+	uv export --no-dev --no-editable --no-emit-project --no-color --format=requirements-txt \
+		| sed '/^[[:space:]]*#/d' > lambda_requirements.txt
+	uv export --no-editable --no-emit-project --no-color --format=requirements-txt \
+		| sed '/^[[:space:]]*#/d' > dev_requirements.txt
 
 unit:
 	uv run pytest tests/unit $(COVERAGE_ARGS)
