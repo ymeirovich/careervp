@@ -27,6 +27,40 @@ jobs:
         working-directory: src/backend
         run: uv run ruff check .
 
+  requirements-drift:
+    name: Requirements Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+      # `make build` runs `make deps` as its own step before the deploy step.
+      # If deps rewrites a committed requirements file, the tree is dirty by the
+      # time `make deploy-devx` evaluates GIT_STAMP (src/backend/Makefile:28),
+      # and DeployedGitSha is stamped `<sha>-dirty`. preflight then fails
+      # `deployed commit is known` and every journey proof is marked
+      # non-reproducible -- which is exactly what happened from handoff 08
+      # onward, caused by a stale dev_requirements.txt.
+      #
+      # A dependency change must regenerate BOTH exports. Committing the file
+      # once does not hold: PR #230 bumped four packages, refreshed
+      # lambda_requirements.txt, and left dev_requirements.txt stale again.
+      - name: Regenerate requirements exports
+        working-directory: src/backend
+        run: make deps
+      - name: Fail if the tree is now dirty
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::requirements exports are stale — run 'make deps' in src/backend and commit the result"
+            git status --porcelain
+            git diff --stat
+            exit 1
+          fi
+          echo "requirements exports are up to date; a deploy from this commit will not be stamped -dirty"
+
   typecheck:
     name: Mypy Type Check
     runs-on: ubuntu-latest
