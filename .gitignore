@@ -81,3 +81,9 @@ src/frontend/test-results/
 # every run, so a committed copy makes `git_dirty: false` unreachable after the
 # mandatory checks (sweep-00 finding #2, closed by handoff 03 Step 3).
 src/frontend/dist/
+
+# setuptools build metadata for the editable `service-cdk` install
+# (src/backend/pyproject.toml: service-cdk = { path = "../../infra", editable = true }).
+# `uv sync` regenerates these, so tracking them made every CI deploy see a dirty
+# tree and stamp DeployedGitSha `-dirty`. Build output is never committed.
+*.egg-info/
