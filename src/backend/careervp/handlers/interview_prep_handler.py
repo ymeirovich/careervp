@@ -807,6 +807,9 @@ def _resolve_interview_prep_context(  # noqa: C901
         'vpr_data': None,
         'vpr_differentiators': None,
         'gap_responses': None,
+        # True when a gap lookup errored (as opposed to finding nothing);
+        # the artifact is then generated without the candidate's own answers.
+        'gap_responses_degraded': False,
         'company_research': None,
         'language': getattr(api_request, 'language', 'en') or 'en',
         'job_title': '',
@@ -897,7 +900,24 @@ def _resolve_interview_prep_context(  # noqa: C901
             logger.warning('Gap responses resolution failed', user_id=user_id, table_name=gap_table_name, error=str(exc))
             continue
 
-        if not hasattr(gap_result, 'success') or not gap_result.success or not gap_result.data:
+        # A lookup that FAILED and one that legitimately found nothing are not
+        # the same event. Reporting both at INFO as "empty" is what let a
+        # ValidationError on every stored gap response hide behind a green J8:
+        # interview prep was generated from CV+VPR alone, with the candidate's
+        # own answers silently absent.
+        if not hasattr(gap_result, 'success') or not gap_result.success:
+            context['gap_responses_degraded'] = True
+            metrics.add_metric(name='InterviewPrepGapResponsesLookupFailed', unit=MetricUnit.Count, value=1)
+            logger.warning(
+                'Interview prep context gap responses lookup FAILED',
+                user_id=user_id,
+                table_name=gap_table_name,
+                code=str(getattr(gap_result, 'code', '')),
+                error=str(getattr(gap_result, 'error', '')),
+            )
+            continue
+
+        if not gap_result.data:
             logger.info('Interview prep context gap responses lookup empty', user_id=user_id, table_name=gap_table_name)
             continue
 
@@ -923,6 +943,7 @@ def _resolve_interview_prep_context(  # noqa: C901
             context['gap_responses'] = filtered or all_responses
         else:
             context['gap_responses'] = all_responses
+        context['gap_responses_degraded'] = False
         metrics.add_metric(name='InterviewPrepGapResponsesResolved', unit=MetricUnit.Count, value=1)
         break
 
@@ -952,6 +973,7 @@ def _resolve_interview_prep_context(  # noqa: C901
         cv_resolved=context['cv_facts'] is not None,
         vpr_resolved=context['vpr_data'] is not None,
         gap_resolved=bool(context['gap_responses']),
+        gap_responses_degraded=context['gap_responses_degraded'],
         company_research_resolved=context['company_research'] is not None,
         language=context['language'],
         key_schema_mode=PRIMARY_KEY_MODE,

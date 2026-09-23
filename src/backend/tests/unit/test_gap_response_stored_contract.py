@@ -112,3 +112,50 @@ def test_latest_version_query_path_maps_too() -> None:
     assert result.success is True
     assert result.data is not None
     assert result.data[0].answer == STORED_ANSWER
+
+
+def test_failed_lookup_is_not_reported_as_empty(monkeypatch: Any) -> None:
+    """A lookup that errors must be distinguishable from one that found nothing.
+
+    The INFO-level 'lookup empty' swallow is what hid this defect behind a
+    green J8; a failure must set the degraded flag and log at WARNING.
+    """
+    import careervp.handlers.interview_prep_handler as module
+    from careervp.models.result import Result, ResultCode
+    from tests.unit.test_interview_prep_context_resolution import _api_request, _make_dal, _mock_vpr
+
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
+    gap_dal = MagicMock()
+    gap_dal.table_name = 'test-gap-responses-table'
+    gap_dal.get_gap_responses.return_value = Result(
+        success=False,
+        error='2 validation errors for GapResponse',
+        code=ResultCode.DYNAMODB_ERROR,
+    )
+    fallback_dal = _make_dal(gap_responses=None, vpr=_mock_vpr())
+
+    with patch.object(module, 'DynamoDalHandler', return_value=gap_dal), patch.object(module, 'logger') as mock_logger:
+        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request())
+
+    assert ctx['gap_responses_degraded'] is True, 'a failed gap lookup must be recorded on the context'
+    warned = [call for call in mock_logger.warning.call_args_list if 'gap responses lookup FAILED' in str(call)]
+    assert warned, 'a failed lookup must be logged at WARNING, not INFO'
+    assert 'validation errors' in str(warned[0]), 'the underlying error must be attached to the log'
+
+
+def test_successful_lookup_leaves_context_undegraded(monkeypatch: Any) -> None:
+    """The degraded flag must not fire when gap answers actually resolve."""
+    import careervp.handlers.interview_prep_handler as module
+    from tests.unit.test_interview_prep_context_resolution import _api_request, _make_dal, _mock_gap_response, _mock_vpr
+
+    monkeypatch.setenv('GAP_RESPONSES_TABLE_NAME', 'test-gap-responses-table')
+    gap_dal = MagicMock()
+    gap_dal.table_name = 'test-gap-responses-table'
+    gap_dal.get_gap_responses.return_value = _make_dal(gap_responses=[_mock_gap_response('gap-001')]).get_gap_responses.return_value
+    fallback_dal = _make_dal(gap_responses=None, vpr=_mock_vpr())
+
+    with patch.object(module, 'DynamoDalHandler', return_value=gap_dal):
+        ctx = module._resolve_interview_prep_context(fallback_dal, 'user-1', _api_request(gap_response_ids=['gap-001']))
+
+    assert ctx['gap_responses_degraded'] is False
+    assert ctx['gap_responses']
